@@ -1,0 +1,24 @@
+{
+  "name": "ibfs",
+  "version": "0.0.0",
+  "description": "Virtual indirect-block filesystem.",
+  "main": "dist/index.json",
+  "scripts": {
+    "test": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/4S1ght/ibfs.git"
+  },
+  "keywords": [
+    "fs",
+    "filesystem",
+    "storage"
+  ],
+  "author": "4S1ght",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/4S1ght/ibfs/issues"
+  },
+  "homepage": "https://github.com/4S1ght/ibfs#readme"
+}
