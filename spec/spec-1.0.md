@@ -31,34 +31,47 @@ At a high level each file and directory consists of a chain of [index blocks](#i
 
 ## Root sector
 The root sector stores all crucial filesystem metadata necessary for mounting and operation.
-Most importantly, it holds a root directory address and cryptographic metadata used to verify decryption keys necessary to operate on the volume if volume encryption is enabled.
+Most importantly, it holds the root directory address and cryptographic metadata used to verify decryption keys necessary to operate on the volume if encryption is enabled.
+
+The maximum usable size of the root sector is 1024 bytes - The minimum allowed sector size.
 ```
 Size | Type   | Description
 -----|--------|----------------------------------------------------------------
+2B   | Int16  | Major driver version used to create the volume.
+2B   | Int16  | Minor version
+2B   | Int16  | Patch version
+-----|--------|----------------------------------------------------------------
 4B   | Int32  | Specifies size of individual sectors in the volume. Allowed 
      |        | values are 1, 2, 4, 8, 16 and 32 kiB respectively, although 
-     |        | the implementation does allow for arbitrary values.
+     |        | the implementation does allow for arbitrary values that fit
+     |        | within the 1-32kiB range.
 -----|--------|----------------------------------------------------------------
-2B   | Int16  | Major driver version used to create the archive.
+8B   | Int64  | Address of the root directory.
 -----|--------|----------------------------------------------------------------
-2B   | Int16  | Minor -//-
+2B   | Int16  | AES encryption type used. Allowed values are:
+     |        | 0   - No encryption is used.
+     |        | 128 - Using AES/XTS 128-bit encryption.
+     |        | 256 - Using AES/XTS 256-bit encryption.
 -----|--------|----------------------------------------------------------------
-2B   | Int16  | Patch -//-
+8B   | Raw    | AES/XTS initialization vector
+     |        | Due to the native NodeJS crypto module's lack of API for
+     |        | manipulating tweak values for individual sectors, an 8-byte
+     |        | IV is used together with an 8-byte sector address to produce
+     |        | custom IVs and emulate the tweak behavior. Although at the
+     |        | cost of less secure encryption.
 -----|--------|----------------------------------------------------------------
-8B   | Int32  | Root directory pointer
+16B  | Binary | AES/XTS key check - 16 null bytes encrypted with the original
+     |        | key. This region is used to verify whether the correct 
+     |        | encryption key is used whenever a user wants to access the 
+     |        | volume's content.
 -----|--------|----------------------------------------------------------------
-1B   | Int8   | Comment chars
+8B   | Int64  | Volume size (in bytes) - This value is set when creating a
+     |        | new volume and when resizing it, as one of the integrity 
+     |        | safeguards.
 -----|--------|----------------------------------------------------------------
-64B  | String | Comment (single-byte chars only)
------|--------|----------------------------------------------------------------
-2B   | Int16  | AES key size used, 0 = no encryption.
------|--------|----------------------------------------------------------------
-8B   | Binary | AES/XTS initialization vector
------|--------|----------------------------------------------------------------
-1B   | Int8   | Block size
------|--------|----------------------------------------------------------------
-8B   | Int64  | Volume size
------|--------|----------------------------------------------------------------
-16B  | Binary | AES/XTS key validity check.
+1B   | Int8   | Metadata sectors count - The number of sectors following the 
+     |        | root sector that are allocated specifically to store arbitrary 
+     |        | JSON metadata used by the filesystem drivers to store
+     |        | configuration, user settings, debug information, etc.
 -----|--------|----------------------------------------------------------------
 ```
