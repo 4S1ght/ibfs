@@ -1,6 +1,8 @@
 
 /**
- * An abstraction class for allocating/reading parts of memory and handling their I/O sequentially.
+ * An abstraction class for allocating/reading buffers and handling their I/O sequentially.
+ * This class is here to ease development and omit hardcoding sector metadata indexes inside
+ * of serialize/deserialize methods.
  * Random I/O can be achieved through the static methods.
  */
 export default class Bytes {
