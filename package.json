@@ -20,5 +20,10 @@
   "bugs": {
     "url": "https://github.com/4S1ght/ibfs/issues"
   },
-  "homepage": "https://github.com/4S1ght/ibfs#readme"
+  "homepage": "https://github.com/4S1ght/ibfs#readme",
+  "devDependencies": {
+    "@types/node": "^22.4.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
 }
