@@ -5,7 +5,7 @@
  * of serialize/deserialize methods.
  * Random I/O can be achieved through the static methods.
  */
-export default class Bytes {
+export default class Memory {
 
     // Props ==================================================================
 
@@ -16,12 +16,12 @@ export default class Bytes {
     /** Length of the internal buffer. */
     public length: number
     /** The underlying buffer instance. */
-    public data: Buffer
+    public bytes: Buffer
 
     // Class ==================================================================
 
     private constructor(buffer: Buffer) {
-        this.data = buffer
+        this.bytes = buffer
         this.length = buffer.length
     }
 
@@ -42,97 +42,97 @@ export default class Bytes {
 
     /** Reads out only the part of the buffer that was written to. */
     public readFilled() {
-        return this.data.subarray(0, this.bytesWritten)
+        return this.bytes.subarray(0, this.bytesWritten)
     }
 
     /** Reads out only the part of the buffer that hasn't yet been read from. */
     public readRemaining() {
-        return this.data.subarray(this.bytesRead, this.length)
+        return this.bytes.subarray(this.bytesRead, this.length)
     }
 
     // Sequential input =============================================
 
     /** Sequentially writes an 8-bit integer. */
-    public writeSeqUInt8(value: number) {
-        this.bytesWritten = this.data.writeUInt8(value, this.bytesWritten)
+    public writeInt8(value: number) {
+        this.bytesWritten = this.bytes.writeUInt8(value, this.bytesWritten)
     }
     /** Sequentially writes a 16-bit integer. */
-    public writeSeqUInt16(value: number) {
-        this.bytesWritten = this.data.writeUInt16LE(value, this.bytesWritten)
+    public writeInt16(value: number) {
+        this.bytesWritten = this.bytes.writeUInt16LE(value, this.bytesWritten)
     }
     /** Sequentially writes a 32-bit integer. */
-    public writeSeqUInt32(value: number) {
-        this.bytesWritten = this.data.writeUInt32LE(value, this.bytesWritten)
+    public writeInt32(value: number) {
+        this.bytesWritten = this.bytes.writeUInt32LE(value, this.bytesWritten)
     }
     /** Sequentially writes a 64-bit integer. (Limited to 52 bits due to float64 / IEEE-754 maximum integer value)  */
-    public writeSeqUInt64N(value: number) {
-        this.bytesWritten = this.data.writeBigInt64LE(BigInt(value), this.bytesWritten)
+    public writeInt64(value: number) {
+        this.bytesWritten = this.bytes.writeBigInt64LE(BigInt(value), this.bytesWritten)
     }
     /** Sequentially writes a 64-bit integer. (Limited to 52 bits due to float64 / IEEE-754 maximum integer value)  */
-    public writeSeqUInt64(value: bigint) {
-        this.bytesWritten = this.data.writeBigInt64LE(value, this.bytesWritten)
+    public writeInt64B(value: bigint) {
+        this.bytesWritten = this.bytes.writeBigInt64LE(value, this.bytesWritten)
     }
     /** Sequentially writes a bitwise 0/1 8-bit integer. */
-    public writeSeqBool(value: boolean) {
-        this.bytesWritten = this.data.writeUInt8(value ? 1 : 0, this.bytesWritten)
+    public writeBool(value: boolean) {
+        this.bytesWritten = this.bytes.writeUInt8(value ? 1 : 0, this.bytesWritten)
     }
     /** Sequentially writes a UTF-8 string. */
-    public writeSeqString(value: string) {
-        this.bytesWritten += this.data.write(value, this.bytesWritten, 'utf-8')
+    public writeString(value: string) {
+        this.bytesWritten += this.bytes.write(value, this.bytesWritten, 'utf-8')
     }
     /** Sequentially reads raw data. */
-    public writeSeq(value: Buffer) {
-        this.data.fill(value, this.bytesWritten, this.bytesWritten + value.length)
+    public write(value: Buffer) {
+        this.bytes.fill(value, this.bytesWritten, this.bytesWritten + value.length)
         this.bytesWritten += value.length
     }
 
     // Sequential output ============================================
 
     /** Sequentially reads an 8-bit integer. */
-    public readSeqUInt8() {
-        const data = this.data.readUint8(this.bytesRead)
+    public readInt8() {
+        const data = this.bytes.readUint8(this.bytesRead)
         this.bytesRead += 1
         return data
     }
     /** Sequentially reads a 16-bit integer. */
-    public readSeqUInt16() {
-        const data = this.data.readUint16LE(this.bytesRead)
+    public readInt16() {
+        const data = this.bytes.readUint16LE(this.bytesRead)
         this.bytesRead += 2
         return data
     }
     /** Sequentially reads a 32-bit integer. */
-    public readSeqUInt32() {
-        const data = this.data.readUint32LE(this.bytesRead)
+    public readInt32() {
+        const data = this.bytes.readUint32LE(this.bytesRead)
         this.bytesRead += 4
         return data
     }
     /** Sequentially reads a 64-bit integer. */
-    public readSeqUInt64() {
-        const data = this.data.readBigInt64LE(this.bytesRead)
+    public readInt64B() {
+        const data = this.bytes.readBigInt64LE(this.bytesRead)
         this.bytesRead += 8
         return data
     }
     /** Sequentially reads a 64-bit integer. */
-    public readSeqUInt64N() {
-        const data = this.data.readBigInt64LE(this.bytesRead)
+    public readInt64() {
+        const data = this.bytes.readBigInt64LE(this.bytesRead)
         this.bytesRead += 8
         return Number(data)
     }
     /** Sequentially reads an 8-bit bitwise 1/0 integer - Boolean. */
-    public readSeqBool() {
-        const data = this.data.readUInt8(this.bytesRead)
+    public readBol() {
+        const data = this.bytes.readUInt8(this.bytesRead)
         this.bytesRead += 1
         return Boolean(data)
     }
     /** Sequentially reads a UTF-8 string. */
-    public readSeqString(length: number) {
-        const data = this.data.subarray(this.bytesRead, this.bytesRead + length).toString('utf-8')
+    public readString(length: number) {
+        const data = this.bytes.subarray(this.bytesRead, this.bytesRead + length).toString('utf-8')
         this.bytesRead += length
         return data
     }
     /** Sequentially reads raw data. */
-    public readSeq(length: number) {
-        const data = this.data.subarray(this.bytesRead, this.bytesRead + length)
+    public read(length: number) {
+        const data = this.bytes.subarray(this.bytesRead, this.bytesRead + length)
         this.bytesRead += length
         return data
     }

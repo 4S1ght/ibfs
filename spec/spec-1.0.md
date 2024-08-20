@@ -56,24 +56,29 @@ Size | Type  | Description
      |       | 128 - Using AES/XTS 128-bit encryption.
      |       | 256 - Using AES/XTS 256-bit encryption.
 -----|-------|----------------------------------------------------------------
-8B   | Raw   | AES/XTS initialization vector
+16B  | Raw   | AES/XTS initialization vector
+     |       |
+     |       | Note:
      |       | Due to the native NodeJS crypto module's lack of API for
-     |       | manipulating tweak values for individual sectors, an 8-byte
-     |       | IV is used together with an 8-byte sector address to produce
-     |       | custom IVs and emulate the tweak behavior. Although at the
-     |       | cost of less secure encryption.
+     |       | manipulating tweak values for individual sectors, this
+     |       | reference implementation uses only the first first 8 bytes of 
+     |       | the IV together with a 64-bit sector address to emulate 
+     |       | individual sector tweaks.
+     |       |  - Although with lower resulting encryption strength.
 -----|-------|----------------------------------------------------------------
 16B  | Raw   | AES/XTS key check - 16 null bytes encrypted with the original
      |       | key. This region is used to verify whether the correct 
      |       | encryption key is used whenever a user wants to access the 
      |       | volume's content.
 -----|-------|----------------------------------------------------------------
-8B   | Int64 | Volume size (in bytes) - This value is set when creating a
-     |       | new volume and when resizing it, as one of the integrity 
-     |       | safeguards.
+8B   | Int64 | Sector count - Total number of sectors inside the volume.
+     |       | This value must be set when creating/resizing volumes in order
+     |       | to serve as one of multiple volume integrity checks.
 -----|-------|----------------------------------------------------------------
-1B   | Int8  | Metadata block size - The number of sectors following the 
+2B   | Int16 | Metadata block size - The number of sectors following the 
      |       | root sector allocated specifically to store arbitrary 
      |       | JSON metadata used by the filesystem drivers to store
      |       | configuration, user settings, debug information, etc.
+     |       | This value is dependant on volume's sector size, but must
+     |       | guarantee to amount to a minimum of 1 MiB usable space.
 ```

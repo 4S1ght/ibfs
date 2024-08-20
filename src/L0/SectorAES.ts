@@ -4,8 +4,7 @@ import crypto from 'node:crypto'
 
 // Types & Constants ==========================================================
 
-type SectorSize = typeof SectorAES.SECTOR_SIZES[number]
-type AESKeySize = typeof SectorAES.AES_KEY_SIZES[number]
+export type AESKeySize = typeof SectorAES.AES_KEY_SIZES[number]
 
 export enum AESCipher {
     ''            = 0,
@@ -13,7 +12,7 @@ export enum AESCipher {
     'aes-256-xts' = 256,
 }
 
-interface SectorAESConfig {
+export interface SectorAESConfig {
     /**
      * AES/XTS cipher used. Enter empty string for no encryption. 
      */
@@ -30,7 +29,6 @@ interface SectorAESConfig {
 
 export default class SectorAES {
 
-    public static readonly SECTOR_SIZES  = [ 1024, 2048, 4096, 8192, 16384, 32768 ] as const
     public static readonly AES_KEY_SIZES = [ 0, 128, 256 ] as const
 
     public readonly iv: Buffer
@@ -43,7 +41,6 @@ export default class SectorAES {
 
         this.iv = config.aesIV
         this.cipher = config.aesCipher
-
         this.workingIV.fill(this.iv, 0, 8)
 
         // Overwrite encrypt/decrypt methods if no encryption is being used
@@ -54,7 +51,6 @@ export default class SectorAES {
         }
 
     }
-
 
     /**
      * Creates a unique IV (initialization vector) for a specific sector.
@@ -74,7 +70,7 @@ export default class SectorAES {
      * @param key Encryption/decryption key
      * @param address Sector address
      */
-    private encrypt(input: Buffer, key: Buffer, address: number) {
+    public encrypt(input: Buffer, key: Buffer, address: number) {
         const iv = this.getIV(address)
         const cipher = crypto.createCipheriv(this.cipher, key, iv)
         const pos = cipher.update(input).copy(input, 0)
@@ -90,14 +86,12 @@ export default class SectorAES {
      * @param key Encryption/decryption key
      * @param address Sector address
      */
-    private decrypt(input: Buffer, key: Buffer, address: number) {
+    public decrypt(input: Buffer, key: Buffer, address: number) {
         const iv = this.getIV(address)
         const decipher = crypto.createDecipheriv(this.cipher, key, iv)
         const pos = decipher.update(input).copy(input, 0)
                     decipher.final().copy(input, pos)
         return input
     }
-
-
 
 }
