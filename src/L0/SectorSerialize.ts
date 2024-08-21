@@ -5,7 +5,7 @@ import type { AESCipher, AESKeySize } from './SectorAES.js'
 
 // Types ======================================================================
 
-type SectorSize = typeof SectorSerialize.SECTOR_SIZES[number]
+export type SectorSize = typeof SectorSerialize.SECTOR_SIZES[number]
 
 /** Class initialization config. */
 export interface SectorSerializeConfig {
@@ -26,6 +26,8 @@ export interface RootSector {
     aesCipher: AESKeySize
     /** The Initialization Vector (IV) used for encryption. */
     aesIV: Buffer
+    /** 16 null bytes encrypted with the original key for key validity checks. */
+    aesKeyCheck: Buffer
     /** Number of sectors inside the volume. */
     sectorCount: number
     /** 
@@ -40,7 +42,7 @@ export interface RootSector {
 export default class SectorSerialize {
 
     // Constants
-    public static readonly SECTOR_SIZES  = [ 1024, 2048, 4096, 8192, 16384, 32768 ] as const
+    public static readonly SECTOR_SIZES = [ 1024, 2048, 4096, 8192, 16384, 32768 ] as const
     
     // Configuration
     public readonly SECTOR_SIZE: number
@@ -67,7 +69,7 @@ export default class SectorSerialize {
         data.writeInt16(sector.aesCipher)
         data.write(sector.aesIV)
         data.writeInt64(sector.sectorCount)
-        data.writeInt8(sector.metadataSectors)
+        data.writeInt16(sector.metadataSectors)
 
         return data.bytes
 
@@ -92,7 +94,7 @@ export default class SectorSerialize {
         props.aesCipher       = data.readInt16() as AESCipher
         props.aesIV           = data.read(16)
         props.sectorCount     = data.readInt64()
-        props.metadataSectors = data.readInt8()
+        props.metadataSectors = data.readInt16()
 
         return props as RootSector
 

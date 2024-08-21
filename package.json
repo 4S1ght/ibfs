@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "description": "Virtual indirect-block filesystem.",
   "main": "dist/index.json",
+  "type": "module",
   "scripts": {
     "test": "vitest"
   },

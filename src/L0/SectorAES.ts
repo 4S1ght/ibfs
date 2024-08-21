@@ -16,13 +16,13 @@ export interface SectorAESConfig {
     /**
      * AES/XTS cipher used. Enter empty string for no encryption. 
      */
-    aesCipher: keyof typeof AESCipher
+    cipher: keyof typeof AESCipher
     /** 
      * 8-byte initialization vector provided from the volume's metadata.  
      * This value is combined with an 8-byte sector address to simulate
      * sector tweak values.
      */
-    aesIV: Buffer
+    iv: Buffer
 }
 
 // Module =====================================================================
@@ -39,13 +39,13 @@ export default class SectorAES {
 
     constructor(config: SectorAESConfig) {
 
-        this.iv = config.aesIV
-        this.cipher = config.aesCipher
+        this.iv = config.iv
+        this.cipher = config.cipher
         this.workingIV.fill(this.iv, 0, 8)
 
         // Overwrite encrypt/decrypt methods if no encryption is being used
         // instead of checking if it's enabled each time a sector is processed.
-        if (config.aesCipher === '') {
+        if (config.cipher === '') {
             this.encrypt = (buf) => buf
             this.decrypt = (buf) => buf
         }
