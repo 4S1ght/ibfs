@@ -16,44 +16,66 @@
         - Directory permissions
 
 # Overview
-IBFS (Indirect-block filesystem) is a fully custom filesystem designed specifically to provide a virtualization layer for any software that needs to expose filesystem access to the local network, such as self-hosted file servers, network attached storage, upload sites and anything else that requires user-provided data and may benefit from extra security against directory traversal, file inclusion or arbitrary file upload attacks.
+IBFS (Indirect-block filesystem) is a fully custom 64-bit filesystem designed specifically to 
+provide a virtualization  layer for any software that needs to expose filesystem access to the local 
+network, such as self-hosted file servers, network attached storage, upload sites and anything else 
+that requires user-provided data and may benefit from extra security against directory traversal, 
+file inclusion or arbitrary file upload attacks.
 
-> **Note:** This specification will evolve alongside the project and is subject to change.
-Currently it's not as much of a specification as it is a form of organizing the plethora of structures, patterns and mechanics used by the filesystem.
+> **Note:** This specification will evolve alongside the project and is subject to change. Currently
+it's not as much of a specification as it is a form of organizing the plethora of structures, 
+patterns and mechanics used by the filesystem.
 
 ## Use cases
-The main use cases for the IBFS filesystem are network file sharing and hosting.
-The virtualized nature of the filesystem isolates the physical host filesystem from consumers and greatly reduces the surface of many types of attacks.
+The main use cases for the IBFS filesystem are network file sharing and hosting. The virtualized 
+nature of the filesystem isolates the physical host filesystem from consumers and greatly reduces 
+the surface of many types of attacks.
 
 # Structural design
-IBFS is a 64-bit filesystem utilizing a hybrid model that combines unrolled-linked-list and FAT-like allocation table patterns.
-At a high level each file and directory consists of a chain of [index blocks](#index-blocks) linked together in an unrolled-linked-list pattern - each of the blocks containing a list of sector addresses pointing to the first sector of a [storage block](#storage─block).
+IBFS is a filesystem utilizing a hybrid model that combines unrolled-linked-list and FAT-like
+allocation table patterns. This design balances real world performance with the difficulties of 
+implementing other more complicated filesystems, such as EXT4, with multiple possible levels of 
+indirect block addressing.
+
+At a high level each file and directory consists of a chain of [index blocks](#index-blocks) linked
+together in an unrolled-linked-list pattern - each of the blocks containing a list of sector
+addresses pointing to the first sector of a [storage block](#storage─block).
 
 ```
-              [ IBFS file or directory entry structure ]
-
- ┌────────────┐             ┌────────────┐             ┌────────────┐             
- │ Head block │ ──│link│──> │ Link block │ ──│link│──> │ Link block │ ──> ...
- └────────────┘             └────────────┘             └────────────┘        
-       ││     
-     <link>─────────────────────────────────────────────────────────────> ...
-       ││                 ││                ││                ││
-       \/                 \/                \/                \/
-┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
-│ Storage block │  │ Storage block │  │ Storage block │  │ Storage block │
-└───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘
-
+┌──────────────────┬───────[ IBFS file and directory entry structure ]─────────────────────────┐
+│                  │                                                                           │
+│                  │ ╔════════════╗     ┌────────────┐     ┌────────────┐                      │
+│  Index blocks    │ ║ Head block ║ ──> │ Link block │ ──> │ Link block │ ──────────────> ...  │
+│                  │ ╚════════════╝     └────────────┘     └────────────┘                      │
+│                  │   │                  │                      └┐                            │
+├──────────────────┤   ├─────────> ...    ├──────────────────┬────┼─────────────────────> ...  │
+│                  │   │                  │                  │   ┌┘        │                   │
+│                  │   ↓                  ↓                  ↓   │         ↓                   │
+│                  │ ┌───────────────┐  ┌───────────────┐┌───────────────┐┌───────────────┐    │
+│  Storage blocks  │ │ Storage block │  │ Storage block ││ Storage block ││ Storage block │    │
+│                  │ └───────────────┘  └───────────────┘└───────────────┘└───────────────┘    │
+│                  │                                             │                             │
+│                  │                                             ├────────────────┬─────> ...  │
+│                  │                                             │                │            │
+│                  │                                     ┌───────────────┐┌───────────────┐    │
+│  Storage blocks  │                                     │ Storage block ││ Storage block │    │
+│                  │                                     └───────────────┘└───────────────┘    │
+│                  │                                                                           │ 
+└──────────────────┴───────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Root sector
 The root sector stores all crucial filesystem metadata necessary for mounting and operation.
-Most importantly, it holds the root directory address and cryptographic metadata used to verify decryption keys necessary to operate on the volume if encryption is enabled.
+Most importantly, it holds the root directory address and cryptographic metadata used to verify 
+decryption keys necessary to operate on the volume if encryption is enabled.
 
 **Root sector size**  
-The maximum safely usable space inside the root sector is equal to the minimum sector size allowed by the specification ─ **1024 bytes.**
+The maximum safely usable space inside the root sector is equal to the minimum sector size allowed 
+by the specification ─ **1024 bytes.**
 
 **Encryption & Data safety**  
-The root sector, along with the root metadata block are the only regions that do not undergo encryption and therefore absolutely no sensitive data should be stored inside them.
+The root sector, along with the root metadata block are the only regions that do not undergo 
+encryption and therefore absolutely no sensitive data should be stored inside them.
 
 ```
 Size │ Type  │ Description
@@ -84,9 +106,9 @@ Size │ Type  │ Description
      │       │  ─ Although with lower resulting encryption strength.
 ─────┼───────┼────────────────────────────────────────────────────────────────
 16B  │ Raw   │ AES/XTS key check - 16 null bytes encrypted with the original
-     │       │ key. This region is used to verify whether the correct 
-     │       │ encryption key is used whenever a user wants to access the 
-     │       │ volume's content.
+     │       │ key. This region is copied, the copy is decrypted and checked
+     │       │ again for 16 null bytes to verify the correct AES key was used
+     │       │ to access the volume.
 ─────┼───────┼────────────────────────────────────────────────────────────────
 8B   │ Int64 │ Sector count - Total number of sectors inside the volume.
      │       │ This value must be set when creating/resizing volumes in order
