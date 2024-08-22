@@ -38,7 +38,7 @@ export default class Volume {
             const aesKeyCheck = (() => {
                 if (config.aesCipher === '') return Buffer.alloc(16)
                 // Parse key
-                const key = Buffer.alloc(({ 'aes-128-xts': 32, 'aes-256-xts': 64})[config.aesCipher])
+                const key = Buffer.alloc({ 'aes-128-xts': 32, 'aes-256-xts': 64}[config.aesCipher])
                 Buffer.from(config.aesKey).copy(key)
                 // Encrypt
                 const aes = new SectorAES({ cipher: config.aesCipher, iv: Buffer.alloc(16) })

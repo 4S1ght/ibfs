@@ -13,6 +13,14 @@ export interface SectorSerializeConfig {
     sectorSize: SectorSize
 }
 
+export interface CommonMeta {
+    /** 
+     * Metadata providing information about the sector's type and its role. 
+     * Exists purely for identification and potential data recovery tooling.
+     */
+    sectorType: Values<typeof SectorType>
+}
+
 export interface RootSector {
     /** The size of individual sectors inside the volume. */
     sectorSize: SectorSize
@@ -37,26 +45,52 @@ export interface RootSector {
     metadataSectors: number
 }
 
+export interface HeadSector {
+    /** Sector data */
+    data: Buffer
+    /** Address of the next link block */
+    next: number
+    /** File created date. */
+    created: number
+    /** File modified date. */
+    modified: number
+    /** Number of sectors within the block (excluding the head block). */
+    blockRange: number
+    /** Block CRC-32 checksum. */
+    crcSum: Buffer
+}
+
+enum SectorType {
+    HEAD = 1,
+    LINK = 2,
+    STORE = 3,
+}
+
 // Module =====================================================================
 
 export default class SectorSerialize {
 
     // Constants
     public static readonly SECTOR_SIZES = [ 1024, 2048, 4096, 8192, 16384, 32768 ] as const
+    public static readonly HEAD_META = 64
+    public static readonly LINK_META = 32
     
     // Configuration
-    public readonly SECTOR_SIZE: number
+    public readonly SECTOR_SIZE:  number
+    public readonly HEAD_CONTENT: number
+    public readonly LINK_CONTENT: number
 
     constructor(config: SectorSerializeConfig) {
         this.SECTOR_SIZE = config.sectorSize
+        this.HEAD_CONTENT = config.sectorSize - SectorSerialize.HEAD_META
+        this.LINK_CONTENT = config.sectorSize - SectorSerialize.LINK_META
     }
 
     /**
-     * Serializes root sector configuration into a buffer ready
-     * to be written to the disk.  
+     * Serializes root sector configuration into a buffer ready to be written to the disk.  
      * -> Refer to root sector documentation in [the specification](../../spec/spec-1.0.md).
-     * @param sector Sector metadata
-     * @returns Buffer
+     * @param sector Sector data object
+     * @returns Sector data buffer
      */
     public static createRootSector(sector: RootSector): Buffer {
 
@@ -76,11 +110,10 @@ export default class SectorSerialize {
     }
 
     /**
-     * Deserializes a root sector that's been read from the disk
-     * into usable information.  
+     * Deserializes the root sector that's been read from the disk into usable information.  
      * -> Refer to root sector documentation in [the specification](../../spec/spec-1.0.md).
-     * @param sector Sector data
-     * @returns Sector metadata
+     * @param sector Sector data buffer
+     * @returns Sector daa object
      */
     public static readRootSector(sector: Buffer): RootSector {
 
@@ -97,6 +130,55 @@ export default class SectorSerialize {
         props.metadataSectors = data.readInt16()
 
         return props as RootSector
+
+    }
+
+    /**
+     * Serializes the head sector into a buffer ready to be written to the disk.  
+     * -> Refer to head sector documentation in [the specification](../../spec/spec-1.0.md).
+     * @param sector Sector data object
+     * @returns Sector data buffer
+     */
+    public createHeadSector(sector: HeadSector): Buffer {
+
+        const data = Memory.allocUnsafe(this.SECTOR_SIZE)
+
+        data.writeInt8(SectorType.HEAD)
+        data.writeInt64(sector.next)
+        data.writeInt64(sector.created)
+        data.writeInt64(sector.modified)
+        data.writeInt8(sector.blockRange)
+        data.writeInt16(sector.data.length)
+        data.write(sector.crcSum) // 8 Bytes
+        data.bytesWritten = SectorSerialize.HEAD_META
+        data.write(sector.data)
+
+        return data.bytes
+
+    }
+
+    /**
+     * Deserializes a head sector that's been read from the disk into usable information.  
+     * -> Refer to head sector documentation in [the specification](../../spec/spec-1.0.md).
+     * @param sector Sector data buffer
+     * @returns Sector data object
+     */
+    public readHeadSector(sector: Buffer): HeadSector & CommonMeta {
+        
+        const props: Partial<HeadSector & CommonMeta> = {}
+        const data = Memory.intake(sector)
+        
+        props.sectorType    = data.readInt8()
+        props.next          = data.readInt64()
+        props.created       = data.readInt64()
+        props.modified      = data.readInt64()
+        props.blockRange    = data.readInt8()
+        const dataLength    = data.readInt16()
+        props.crcSum        = data.read(8)
+        data.bytesRead      = SectorSerialize.HEAD_META
+        props.data          = data.read(dataLength)
+
+        return props as HeadSector & CommonMeta
 
     }
 
