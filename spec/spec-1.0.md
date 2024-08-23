@@ -145,3 +145,25 @@ padding applied to fit the set sector size.
 ## Head sector
 A head sector is the starting sector inside a [head block](#head-block), which itself is the
 starting block in a chain of index blocks mapping out file data.
+```
+┌─────────────────────────┬────────────────────────────────────────────────┐ 
+│     Metadata [64B]      │           Data [sector size - 64B]             │
+└─────────────────────────┴────────────────────────────────────────────────┘
+         │
+         V
+┌─────────────────────────┐
+│ [1B] Sector type (1)    │  Type of the sector (values 1/2/3/4)
+├─────────────────────────┤
+│ [8B] Next block address │  Address of the next index block
+├─────────────────────────┤
+│ [8B] Creation date      │  File creation date
+├─────────────────────────┤
+│ [8B] Modification date  │  File modification date
+├─────────────────────────┤
+│ [1B] Block range        │  Number of sectors in the block (0-255)
+├─────────────────────────┤
+│ [2B] Data length        │  Length of the data stored inside the sector.
+├─────────────────────────┤
+│ [8B] CRC-64 checksum    │  CRC-64 checksum of sector data.
+└─────────────────────────┘
+```
