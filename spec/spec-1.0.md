@@ -8,33 +8,34 @@
     - [Sector types](#sector-types)
         - [Root sector](#root-sector)
         - [Head Sector](#head-sector)
-    - Index blocks
-        - Head block
-        - Link block
-    - Storage block
-        - Storage sector
+    - [Blocks](#blocks)
+        - Index blocks
+            - Head block
+            - Link block
+        - Storage block
+            - Storage sector
 3. Operational details
     - 
 
 # Overview
-IBFS (Indirect-block filesystem) is a fully custom 64-bit filesystem designed specifically to 
+IBFS (Indirect-block filesystem) is a fully custom 64-bit filesystem designed specifically to
 provide a virtualization layer for any software that needs to expose filesystem access over the
-network, such as self-hosted file servers, network attached storage, upload sites and anything else 
-that requires user-provided data and may benefit from extra security against directory traversal, 
+network, such as self-hosted file servers, network attached storage, upload sites and anything else
+that requires user-provided data and may benefit from extra security against directory traversal,
 file inclusion or arbitrary file upload attacks.
 
 > **Note:** This specification will evolve alongside the project and is subject to change. Currently
-it's not as much of a specification as it is a form of organizing the plethora of structures, 
+it's not as much of a specification as it is a form of organizing the plethora of structures,
 patterns and mechanics used by the filesystem.
 
 ## Use cases
-The main use cases for the IBFS filesystem are network file sharing and hosting. The virtualized 
-nature of the filesystem isolates the physical host filesystem from consumers and greatly reduces 
+The main use cases for the IBFS filesystem are network file sharing and hosting. The virtualized
+nature of the filesystem isolates the physical host filesystem from consumers and greatly reduces
 the surface of many types of attacks.
 
 # Structural design
 IBFS is a filesystem utilizing a hybrid model that combines unrolled-linked-list and FAT-like
-allocation table patterns. This design balances real world performance with the difficulty of 
+allocation table patterns. This design balances real world performance with the difficulty of
 implementation.
 
 ## File topology
@@ -63,23 +64,32 @@ addresses pointing to the first sector of a [storage block](#storage─block).
 │                  │                                                                           │ 
 └──────────────────┴───────────────────────────────────────────────────────────────────────────┘
 ```
-
+ś
 # Sector types
-IBFS makes use of multiple sector types, which are `root`, `head`, `link`, `storage` and `raw` 
+Unlike general in terms used to describe physical filesystems, "sector" and "block" do not hold the
+same meaning in regard to IBFS as they do in more widely known physical filesystems. Traditional
+filesystems distinguish blocks as the most atomic logical unit of data that's read from or written
+to the disk. IBFS being a virtual filesystem does not operate directly on a physical medium composed
+of sectors. Each IBFS "volume" is its own virtual disk living inside consists of a file located on
+the host's filesystem. This file is the divided into sectors of specific size (known in general
+terms "block size"), such as 1 or 2 kiB. These sectors are then grouped logically into what IBFS
+knows as a "[blocks](#blocks)".
+
+IBFS makes use of multiple sector types, which are `root`, `head`, `link`, `storage` and `raw`
 sectors. all of which are constructed according to their purposes.
 
 ## Root sector
-The root sector stores all crucial filesystem metadata necessary for mounting and operation.
-Most importantly, it holds the root directory address and cryptographic metadata used to verify 
+The root sector stores all crucial filesystem metadata necessary for mounting and operation. Most
+importantly, it holds the root directory address and cryptographic metadata used to verify
 decryption keys, effectively serving as the entry point into the filesystem.
 
 **Root sector size**  
-The maximum safely usable space inside the root sector is equal to the minimum sector size allowed 
+The maximum safely usable space inside the root sector is equal to the minimum sector size allowed
 by the specification ─ **1024 bytes.**. The actual size of the root sector may be larger, depending
 on sector size configured.
 
 **Encryption & Data safety**  
-The root sector, along with the root metadata block are the only regions that do not undergo 
+The root sector, along with the root metadata block are the only regions that do not undergo
 encryption and therefore absolutely no sensitive data should be stored inside them.
 
 ```
@@ -127,11 +137,11 @@ Size │ Type  │ Description
      │       │ guarantee to amount to a minimum of 1 MiB usable space.
 ─────┴───────┴────────────────────────────────────────────────────────────────
 
-Remaining space up to the 124th byte is left empty, reserved for future 
-changes and additions. The actual length of the sector depends on the chosen
-sector size.
+Remaining space up to the 1024th byte is left empty, reserved for future 
+changes and additions. The actual size of the sector depends on the 
+padding applied to fit the set sector size.
 ```
 
 ## Head sector
-A head sector is a starting point of every logical structure inside the filesystem. It is the first
-sector inside a [head block](#head-block)
+A head sector is the starting sector inside a [head block](#head-block), which itself is the
+starting block in a chain of index blocks mapping out file data.
