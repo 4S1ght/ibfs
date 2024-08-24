@@ -30,7 +30,7 @@ export default class Volume {
         try {
 
             // Metadata
-            const metadataSectors = Math.ceil(1024*512 / config.sectorSize)
+            const metadataSectors = Math.ceil(1024*1024 / config.sectorSize)
             const metadata = Buffer.from(JSON.stringify({ ibfs: {} }))
 
             // Creates the key check buffer used later to verify the correctness of
@@ -38,7 +38,7 @@ export default class Volume {
             const aesKeyCheck = (() => {
                 if (config.aesCipher === '') return Buffer.alloc(16)
                 // Parse key
-                const key = Buffer.alloc(({ 'aes-128-xts': 32, 'aes-256-xts': 64})[config.aesCipher])
+                const key = Buffer.alloc({ 'aes-128-xts': 32, 'aes-256-xts': 64}[config.aesCipher])
                 Buffer.from(config.aesKey).copy(key)
                 // Encrypt
                 const aes = new SectorAES({ cipher: config.aesCipher, iv: Buffer.alloc(16) })
@@ -47,16 +47,20 @@ export default class Volume {
 
             // Root sector
             const rs = SectorSerialize.createRootSector({
-                specMajor: FS_SPEC[0],
-                specMinor: FS_SPEC[1],
-                sectorSize: config.sectorSize,
-                sectorCount: config.sectorCount,
-                metadataSectors,
-                aesCipher: AESCipher[config.aesCipher],
-                aesIV: crypto.randomBytes(16),
-                aesKeyCheck,
-                rootDirectory: metadataSectors + 1
+                specMajor:              FS_SPEC[0],
+                specMinor:              FS_SPEC[1],
+                sectorSize:             config.sectorSize,
+                sectorCount:            config.sectorCount,
+                metadataSectors:        metadataSectors,
+                aesCipher:              AESCipher[config.aesCipher],
+                aesIV:                  crypto.randomBytes(16),
+                nodeCryptoCompatMode:   true,
+                aesKeyCheck:            aesKeyCheck,
+                rootDirectory:          metadataSectors + 1
             })
+
+            const serialize = new SectorSerialize({ sectorSize: config.sectorSize })
+            // TODO const rootDir = serialize.createHeadSector({}) 
             
 
         } 
