@@ -34,6 +34,11 @@ export interface RootSector {
     aesCipher: AESKeySize
     /** The Initialization Vector (IV) used for encryption. */
     aesIV: Buffer
+    /** 
+     * NodeJS compatibility mode enabled/disabled. In compat mode, only first 8 bytes of the IV are used.
+     * and tweak values for XTS encryption should be emulated.
+    */
+    nodeCryptoCompatMode: boolean
     /** 16 null bytes encrypted with the original key for key validity checks. */
     aesKeyCheck: Buffer
     /** Number of sectors inside the volume. */
@@ -102,6 +107,7 @@ export default class SectorSerialize {
         data.writeInt64(sector.rootDirectory)
         data.writeInt16(sector.aesCipher)
         data.write(sector.aesIV)
+        data.writeBool(sector.nodeCryptoCompatMode)
         data.writeInt64(sector.sectorCount)
         data.writeInt16(sector.metadataSectors)
 
@@ -120,14 +126,15 @@ export default class SectorSerialize {
         const props: Partial<RootSector> = {}
         const data = Memory.intake(sector)
 
-        props.specMajor       = data.readInt16()
-        props.specMinor       = data.readInt16()
-        props.sectorSize      = data.readInt32() as SectorSize
-        props.rootDirectory   = data.readInt64()
-        props.aesCipher       = data.readInt16() as AESCipher
-        props.aesIV           = data.read(16)
-        props.sectorCount     = data.readInt64()
-        props.metadataSectors = data.readInt16()
+        props.specMajor            = data.readInt16()
+        props.specMinor            = data.readInt16()
+        props.sectorSize           = data.readInt32() as SectorSize
+        props.rootDirectory        = data.readInt64()
+        props.aesCipher            = data.readInt16() as AESCipher
+        props.aesIV                = data.read(16)
+        props.nodeCryptoCompatMode = data.readBool()
+        props.sectorCount          = data.readInt64()
+        props.metadataSectors      = data.readInt16()
 
         return props as RootSector
 

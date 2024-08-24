@@ -111,14 +111,13 @@ Size │ Type  │ Description
      │       │ 256 - Using AES/XTS 256-bit encryption.
 ─────┼───────┼────────────────────────────────────────────────────────────────
 16B  │ Raw   │ AES/XTS initialization vector
-     │       │
-     │       │ Note:
-     │       │ Due to the native NodeJS crypto module's lack of API for
-     │       │ manipulating tweak values for individual sectors, this
-     │       │ reference implementation uses only the first first 8 bytes of 
-     │       │ the IV together with a 64-bit sector address to emulate 
-     │       │ individual sector tweaks.
-     │       │  ─ Although with lower resulting encryption strength.
+─────┼───────┼────────────────────────────────────────────────────────────────
+1B   │ Bool  │ NodeJS crypto compatibility.
+     │       │ When enabled, all AES/XTS encryption must be done using 
+     │       │ emulated tweaks, meaning only the first half of the IV is used
+     │       │ in combination with the sector address to produce a distinct
+     │       │ IV for each sector. This lowers encryption strength, but keeps
+     │       │ native compatibility with NodeJS.
 ─────┼───────┼────────────────────────────────────────────────────────────────
 16B  │ Raw   │ AES/XTS key check - 16 null bytes encrypted with the original
      │       │ key. This region is copied, the copy is decrypted and checked
@@ -137,9 +136,8 @@ Size │ Type  │ Description
      │       │ guarantee to amount to a minimum of 1 MiB usable space.
 ─────┴───────┴────────────────────────────────────────────────────────────────
 
-Remaining space up to the 1024th byte is left empty, reserved for future 
-changes and additions. The actual size of the sector depends on the 
-padding applied to fit the set sector size.
+Remaining space up to the 1024th byte is left empty, reserved for future changes and additions. The
+actual size of the sector depends on the padding applied to fit the set sector size.
 ```
 
 ## Head sector
@@ -147,12 +145,12 @@ A head sector is the starting sector inside a [head block](#head-block), which i
 starting block in a chain of index blocks mapping out file data.
 ```
 ┌─────────────────────────┬────────────────────────────────────────────────┐ 
-│     Metadata [64B]      │           Data [sector size - 64B]             │
+│     Metadata [64B]      │        Data [sector size minus 64 bytes]       │
 └─────────────────────────┴────────────────────────────────────────────────┘
-         │
-         V
+             │
+             V
 ┌─────────────────────────┐
-│ [1B] Sector type (1)    │  Type of the sector (values 1/2/3/4)
+│ [1B] Sector type        │  Type of the sector (value of 1)
 ├─────────────────────────┤
 │ [8B] Next block address │  Address of the next index block
 ├─────────────────────────┤
@@ -162,7 +160,7 @@ starting block in a chain of index blocks mapping out file data.
 ├─────────────────────────┤
 │ [1B] Block range        │  Number of sectors in the block (0-255)
 ├─────────────────────────┤
-│ [2B] Data length        │  Length of the data stored inside the sector.
+│ [2B] Data length        │  Length of the data stored inside the last sector.
 ├─────────────────────────┤
 │ [8B] CRC-64 checksum    │  CRC-64 checksum of sector data.
 └─────────────────────────┘
