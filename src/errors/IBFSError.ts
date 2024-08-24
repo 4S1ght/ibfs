@@ -1,21 +1,22 @@
 enum ErrorCodes {
     
     // Level 0 errors
-    L0_CREATE_CANT_CREATE = 101
+    L0_VCREATE_CANT_CREATE  = 101, // Can't create an IBFS volume
+    L0_CSUM_MISMATCH        = 102, // Sector checksum mismatch likely indicating data corruption inside a sector.
 
 }
 
 type ErrorCode = keyof typeof ErrorCodes
 type ErrorMetadata = { [key: string]: any }
 
-export default class IBFSError extends Error {
+export default class IBFSError<Code extends ErrorCode = ErrorCode> extends Error {
 
     public readonly errno: number
-    public readonly code: ErrorCode
+    public readonly code: Code
     public readonly causes: Error[] = []
     public readonly meta: ErrorMetadata = {}
 
-    constructor(code: ErrorCode, message?: string, cause?: Error, meta?: ErrorMetadata) {
+    constructor(code: Code, message?: string, cause?: Error | null, meta?: ErrorMetadata) {
         
         super(message)
         this.name = this.constructor.name

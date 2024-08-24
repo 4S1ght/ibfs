@@ -65,7 +65,7 @@ export default class Volume {
 
         } 
         catch (error) {
-            return new IBFSError('L0_CREATE_CANT_CREATE', undefined, error as Error)
+            return new IBFSError('L0_VCREATE_CANT_CREATE', undefined, error as Error)
         }
     }
 

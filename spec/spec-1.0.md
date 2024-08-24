@@ -152,6 +152,8 @@ starting block in a chain of index blocks mapping out file data.
 ┌─────────────────────────┐
 │ [1B] Sector type        │  Type of the sector (value of 1)
 ├─────────────────────────┤
+│ [4B] CRC-32 checksum    │  CRC-32 checksum of sector data.
+├─────────────────────────┤
 │ [8B] Next block address │  Address of the next index block
 ├─────────────────────────┤
 │ [8B] Creation date      │  File creation date
@@ -161,7 +163,5 @@ starting block in a chain of index blocks mapping out file data.
 │ [1B] Block range        │  Number of sectors in the block (0-255)
 ├─────────────────────────┤
 │ [2B] Data length        │  Length of the data stored inside the last sector.
-├─────────────────────────┤
-│ [8B] CRC-64 checksum    │  CRC-64 checksum of sector data.
 └─────────────────────────┘
 ```

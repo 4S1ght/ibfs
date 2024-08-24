@@ -1,7 +1,11 @@
 // Imports ====================================================================
 
+import zlib from 'node:zlib'
+
 import Memory from './Memory.js'
+import IBFSError from '../errors/IBFSError.js'
 import type { AESCipher, AESKeySize } from './SectorAES.js'
+import { objCopyExcept } from '../Helpers.js'
 
 // Types ======================================================================
 
@@ -61,8 +65,6 @@ export interface HeadSector {
     modified: number
     /** Number of sectors within the block (excluding the head block). */
     blockRange: number
-    /** Block CRC-32 checksum. */
-    crcSum: Buffer
 }
 
 enum SectorType {
@@ -148,15 +150,16 @@ export default class SectorSerialize {
      */
     public createHeadSector(sector: HeadSector): Buffer {
 
-        const data = Memory.allocUnsafe(this.SECTOR_SIZE)
+        const data = Memory.allocate(this.SECTOR_SIZE)
+        const crc32sum = zlib.crc32(sector.data)
 
         data.writeInt8(SectorType.HEAD)
+        data.writeInt32(crc32sum)
         data.writeInt64(sector.next)
         data.writeInt64(sector.created)
         data.writeInt64(sector.modified)
         data.writeInt8(sector.blockRange)
         data.writeInt16(sector.data.length)
-        data.write(sector.crcSum) // 8 Bytes
         data.bytesWritten = SectorSerialize.HEAD_META
         data.write(sector.data)
 
@@ -170,22 +173,31 @@ export default class SectorSerialize {
      * @param sector Sector data buffer
      * @returns Sector data object
      */
-    public readHeadSector(sector: Buffer): HeadSector & CommonMeta {
+    public readHeadSector(sector: Buffer): Eav<HeadSector & CommonMeta, IBFSError<'L0_CSUM_MISMATCH'>> {
         
         const props: Partial<HeadSector & CommonMeta> = {}
         const data = Memory.intake(sector)
         
-        props.sectorType    = data.readInt8()
-        props.next          = data.readInt64()
-        props.created       = data.readInt64()
-        props.modified      = data.readInt64()
-        props.blockRange    = data.readInt8()
-        const dataLength    = data.readInt16()
-        props.crcSum        = data.read(8)
-        data.bytesRead      = SectorSerialize.HEAD_META
-        props.data          = data.read(dataLength)
+        props.sectorType      = data.readInt8()
+        const crcSumReference = data.readInt32()
+        props.next            = data.readInt64()
+        props.created         = data.readInt64()
+        props.modified        = data.readInt64()
+        props.blockRange      = data.readInt8()
+        const dataLength      = data.readInt16()
+        data.bytesRead        = SectorSerialize.HEAD_META
+        props.data            = data.read(dataLength)
 
-        return props as HeadSector & CommonMeta
+        const crcSumNew = zlib.crc32(props.data)
+
+        if (crcSumNew !== crcSumReference) {
+            return [new IBFSError(
+                'L0_CSUM_MISMATCH', 'READ: head sector crcSum mismatch.', 
+                null, objCopyExcept(props, ['data'])
+            ), null]
+        }
+
+        return [null, props as HeadSector & CommonMeta]
 
     }
 
