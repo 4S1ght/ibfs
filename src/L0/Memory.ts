@@ -119,7 +119,7 @@ export default class Memory {
         return Number(data)
     }
     /** Sequentially reads an 8-bit bitwise 1/0 integer - Boolean. */
-    public readBol() {
+    public readBool() {
         const data = this.bytes.readUInt8(this.bytesRead)
         this.bytesRead += 1
         return Boolean(data)
