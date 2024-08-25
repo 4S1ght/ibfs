@@ -142,26 +142,51 @@ actual size of the sector depends on the padding applied to fit the set sector s
 
 ## Head sector
 A head sector is the starting sector inside a [head block](#head-block), which itself is the
-starting block in a chain of index blocks mapping out file data.
+starting block in a chain of index blocks mapping out file data with a single level of indirection described in the [file topology](#file-topology) section.
 ```
-┌─────────────────────────┬────────────────────────────────────────────────┐ 
-│     Metadata [64B]      │        Data [sector size minus 64 bytes]       │
-└─────────────────────────┴────────────────────────────────────────────────┘
-             │
-             V
-┌─────────────────────────┐
-│ [1B] Sector type        │  Type of the sector (value of 1)
-├─────────────────────────┤
-│ [4B] CRC-32 checksum    │  CRC-32 checksum of sector data.
-├─────────────────────────┤
-│ [8B] Next block address │  Address of the next index block
-├─────────────────────────┤
-│ [8B] Creation date      │  File creation date
-├─────────────────────────┤
-│ [8B] Modification date  │  File modification date
-├─────────────────────────┤
-│ [1B] Block range        │  Number of sectors in the block (0-255)
-├─────────────────────────┤
-│ [2B] Data length        │  Length of the data stored inside the last sector.
-└─────────────────────────┘
+┌──────────────────┬─────────────────────────────────────┐ 
+│  Metadata [64B]  │  Data [sector size minus 64 bytes]  │
+└──────────────────┴─────────────────────────────────────┘
+         │
+         V
+┌────────────────────────────────────────────────────────┐
+│  1. [1B] Sector type                                   │
+├────────────────────────────────────────────────────────┤
+│  2. [4B] CRC-32 checksum                               │
+├────────────────────────────────────────────────────────┤
+│  3. [8B] Next block address                            │
+├────────────────────────────────────────────────────────┤
+│  4. [8B] Creation date                                 │
+├────────────────────────────────────────────────────────┤
+│  5. [8B] Modification date                             │
+├────────────────────────────────────────────────────────┤
+│  6. [1B] Block range                                   │
+├────────────────────────────────────────────────────────┤
+│  7. [2B] Data length                                   │
+├────────────────────────────────────────────────────────┤
+│  7. Padding reserved for future changes                │
+└────────────────────────────────────────────────────────┘
 ```
+
+1. `Int8` indicating the sector type, used primarily for identification and recovery. For head
+   sectors this value is set to 1. All other metadata-holding sector types are designated their own
+   sector type value.
+
+2. IEEE 802.3 CRC-32 checksum of the block's data (not to be confused with "metadata"). This
+   checksum is computed for the entire **data section** of the block right before it's written to
+   the disk. This includes the usable data and any padding at the end of the final sector **AFTER**
+   they have been encrypted. Sector metadata is not included in the checksum.
+
+3. `Int64` address of the next index block in the chain.
+
+4. File **creation** date in ISO 8601 format.
+
+5. File **modification** date in ISO 8601 format.
+
+6. `Int8` value between 0 and 255 specifying how many subsequent sectors belong to the block. These
+   are raw data sectors that do not hold any metadata.
+
+7. `Int16` value stating how many bytes inside the block's last sector are usable data. The length
+   of user data is frequently shorter than what individual sectors are allowed to hold, and
+   therefore padding is added at the end. This data point provides a way to extract the sector data
+   in its original size.
