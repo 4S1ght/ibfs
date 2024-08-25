@@ -11,18 +11,12 @@ import { objCopyExcept } from '../Helpers.js'
 
 export type SectorSize = typeof SectorSerialize.SECTOR_SIZES[number]
 
+// Root sector ================================================================
+
 /** Class initialization config. */
 export interface SectorSerializeConfig {
     /** The size of individual sectors inside the volume. */
     sectorSize: SectorSize
-}
-
-export interface CommonMeta {
-    /** 
-     * Metadata providing information about the sector's type and its role. 
-     * Exists purely for identification and potential data recovery tooling.
-     */
-    sectorType: Values<typeof SectorType>
 }
 
 export interface RootSector {
@@ -54,17 +48,36 @@ export interface RootSector {
     metadataSectors: number
 }
 
-export interface HeadSector {
-    /** Sector data */
+// Data sectors ===============================================================
+
+interface CommonReadMeta {
+    /** 
+     * Metadata providing information about the sector's type and its role. 
+     * Exists purely for identification and potential data recovery tooling.
+     */
+    sectorType: Values<typeof SectorType>
+}
+
+interface CommonMeta {
+    /** Sector data. */
     data: Buffer
-    /** Address of the next link block */
+    /** Address of the next link block. */
     next: number
+    /** CRC32 checksum of the block's content. */
+    crc32Sum: number
+    /** Number of sectors within the block (excluding the head block). */
+    blockRange: number
+}
+
+export interface HeadSector extends CommonMeta {
     /** File created date. */
     created: number
     /** File modified date. */
     modified: number
-    /** Number of sectors within the block (excluding the head block). */
-    blockRange: number
+}
+
+export interface LinkSector extends CommonMeta {
+
 }
 
 enum SectorType {
@@ -101,19 +114,19 @@ export default class SectorSerialize {
      */
     public static createRootSector(sector: RootSector): Buffer {
 
-        const data = Memory.allocate(sector.sectorSize)
+        const data = Memory.alloc(sector.sectorSize)
 
         data.writeInt16(sector.specMajor)
         data.writeInt16(sector.specMinor)
         data.writeInt32(sector.sectorSize)
+        data.writeInt64(sector.sectorCount)
+        data.writeInt16(sector.metadataSectors)
         data.writeInt64(sector.rootDirectory)
         data.writeInt16(sector.aesCipher)
         data.write(sector.aesIV)
         data.writeBool(sector.nodeCryptoCompatMode)
-        data.writeInt64(sector.sectorCount)
-        data.writeInt16(sector.metadataSectors)
 
-        return data.bytes
+        return data.buffer
 
     }
 
@@ -131,12 +144,12 @@ export default class SectorSerialize {
         props.specMajor            = data.readInt16()
         props.specMinor            = data.readInt16()
         props.sectorSize           = data.readInt32() as SectorSize
+        props.sectorCount          = data.readInt64()
+        props.metadataSectors      = data.readInt16()
         props.rootDirectory        = data.readInt64()
         props.aesCipher            = data.readInt16() as AESCipher
         props.aesIV                = data.read(16)
         props.nodeCryptoCompatMode = data.readBool()
-        props.sectorCount          = data.readInt64()
-        props.metadataSectors      = data.readInt16()
 
         return props as RootSector
 
@@ -150,11 +163,10 @@ export default class SectorSerialize {
      */
     public createHeadSector(sector: HeadSector): Buffer {
 
-        const data = Memory.allocate(this.SECTOR_SIZE)
-        const crc32sum = zlib.crc32(sector.data)
+        const data = Memory.alloc(this.SECTOR_SIZE)
 
         data.writeInt8(SectorType.HEAD)
-        data.writeInt32(crc32sum)
+        data.writeInt32(sector.crc32Sum)
         data.writeInt64(sector.next)
         data.writeInt64(sector.created)
         data.writeInt64(sector.modified)
@@ -163,7 +175,7 @@ export default class SectorSerialize {
         data.bytesWritten = SectorSerialize.HEAD_META
         data.write(sector.data)
 
-        return data.bytes
+        return data.buffer
 
     }
 
@@ -173,31 +185,67 @@ export default class SectorSerialize {
      * @param sector Sector data buffer
      * @returns Sector data object
      */
-    public readHeadSector(sector: Buffer): Eav<HeadSector & CommonMeta, IBFSError<'L0_CSUM_MISMATCH'>> {
+    public readHeadSector(sector: Buffer): HeadSector & CommonReadMeta {
         
-        const props: Partial<HeadSector & CommonMeta> = {}
+        const props: Partial<HeadSector & CommonReadMeta> = {}
         const data = Memory.intake(sector)
         
-        props.sectorType      = data.readInt8()
-        const crcSumReference = data.readInt32()
-        props.next            = data.readInt64()
-        props.created         = data.readInt64()
-        props.modified        = data.readInt64()
-        props.blockRange      = data.readInt8()
-        const dataLength      = data.readInt16()
-        data.bytesRead        = SectorSerialize.HEAD_META
-        props.data            = data.read(dataLength)
+        props.sectorType  = data.readInt8()
+        props.crc32Sum    = data.readInt32()
+        props.next        = data.readInt64()
+        props.created     = data.readInt64()
+        props.modified    = data.readInt64()
+        props.blockRange  = data.readInt8()
+        const dataLength  = data.readInt16()
+        data.bytesRead    = SectorSerialize.HEAD_META
+        props.data        = data.read(dataLength)
 
-        const crcSumNew = zlib.crc32(props.data)
+        return props as HeadSector & CommonReadMeta
 
-        if (crcSumNew !== crcSumReference) {
-            return [new IBFSError(
-                'L0_CSUM_MISMATCH', 'READ: head sector crcSum mismatch.', 
-                null, objCopyExcept(props, ['data'])
-            ), null]
-        }
+    }
 
-        return [null, props as HeadSector & CommonMeta]
+    /**
+     * Serializes the link sector into a buffer ready to be written to the disk.  
+     * -> Refer to link sector documentation in [the specification](../../spec/spec-1.0.md).
+     * @param sector Sector data object
+     * @returns Sector data buffer
+     */
+    public createLinkSector(sector: LinkSector): Buffer {
+
+        const data = Memory.alloc(this.SECTOR_SIZE)
+
+        data.writeInt8(SectorType.LINK)
+        data.writeInt32(sector.crc32Sum)
+        data.writeInt64(sector.next)
+        data.writeInt8(sector.blockRange)
+        data.writeInt16(sector.data.length)
+        data.bytesWritten = SectorSerialize.LINK_META
+        data.write(sector.data)
+
+        return data.buffer
+
+    }
+
+    /**
+     * Deserializes a link sector that's been read from the disk into usable information.  
+     * -> Refer to kink sector documentation in [the specification](../../spec/spec-1.0.md).
+     * @param sector Sector data buffer
+     * @returns Sector data object
+     */
+    public readLinkSector(sector: Buffer): LinkSector & CommonReadMeta {
+
+        const props: Partial<LinkSector & CommonReadMeta> = {}
+        const data = Memory.intake(sector)
+
+        props.sectorType    = data.readInt8()
+        props.crc32Sum      = data.readInt32()
+        props.next          = data.readInt64()
+        props.blockRange    = data.readInt8()
+        const dataLength    = data.readInt16()
+        data.bytesRead      = SectorSerialize.LINK_META
+        props.data          = data.read(dataLength)
+
+        return props as LinkSector & CommonReadMeta
 
     }
 
