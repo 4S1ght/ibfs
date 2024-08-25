@@ -6,8 +6,8 @@ import fs from "node:fs/promises"
 import crypto from "node:crypto"
 
 import Memory from "./Memory.js"
-import SectorSerialize, { SectorSize } from "./SectorSerialize.js"
-import SectorAES, { AESCipher } from "./SectorAES.js"
+import SectorSerialize, { SectorSize } from "./BlockSerialize.js"
+import SectorAES, { AESCipher } from "./BlockAES.js"
 import IBFSError from "../errors/IBFSError.js"
 import { FS_SPEC } from '../Constants.js'
 

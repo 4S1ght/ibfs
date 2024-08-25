@@ -1,7 +1,7 @@
 {
     "include": [
         "./src/*",
-        "./src/L0/*"
+        "src/L0-old/*"
     ],
     "compilerOptions": {
 

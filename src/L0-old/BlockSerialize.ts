@@ -4,7 +4,7 @@ import zlib from 'node:zlib'
 
 import Memory from './Memory.js'
 import IBFSError from '../errors/IBFSError.js'
-import type { AESCipher, AESKeySize } from './SectorAES.js'
+import type { AESCipher, AESKeySize } from './BlockAES.js'
 import { objCopyExcept } from '../Helpers.js'
 
 // Types ======================================================================
@@ -57,13 +57,13 @@ export interface RootSector {
 export interface HeadSector {
     /** Sector data */
     data: Buffer
-    /** Address of the next link block */
+    /** Address of the next link node */
     next: number
     /** File created date. */
     created: number
     /** File modified date. */
     modified: number
-    /** Number of sectors within the block (excluding the head block). */
+    /** Number of sectors within the node (excluding the head node). */
     blockRange: number
 }
 
