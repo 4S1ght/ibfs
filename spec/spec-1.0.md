@@ -15,7 +15,8 @@
         - Storage block
             - Storage sector
 3. Operational details
-    - 
+
+> **This specification will be refactored completely once the general topology design is finished.**
 
 # Overview
 IBFS (Indirect-block filesystem) is a fully custom 64-bit filesystem designed specifically to

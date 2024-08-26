@@ -80,7 +80,7 @@ export default class Memory {
     public writeString(value: string) {
         this.bytesWritten += this.buffer.write(value, this.bytesWritten, 'utf-8')
     }
-    /** Sequentially reads raw data. */
+    /** Sequentially writes raw data. */
     public write(value: Buffer) {
         this.buffer.fill(value, this.bytesWritten, this.bytesWritten + value.length)
         this.bytesWritten += value.length

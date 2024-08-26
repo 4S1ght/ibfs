@@ -1,2 +1,2 @@
 export const FS_SPEC = [1, 0] as const
-export const VOLUME_FILE_EXTENSION = '.ibfs'
+export const VD_FILE_EXT = '.ibfs'

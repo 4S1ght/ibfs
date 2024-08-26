@@ -1,11 +1,7 @@
 // Imports ====================================================================
 
-import zlib from 'node:zlib'
-
 import Memory from './Memory.js'
-import IBFSError from '../errors/IBFSError.js'
 import type { AESCipher, AESKeySize } from './SectorAES.js'
-import { objCopyExcept } from '../Helpers.js'
 
 // Types ======================================================================
 
@@ -76,9 +72,8 @@ export interface HeadSector extends CommonMeta {
     modified: number
 }
 
-export interface LinkSector extends CommonMeta {
-
-}
+export interface LinkSector extends CommonMeta {}
+export interface StorageSector extends CommonMeta {}
 
 enum SectorType {
     HEAD = 1,
@@ -92,19 +87,24 @@ export default class SectorSerialize {
 
     // Constants
     public static readonly SECTOR_SIZES = [ 1024, 2048, 4096, 8192, 16384, 32768 ] as const
-    public static readonly HEAD_META = 64
-    public static readonly LINK_META = 32
+    public static readonly HEAD_META  = 64
+    public static readonly LINK_META  = 32
+    public static readonly STORE_META = 32
     
     // Configuration
-    public readonly SECTOR_SIZE:  number
-    public readonly HEAD_CONTENT: number
-    public readonly LINK_CONTENT: number
+    public readonly SECTOR_SIZE:   number
+    public readonly HEAD_CONTENT:  number
+    public readonly LINK_CONTENT:  number
+    public readonly STORE_CONTENT: number
 
     constructor(config: SectorSerializeConfig) {
-        this.SECTOR_SIZE = config.sectorSize
-        this.HEAD_CONTENT = config.sectorSize - SectorSerialize.HEAD_META
-        this.LINK_CONTENT = config.sectorSize - SectorSerialize.LINK_META
+        this.SECTOR_SIZE   = config.sectorSize
+        this.HEAD_CONTENT  = config.sectorSize - SectorSerialize.HEAD_META
+        this.LINK_CONTENT  = config.sectorSize - SectorSerialize.LINK_META
+        this.STORE_CONTENT = config.sectorSize - SectorSerialize.STORE_META
     }
+
+    // Root sector ================================================================================
 
     /**
      * Serializes root sector configuration into a buffer ready to be written to the disk.  
@@ -155,6 +155,8 @@ export default class SectorSerialize {
 
     }
 
+    // Head sector ================================================================================
+
     /**
      * Serializes the head sector into a buffer ready to be written to the disk.  
      * -> Refer to head sector documentation in [the specification](../../spec/spec-1.0.md).
@@ -204,6 +206,8 @@ export default class SectorSerialize {
 
     }
 
+    // Link sector ================================================================================
+
     /**
      * Serializes the link sector into a buffer ready to be written to the disk.  
      * -> Refer to link sector documentation in [the specification](../../spec/spec-1.0.md).
@@ -247,6 +251,52 @@ export default class SectorSerialize {
 
         return props as LinkSector & CommonReadMeta
 
+    }
+
+    // Storage sector =============================================================================
+
+    /**
+     * Serializes the storage sector into a buffer ready to be written to the disk.  
+     * -> Refer to storage sector documentation in [the specification](../../spec/spec-1.0.md).
+     * @param sector Sector data object
+     * @returns Sector data buffer
+     */
+    public createStorageSector(sector: StorageSector): Buffer {
+
+        const data = Memory.alloc(this.SECTOR_SIZE)
+
+        data.writeInt8(SectorType.STORE)
+        data.writeInt32(sector.crc32Sum)
+        data.writeInt64(sector.next)
+        data.writeInt8(sector.blockRange)
+        data.writeInt16(sector.data.length)
+        data.bytesWritten = SectorSerialize.STORE_META
+        data.write(sector.data)
+
+        return data.buffer
+
+    }
+
+    /**
+     * Deserializes a storage sector that's been read from the disk into usable information.  
+     * -> Refer to kink storage documentation in [the specification](../../spec/spec-1.0.md).
+     * @param sector Sector data buffer
+     * @returns Sector data object
+     */
+    public readStorageSector(sector: Buffer): StorageSector & CommonReadMeta {
+
+        const props: Partial<StorageSector & CommonReadMeta> = {}
+        const data = Memory.intake(sector)
+
+        props.sectorType    = data.readInt8()
+        props.crc32Sum      = data.readInt32()
+        props.next          = data.readInt64()
+        props.blockRange    = data.readInt8()
+        const dataLength    = data.readInt16()
+        data.bytesRead      = SectorSerialize.STORE_META
+        props.data          = data.read(dataLength)
+
+        return props as StorageSector & CommonReadMeta
     }
 
 }
