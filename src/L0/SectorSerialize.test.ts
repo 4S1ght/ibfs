@@ -1,6 +1,7 @@
 
 import crypto from 'node:crypto'
-import SectorSerialize, { RootSector } from './SectorSerialize.js'
+import zlib from 'node:zlib'
+import SectorSerialize, { HeadSector, LinkSector, RootSector, StorageSector } from './SectorSerialize.js'
 import { describe, test, expect } from 'vitest'
 
 describe('Root sector', () => {
@@ -20,8 +21,6 @@ describe('Root sector', () => {
 
     const sectorMemory = SectorSerialize.createRootSector(settings)
     const sectorObject = SectorSerialize.readRootSector(sectorMemory)
-    console.log(settings)
-    console.log(sectorObject)
 
 
     test('sectorSize',           () => expect(sectorObject.sectorSize)          .toBe(settings.sectorSize))
@@ -34,5 +33,69 @@ describe('Root sector', () => {
     test('aesIV',                () => expect(sectorObject.aesIV)               .toStrictEqual(settings.aesIV))
     test('metadataSectors',      () => expect(sectorObject.metadataSectors)     .toBe(settings.metadataSectors))
     test('nodeCryptoCompatMode', () => expect(sectorObject.nodeCryptoCompatMode).toBe(settings.nodeCryptoCompatMode))
+
+})
+
+describe('Head sector', () => {
+
+    const settings: HeadSector = {
+        created: Math.floor(Date.now()/1000),
+        modified: Math.floor(Date.now()/1000),
+        next: 12345,
+        blockRange: 10,
+        crc32Sum: zlib.crc32('test'),
+        data: crypto.randomBytes(10)
+    }
+
+    const ss = new SectorSerialize({ sectorSize: 1024 })
+    const sectorMemory = ss.createHeadSector(settings)
+    const sectorObject = ss.readHeadSector(sectorMemory)
+
+    test('created',     () => expect(sectorObject.created)      .toBe(settings.created))
+    test('modified',    () => expect(sectorObject.modified)     .toBe(settings.modified))
+    test('next',        () => expect(sectorObject.next)         .toBe(settings.next))
+    test('blockRange',  () => expect(sectorObject.blockRange)   .toBe(settings.blockRange))
+    test('crc32Sum',    () => expect(sectorObject.crc32Sum)     .toBe(settings.crc32Sum))
+    test('data',        () => expect(sectorObject.data)         .toStrictEqual(settings.data))
+
+})
+
+describe('Link sector', () => {
+
+    const settings: LinkSector = {
+        next: 12345,
+        blockRange: 10,
+        crc32Sum: zlib.crc32('test'),
+        data: crypto.randomBytes(10)
+    }
+
+    const ss = new SectorSerialize({ sectorSize: 1024 })
+    const sectorMemory = ss.createLinkSector(settings)
+    const sectorObject = ss.readLinkSector(sectorMemory)
+
+    test('next',        () => expect(sectorObject.next)         .toBe(settings.next))
+    test('blockRange',  () => expect(sectorObject.blockRange)   .toBe(settings.blockRange))
+    test('crc32Sum',    () => expect(sectorObject.crc32Sum)     .toBe(settings.crc32Sum))
+    test('data',        () => expect(sectorObject.data)         .toStrictEqual(settings.data))
+
+})
+
+describe('Storage sector', () => {
+
+    const settings: StorageSector = {
+        next: 12345,
+        blockRange: 10,
+        crc32Sum: zlib.crc32('test'),
+        data: crypto.randomBytes(10)
+    }
+
+    const ss = new SectorSerialize({ sectorSize: 1024 })
+    const sectorMemory = ss.createStorageSector(settings)
+    const sectorObject = ss.readStorageSector(sectorMemory)
+
+    test('next',        () => expect(sectorObject.next)         .toBe(settings.next))
+    test('blockRange',  () => expect(sectorObject.blockRange)   .toBe(settings.blockRange))
+    test('crc32Sum',    () => expect(sectorObject.crc32Sum)     .toBe(settings.crc32Sum))
+    test('data',        () => expect(sectorObject.data)         .toStrictEqual(settings.data))
 
 })
