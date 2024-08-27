@@ -29,7 +29,8 @@ export interface RootSector {
     /** The Initialization Vector (IV) used for encryption. */
     aesIV: Buffer
     /** 
-     * NodeJS compatibility mode enabled/disabled. In compat mode, only first 8 bytes of the IV are used.
+     * Mode of compatibility with native NodeJS crypto APIs. 
+     * In compatibility mode, only first 8 bytes of the IV are used 
      * and tweak values for XTS encryption should be emulated.
     */
     nodeCryptoCompatMode: boolean
@@ -124,6 +125,7 @@ export default class SectorSerialize {
         data.writeInt64(sector.rootDirectory)
         data.writeInt16(sector.aesCipher)
         data.write(sector.aesIV)
+        data.write(sector.aesKeyCheck)
         data.writeBool(sector.nodeCryptoCompatMode)
 
         return data.buffer
@@ -149,6 +151,7 @@ export default class SectorSerialize {
         props.rootDirectory        = data.readInt64()
         props.aesCipher            = data.readInt16() as AESCipher
         props.aesIV                = data.read(16)
+        props.aesKeyCheck          = data.read(16)
         props.nodeCryptoCompatMode = data.readBool()
 
         return props as RootSector
