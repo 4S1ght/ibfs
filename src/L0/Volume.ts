@@ -57,13 +57,20 @@ export default class Volume {
             // Setup ==============================================================================
 
             const update = config.onUpdate || (() => {})
+
             update('setup:deps', 0)
 
             // Add file extension
             if (path.extname(config.volume) !== VD_FILE_EXT) config.volume += VD_FILE_EXT
 
-            // Set up serializer
+            const aesIV = crypto.randomBytes(16)
+            const aesKey = Buffer.alloc({ 'aes-128-xts': 32, 'aes-256-xts': 64, '': 0 }[config.aesCipher!])
+            Buffer.from(config.aesKey!).copy(aesKey)
+
+            // Set up deps
             const serialize = new SectorSerialize({ sectorSize: config.sectorSize })
+            const aes = new SectorAES({ iv: aesIV, cipher: config.aesCipher || '' })
+
 
             // Root sector ========================================================================
 
@@ -76,12 +83,8 @@ export default class Volume {
             // user supplied decryption key.
             const aesKeyCheck = (() => {
                 if (!config.aesCipher) return Buffer.alloc(16)
-                // Parse key
-                const key = Buffer.alloc({ 'aes-128-xts': 32, 'aes-256-xts': 64}[config.aesCipher!])
-                Buffer.from(config.aesKey!).copy(key)
-                // Encrypt
-                const aes = new SectorAES({ cipher: config.aesCipher!, iv: Buffer.alloc(16) })
-                return aes.encrypt(Buffer.alloc(16), key, 0)
+                const aes = new SectorAES({ cipher: config.aesCipher!, iv: aesIV })
+                return aes.encrypt(Buffer.alloc(16), aesKey, 0)
             })()
 
             // Root sector
@@ -92,7 +95,7 @@ export default class Volume {
                 sectorCount:            config.sectorCount,
                 metadataSectors:        metadataSectors,
                 aesCipher:              AESCipher[config.aesCipher || ''],
-                aesIV:                  crypto.randomBytes(16),
+                aesIV:                  aesIV,
                 nodeCryptoCompatMode:   true,
                 aesKeyCheck:            aesKeyCheck,
                 rootDirectory:          metadataSectors + 1
@@ -113,7 +116,10 @@ export default class Volume {
             const rootDirIndexData = Memory.alloc(serialize.HEAD_CONTENT)
             // First root directory storage block address and its block size
             rootDirIndexData.writeInt64(metadataSectors + 2)
-            rootDirIndexData.writeInt8(0)                    
+            rootDirIndexData.writeInt8(0)
+
+            // Encrypt sector data if AES enabled
+            aes.encrypt(rootDirIndexData.buffer, aesKey, metadataSectors + 1)
 
             const rootDirIndex = serialize.createHeadSector({
                 created: Date.now(),
@@ -124,11 +130,16 @@ export default class Volume {
                 blockRange: 0
             })
 
+
             // Root directory content =============================================================
 
             update('setup:root_dir_store', 0)
 
             const rootDirStoreData = Memory.alloc(serialize.STORE_CONTENT)
+            rootDirStoreData.writeString(JSON.stringify({}))
+            // Encrypt sector data if AES enabled
+            aes.encrypt(rootDirStoreData.buffer, aesKey, metadataSectors + 2)
+
             const rootDirStore = serialize.createStorageSector({
                 data: rootDirStoreData.buffer,
                 next: 0,
