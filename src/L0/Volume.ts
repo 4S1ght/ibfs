@@ -5,12 +5,14 @@ import path from "node:path"
 import fs from "node:fs/promises"
 import crypto from "node:crypto"
 import zlib from "node:zlib"
+import type { WriteStream } from "node:fs"
 
 import Memory from "./Memory.js"
 import SectorSerialize, { SectorSize } from "./SectorSerialize.js"
 import SectorAES, { AESCipher } from "./SectorAES.js"
 import IBFSError from "../errors/IBFSError.js"
 import { FS_SPEC, VD_FILE_EXT } from '../Constants.js'
+import { sanitize } from "../Helpers.js"
 
 // Types ==========================================================================================
 
@@ -26,8 +28,18 @@ export interface VolumeCreateConfig {
     /** AES encryption key */
     aesKey?: Buffer | string
     /** A callback called on each update as the volume is being created. */
-    onUpdate: () => any
+    onUpdate?: (status: VolumeCreateUpdate, written: number) => any
 }
+
+type VolumeCreateUpdate = 
+      'setup:deps' 
+    | 'setup:root' 
+    | 'setup:metadata' 
+    | 'setup:root_dir_index' 
+    | 'setup:root_dir_store'
+    | 'setup:bootstrap'
+    | 'write:bootstrap'
+    | 'write:allocate'
 
 // Module =========================================================================================
 
@@ -36,9 +48,16 @@ export default class Volume {
     private constructor() {}
 
     public static async create(config: VolumeCreateConfig): EavSingleAsync<IBFSError> {
+
+        let file: fs.FileHandle
+        let ws: WriteStream
+
         try {
 
             // Setup ==============================================================================
+
+            const update = config.onUpdate || (() => {})
+            update('setup:deps', 0)
 
             // Add file extension
             if (path.extname(config.volume) !== VD_FILE_EXT) config.volume += VD_FILE_EXT
@@ -47,6 +66,8 @@ export default class Volume {
             const serialize = new SectorSerialize({ sectorSize: config.sectorSize })
 
             // Root sector ========================================================================
+
+            update('setup:root', 0)
 
             // Metadata
             const metadataSectors = Math.ceil(1024*1024 / config.sectorSize)
@@ -79,11 +100,15 @@ export default class Volume {
 
             // Metadata block =====================================================================
 
+            update('setup:metadata', 0)
+
             const metadata = Memory.alloc(metadataSectors * config.sectorSize)
             metadata.writeString(JSON.stringify({ ibfs: {} }))
             const metadataBlock = metadata.buffer
 
             // Root directory index ===============================================================
+
+            update('setup:root_dir_index', 0)
 
             const rootDirIndexData = Memory.alloc(serialize.HEAD_CONTENT)
             // First root directory storage block address and its block size
@@ -101,6 +126,8 @@ export default class Volume {
 
             // Root directory content =============================================================
 
+            update('setup:root_dir_store', 0)
+
             const rootDirStoreData = Memory.alloc(serialize.STORE_CONTENT)
             const rootDirStore = serialize.createStorageSector({
                 data: rootDirStoreData.buffer,
@@ -111,22 +138,64 @@ export default class Volume {
 
             // File write =========================================================================
 
-            const initialFile = Buffer.concat([
+            update('setup:bootstrap', 0)
+
+            const file = await fs.open(config.volume, 'w+', 0o600)
+            const ws = file.createWriteStream({ highWaterMark: config.sectorSize * 300 })
+            const bf = Buffer.alloc(config.sectorSize)
+            let canWrite = true
+            let broken = false
+            let bw = 0
+
+            update('write:bootstrap', 0)
+
+            file.write(Buffer.concat([
                 rootSector,
                 metadataBlock,
                 rootDirIndex,
                 rootDirStore
-            ])
+            ]))
 
-            await fs.writeFile(config.volume, initialFile)
+            update('write:allocate', 0)
 
-            // File expand stream =================================================================
+            for (let i = 0; i < config.sectorCount; i++) {
+                
+                if (broken) break
 
-            // TODO: Use streams to expand the file to the desired volume size.
+                // Write to the stream
+                canWrite = ws.write(bf, error => {
+                    if (error && !broken) {
+                        broken = true
+                        file.close()
+                        return new IBFSError(
+                            'L0_VCREATE_WS_ERROR', 
+                            'WriteStream error while creating the volume.', 
+                            error as Error, 
+                            sanitize({ ...config, failedSectorPosition: i }, ['aesKey'])
+                        )
+                    }
+                })
+
+                // Pause the loop if the stream fills up
+                if (!canWrite) await new Promise<void>(resume => ws.on('drain', () => {
+                    ws.removeAllListeners('drain')
+                    resume()
+                }))
+                
+                if (ws.bytesWritten - bw >= 100_000_000) {
+                    update('write:allocate', ws.bytesWritten)
+                    bw = ws.bytesWritten
+                }
+
+            }
 
         } 
         catch (error) {
             return new IBFSError('L0_VCREATE_CANT_CREATE', undefined, error as Error)
+        }
+        finally {
+            if (ws!) ws.close()
+            if (file!) file.close()
         }
     }
 

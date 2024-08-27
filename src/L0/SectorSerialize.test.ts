@@ -22,7 +22,7 @@ describe('Root sector', () => {
     const sectorMemory = SectorSerialize.createRootSector(settings)
     const sectorObject = SectorSerialize.readRootSector(sectorMemory)
 
-
+    test('sector length',        () => expect(sectorMemory.length)              .toBe(1024))
     test('sectorSize',           () => expect(sectorObject.sectorSize)          .toBe(settings.sectorSize))
     test('sectorCount',          () => expect(sectorObject.sectorCount)         .toBe(settings.sectorCount))
     test('specMajor',            () => expect(sectorObject.specMajor)           .toBe(settings.specMajor))
@@ -51,12 +51,13 @@ describe('Head sector', () => {
     const sectorMemory = ss.createHeadSector(settings)
     const sectorObject = ss.readHeadSector(sectorMemory)
 
-    test('created',     () => expect(sectorObject.created)      .toBe(settings.created))
-    test('modified',    () => expect(sectorObject.modified)     .toBe(settings.modified))
-    test('next',        () => expect(sectorObject.next)         .toBe(settings.next))
-    test('blockRange',  () => expect(sectorObject.blockRange)   .toBe(settings.blockRange))
-    test('crc32Sum',    () => expect(sectorObject.crc32Sum)     .toBe(settings.crc32Sum))
-    test('data',        () => expect(sectorObject.data)         .toStrictEqual(settings.data))
+    test('sector length', () => expect(sectorMemory.length)       .toBe(1024))
+    test('created',       () => expect(sectorObject.created)      .toBe(settings.created))
+    test('modified',      () => expect(sectorObject.modified)     .toBe(settings.modified))
+    test('next',          () => expect(sectorObject.next)         .toBe(settings.next))
+    test('blockRange',    () => expect(sectorObject.blockRange)   .toBe(settings.blockRange))
+    test('crc32Sum',      () => expect(sectorObject.crc32Sum)     .toBe(settings.crc32Sum))
+    test('data',          () => expect(sectorObject.data)         .toStrictEqual(settings.data))
 
 })
 
@@ -73,10 +74,11 @@ describe('Link sector', () => {
     const sectorMemory = ss.createLinkSector(settings)
     const sectorObject = ss.readLinkSector(sectorMemory)
 
-    test('next',        () => expect(sectorObject.next)         .toBe(settings.next))
-    test('blockRange',  () => expect(sectorObject.blockRange)   .toBe(settings.blockRange))
-    test('crc32Sum',    () => expect(sectorObject.crc32Sum)     .toBe(settings.crc32Sum))
-    test('data',        () => expect(sectorObject.data)         .toStrictEqual(settings.data))
+    test('sector length', () => expect(sectorMemory.length)       .toBe(1024))
+    test('next',          () => expect(sectorObject.next)         .toBe(settings.next))
+    test('blockRange',    () => expect(sectorObject.blockRange)   .toBe(settings.blockRange))
+    test('crc32Sum',      () => expect(sectorObject.crc32Sum)     .toBe(settings.crc32Sum))
+    test('data',          () => expect(sectorObject.data)         .toStrictEqual(settings.data))
 
 })
 
@@ -93,9 +95,10 @@ describe('Storage sector', () => {
     const sectorMemory = ss.createStorageSector(settings)
     const sectorObject = ss.readStorageSector(sectorMemory)
 
-    test('next',        () => expect(sectorObject.next)         .toBe(settings.next))
-    test('blockRange',  () => expect(sectorObject.blockRange)   .toBe(settings.blockRange))
-    test('crc32Sum',    () => expect(sectorObject.crc32Sum)     .toBe(settings.crc32Sum))
-    test('data',        () => expect(sectorObject.data)         .toStrictEqual(settings.data))
+    test('sector length', () => expect(sectorMemory.length)       .toBe(1024))
+    test('next',          () => expect(sectorObject.next)         .toBe(settings.next))
+    test('blockRange',    () => expect(sectorObject.blockRange)   .toBe(settings.blockRange))
+    test('crc32Sum',      () => expect(sectorObject.crc32Sum)     .toBe(settings.crc32Sum))
+    test('data',          () => expect(sectorObject.data)         .toStrictEqual(settings.data))
 
 })

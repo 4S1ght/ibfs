@@ -2,7 +2,7 @@ enum ErrorCodes {
     
     // Level 0 errors
     L0_VCREATE_CANT_CREATE  = 101, // Can't create an IBFS volume
-    L0_CSUM_MISMATCH        = 102, // Sector checksum mismatch likely indicating data corruption inside a sector.
+    L0_VCREATE_WS_ERROR     = 102, // Write stream error ocurred while the volume was being created.
 
 }
 
