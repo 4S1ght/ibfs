@@ -82,7 +82,7 @@ export default class Memory {
     }
     /** Sequentially writes raw data. */
     public write(value: Buffer) {
-        this.buffer.fill(value, this.bytesWritten, this.bytesWritten + value.length)
+        value.copy(this.buffer, this.bytesWritten)
         this.bytesWritten += value.length
     }
 

@@ -42,14 +42,16 @@ describe('Head sector', () => {
         created: Math.floor(Date.now()/1000),
         modified: Math.floor(Date.now()/1000),
         next: 12345,
-        blockRange: 10,
+        blockRange: 0,
         crc32Sum: zlib.crc32('test'),
-        data: crypto.randomBytes(10)
+        data: Buffer.from('test'),
+        endPadding: 1024 - SectorSerialize.HEAD_META - 4
     }
 
     const ss = new SectorSerialize({ sectorSize: 1024 })
     const sectorMemory = ss.createHeadSector(settings)
     const sectorObject = ss.readHeadSector(sectorMemory)
+    console.log(sectorObject)
 
     test('sector length', () => expect(sectorMemory.length)       .toBe(1024))
     test('created',       () => expect(sectorObject.created)      .toBe(settings.created))
@@ -65,9 +67,10 @@ describe('Link sector', () => {
 
     const settings: LinkSector = {
         next: 12345,
-        blockRange: 10,
+        blockRange: 0,
         crc32Sum: zlib.crc32('test'),
-        data: crypto.randomBytes(10)
+        data: Buffer.from('test'),
+        endPadding: 1024 - SectorSerialize.LINK_META - 4
     }
 
     const ss = new SectorSerialize({ sectorSize: 1024 })
@@ -86,9 +89,10 @@ describe('Storage sector', () => {
 
     const settings: StorageSector = {
         next: 12345,
-        blockRange: 10,
+        blockRange: 0,
         crc32Sum: zlib.crc32('test'),
-        data: crypto.randomBytes(10)
+        data: Buffer.from('test'),
+        endPadding: 1024 - SectorSerialize.STORE_META - 4
     }
 
     const ss = new SectorSerialize({ sectorSize: 1024 })

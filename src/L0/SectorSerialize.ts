@@ -64,6 +64,11 @@ interface CommonMeta {
     crc32Sum: number
     /** Number of sectors within the block (excluding the head block). */
     blockRange: number
+    /** 
+     * Amount of bytes at the end of the last block sector that do not
+     * contain data and should be stripped.
+    */
+    endPadding: number
 }
 
 export interface HeadSector extends CommonMeta {
@@ -176,7 +181,7 @@ export default class SectorSerialize {
         data.writeInt64(sector.created)
         data.writeInt64(sector.modified)
         data.writeInt8(sector.blockRange)
-        data.writeInt16(sector.data.length)
+        data.writeInt16(sector.endPadding)
         data.bytesWritten = SectorSerialize.HEAD_META
         data.write(sector.data)
 
@@ -195,15 +200,16 @@ export default class SectorSerialize {
         const props: Partial<HeadSector & CommonReadMeta> = {}
         const data = Memory.intake(sector)
         
+        
         props.sectorType  = data.readInt8()
         props.crc32Sum    = data.readInt32()
         props.next        = data.readInt64()
         props.created     = data.readInt64()
         props.modified    = data.readInt64()
         props.blockRange  = data.readInt8()
-        const dataLength  = data.readInt16()
+        props.endPadding  = data.readInt16()
         data.bytesRead    = SectorSerialize.HEAD_META
-        props.data        = data.read(dataLength)
+        props.data        = data.read(this.HEAD_CONTENT - (props.blockRange === 0 ? props.endPadding : 0))
 
         return props as HeadSector & CommonReadMeta
 
@@ -225,7 +231,7 @@ export default class SectorSerialize {
         data.writeInt32(sector.crc32Sum)
         data.writeInt64(sector.next)
         data.writeInt8(sector.blockRange)
-        data.writeInt16(sector.data.length)
+        data.writeInt16(sector.endPadding)
         data.bytesWritten = SectorSerialize.LINK_META
         data.write(sector.data)
 
@@ -248,9 +254,9 @@ export default class SectorSerialize {
         props.crc32Sum      = data.readInt32()
         props.next          = data.readInt64()
         props.blockRange    = data.readInt8()
-        const dataLength    = data.readInt16()
+        props.endPadding    = data.readInt16()
         data.bytesRead      = SectorSerialize.LINK_META
-        props.data          = data.read(dataLength)
+        props.data          = data.read(this.LINK_CONTENT - (props.blockRange === 0 ? props.endPadding : 0))
 
         return props as LinkSector & CommonReadMeta
 
@@ -272,7 +278,7 @@ export default class SectorSerialize {
         data.writeInt32(sector.crc32Sum)
         data.writeInt64(sector.next)
         data.writeInt8(sector.blockRange)
-        data.writeInt16(sector.data.length)
+        data.writeInt16(sector.endPadding)
         data.bytesWritten = SectorSerialize.STORE_META
         data.write(sector.data)
 
@@ -295,9 +301,9 @@ export default class SectorSerialize {
         props.crc32Sum      = data.readInt32()
         props.next          = data.readInt64()
         props.blockRange    = data.readInt8()
-        const dataLength    = data.readInt16()
+        props.endPadding    = data.readInt16()
         data.bytesRead      = SectorSerialize.STORE_META
-        props.data          = data.read(dataLength)
+        props.data          = data.read(this.STORE_CONTENT - (props.blockRange === 0 ? props.endPadding : 0))
 
         return props as StorageSector & CommonReadMeta
     }

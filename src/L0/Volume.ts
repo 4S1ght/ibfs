@@ -127,7 +127,8 @@ export default class Volume {
                 data: rootDirIndexData.buffer,
                 next: 0,
                 crc32Sum: zlib.crc32(rootDirIndexData.buffer),
-                blockRange: 0
+                blockRange: 0,
+                endPadding: serialize.HEAD_CONTENT - rootDirIndexData.buffer.length
             })
 
 
@@ -144,7 +145,8 @@ export default class Volume {
                 data: rootDirStoreData.buffer,
                 next: 0,
                 crc32Sum: zlib.crc32(rootDirStoreData.buffer),
-                blockRange: 0
+                blockRange: 0,
+                endPadding: serialize.STORE_CONTENT - rootDirStoreData.buffer.length
             })
 
             // File write =========================================================================

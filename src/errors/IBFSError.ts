@@ -1,8 +1,10 @@
 enum ErrorCodes {
     
     // Level 0 errors
-    L0_VCREATE_CANT_CREATE  = 101, // Can't create an IBFS volume
-    L0_VCREATE_WS_ERROR     = 102, // Write stream error ocurred while the volume was being created.
+    L0_VCREATE_CANT_CREATE      = 101, // Can't create an IBFS volume
+    L0_VCREATE_WS_ERROR         = 102, // Write stream error ocurred while the volume was being created.
+
+    L0_BS_CANT_SERIALIZE_HEAD   = 103, // Problem serializing a head block.
 
 }
 
@@ -16,9 +18,9 @@ export default class IBFSError<Code extends ErrorCode = ErrorCode> extends Error
     public readonly causes: Error[] = []
     public readonly meta: ErrorMetadata = {}
 
-    constructor(code: Code, message?: string, cause?: Error | null, meta?: ErrorMetadata) {
+    constructor(code: Code, message?: string|null, cause?: Error | null, meta?: ErrorMetadata) {
         
-        super(message)
+        super(message || undefined)
         this.name = this.constructor.name
         this.code = code
         this.errno = ErrorCodes[code]
