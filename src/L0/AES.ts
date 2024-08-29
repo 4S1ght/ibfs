@@ -4,7 +4,7 @@ import crypto from 'node:crypto'
 
 // Types & Constants ==========================================================
 
-export type AESKeySize = typeof SectorAES.AES_KEY_SIZES[number]
+export type AESKeySize = typeof BlockAES.AES_KEY_SIZES[number]
 
 export enum AESCipher {
     ''            = 0,
@@ -12,7 +12,7 @@ export enum AESCipher {
     'aes-256-xts' = 256,
 }
 
-export interface SectorAESConfig {
+export interface BlockAESConfig {
     /**
      * AES/XTS cipher used. Enter empty string for no encryption. 
      */
@@ -27,7 +27,7 @@ export interface SectorAESConfig {
 
 // Module =====================================================================
 
-export default class SectorAES {
+export default class BlockAES {
 
     public static readonly AES_KEY_SIZES = [ 0, 128, 256 ] as const
 
@@ -37,7 +37,7 @@ export default class SectorAES {
     /** Combines 8-byte IV with 8-byte sector address to emulate tweak values. */
     public workingIV = Buffer.alloc(16)
 
-    constructor(config: SectorAESConfig) {
+    constructor(config: BlockAESConfig) {
 
         this.iv = config.iv
         this.cipher = config.cipher

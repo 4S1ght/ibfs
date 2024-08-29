@@ -3,3 +3,4 @@ tests/
 dist/
 
 .DS_Store
+*-old
