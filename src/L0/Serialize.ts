@@ -98,6 +98,7 @@ export default class Serialize {
     public static readonly HEAD_META  = 64
     public static readonly LINK_META  = 32
     public static readonly STORE_META = 32
+    public static readonly MDATA_META = 16
     
     // Configuration
     public readonly SECTOR_SIZE:   number
@@ -160,6 +161,45 @@ export default class Serialize {
         props.nodeCryptoCompatMode = data.readBool()
 
         return props as RootSector
+
+    }
+
+    // Meta block =================================================================================
+
+    /**
+     * Serializes a JSON object and produces a standard-sized 1MiB metadata block
+     * ready to be written to the disk.
+     * @param block JSON object stored inside the block
+     * @returns Buffer
+     */
+    public createMetaBlock(block: Object) {
+
+        const size = Math.ceil(1024*1024 / this.SECTOR_SIZE)
+        const data = Memory.alloc(size)
+
+        const jsonString = Buffer.from(JSON.stringify(block))
+        data.writeInt32(jsonString.length)
+        data.bytesWritten = Serialize.MDATA_META
+        data.write(jsonString)
+
+        return data.buffer
+
+    }
+
+    /**
+     * Deserializes the metadata block into a JSON object.
+     * @param block Raw metadata block
+     * @returns Metadata object
+     */
+    public readMetaBlock<Metadata extends Object = Object>(block: Buffer): Metadata {
+
+        const data = Memory.intake(block)
+
+        const size = data.readInt32()
+        data.bytesRead = Serialize.MDATA_META
+        const jsonString = data.readString(size)
+
+        return JSON.parse(jsonString)
 
     }
 
