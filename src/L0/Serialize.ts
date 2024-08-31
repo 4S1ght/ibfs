@@ -49,35 +49,30 @@ export interface RootSector {
 
 // Data sectors ===============================================================
 
-interface CommonReadMeta {
+export interface CommonReadMeta {
     /** 
      * Metadata providing information about the sector's type and its role. 
      * Exists purely for identification and potential data recovery tooling.
      */
-    sectorType: Values<typeof SectorType>
+    blockType: Values<typeof SectorType>
     /** CRC32 checksum of the block's content (after encryption) */
     crc32Sum: number
 }
 
-interface CommonWriteMeta {
+export interface CommonWriteMeta {
     /** AES encryption key for disk encryption. */
     aesKey?: Buffer
     /** Address of the block. */
     address: number
 }
 
-interface CommonMeta {
+export interface CommonMeta {
     /** Sector data. */
     data: Buffer
     /** Address of the next link block. */
     next: number
     /** Number of sectors within the block (excluding the head block). */
     blockRange: number
-    /** 
-     * Amount of bytes at the end of the last block sector that do not
-     * contain data and should be stripped.
-    */
-    endPadding: number
 }
 
 export interface HeadBlock extends CommonMeta {
@@ -89,6 +84,17 @@ export interface HeadBlock extends CommonMeta {
 
 export interface LinkBlock extends CommonMeta {}
 export interface StorageBlock extends CommonMeta {}
+
+interface Finalizer<Data> {
+    /** Block metadata */
+    metadata: Omit<Data, 'data'>
+    /** 
+     * Finalizer function that finishes deserializing the block.
+     * It needs to be supplied the trailing data sectors after the
+     * head/link/storage descriptor sector to decrypt and process the data.
+     */
+    final: (rawSectors: Buffer) => Data
+}
 
 enum SectorType {
     HEAD = 1,
@@ -190,7 +196,7 @@ export default class Serialize {
      */
     public createMetaBlock(block: Object) {
 
-        const size = Math.ceil(1024*1024 / this.SECTOR_SIZE)
+        const size = this.SECTOR_SIZE * Math.ceil(1024*1024 / this.SECTOR_SIZE)
         const data = Memory.alloc(size)
 
         const jsonString = Buffer.from(JSON.stringify(block))
@@ -223,35 +229,73 @@ export default class Serialize {
 
     public createHeadBlock(blockData: HeadBlock & CommonWriteMeta): Buffer {
 
-        const block = Memory.alloc(blockData.blockRange)
-        const initialData = Memory.intake(blockData.data)
+        const dist = Memory.alloc(this.SECTOR_SIZE * blockData.blockRange+1)
+        const src = Memory.intake(blockData.data)
 
-        block.writeInt8(SectorType.HEAD)
-        block.writeInt32(0) // CRC
-        block.writeInt64(blockData.next)
-        block.writeInt64(blockData.created)
-        block.writeInt64(blockData.modified)
-        block.writeInt8(blockData.blockRange)
-        block.writeInt16(blockData.endPadding)
-        block.bytesWritten = Serialize.HEAD_META
+        // Metadata
+        dist.writeInt8(SectorType.HEAD)                                 // Block type
+        dist.writeInt32(0)                                              // CRC
+        dist.writeInt64(blockData.next)                                 // Next address
+        dist.writeInt64(blockData.created)                              // Creation date
+        dist.writeInt64(blockData.modified)                             // Modification date
+        dist.writeInt8(blockData.blockRange)                            // Sectors inside the block
+        dist.writeInt16(dist.length - Serialize.HEAD_META - src.length) // End sector padding (unencrypted)
+        dist.bytesWritten = Serialize.HEAD_META
 
-        // Redo it to account for smaller content capacity of the 1st sector in the block
+        // Head sector
+        src.bytesRead = Serialize.HEAD_META
+        const address = blockData.address
+        const headSectorData = src.read(this.HEAD_CONTENT)
+        const headSectorDataEnc = this.AES.encrypt(headSectorData, blockData.aesKey!, address)
+        dist.write(headSectorDataEnc)
 
-        for (let i = 0; i < blockData.blockRange; i++) {
-            const address = blockData.address
-            const sectorData = initialData.read(this.SECTOR_SIZE)
+        // Raw sectors
+        for (let i = 1; i < blockData.blockRange; i++) {
+            const address = blockData.address + i
+            const sectorData = src.read(this.SECTOR_SIZE)
             const sectorDataEnc = this.AES.encrypt(sectorData, blockData.aesKey!, address)
-            block.write(sectorDataEnc)
+            dist.write(sectorDataEnc)
         }
 
-        block.bytesWritten = 1
-        block.writeInt32(crc32(block.read(Infinity)))
+        // Read encrypted content...
+        dist.bytesRead = Serialize.HEAD_META
+        const crc32Sum = crc32(dist.read(Infinity))
+        // ...and compute the checksum
+        dist.bytesWritten = 1
+        dist.writeInt32(crc32Sum)
 
-        return block.buffer
+        return dist.buffer
 
     }
 
-    public readHeadBlock(block: HeadBlock) {}
+    public readHeadBlock(headSector: Buffer): Finalizer<HeadBlock & CommonReadMeta> {
+
+        // @ts-expect-error - Populated later
+        const props: HeadBlock & CommonReadMeta = {}
+        const src = Memory.intake(headSector)
+
+        props.blockType   = src.readInt8()
+        props.crc32Sum    = src.readInt32()
+        props.next        = src.readInt64()
+        props.created     = src.readInt64()
+        props.modified    = src.readInt64()
+        props.blockRange  = src.readInt8()
+        const endPadding  = src.readInt16()
+
+        const dist = Memory.alloc(props.blockRange+1)
+        
+        return {
+            metadata: props,
+            final: (sectors: Buffer) => {
+
+                // TODO: parse the content
+
+                props.data = dist.readFilled()
+                return props
+            }
+        }
+
+    }
 
     public createLinkBlock(block: LinkBlock) {}
     public readLinkBlock(block: LinkBlock) {}
