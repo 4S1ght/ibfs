@@ -3,7 +3,7 @@
 import { crc32 } from "zlib"
 
 import Memory from "@L0/Memory.js"
-import AES, { AESCipher, AESKeySize } from "@L0/AES.js"
+import BlockAES, { AESCipher, AESKeySize, BlockAESConfig } from "@L0/AES.js"
 import IBFSError from "@errors/IBFSError.js"
 
 // Types ==========================================================================================
@@ -55,6 +55,15 @@ interface CommonReadMeta {
      * Exists purely for identification and potential data recovery tooling.
      */
     sectorType: Values<typeof SectorType>
+    /** CRC32 checksum of the block's content (after encryption) */
+    crc32Sum: number
+}
+
+interface CommonWriteMeta {
+    /** AES encryption key for disk encryption. */
+    aesKey?: Buffer
+    /** Address of the block. */
+    address: number
 }
 
 interface CommonMeta {
@@ -62,8 +71,6 @@ interface CommonMeta {
     data: Buffer
     /** Address of the next link block. */
     next: number
-    /** CRC32 checksum of the block's content. */
-    crc32Sum: number
     /** Number of sectors within the block (excluding the head block). */
     blockRange: number
     /** 
@@ -106,11 +113,20 @@ export default class Serialize {
     public readonly LINK_CONTENT:  number
     public readonly STORE_CONTENT: number
 
-    constructor(config: BlockSerializeConfig) {
+    public readonly AES: BlockAES
+
+    constructor(config: BlockSerializeConfig & BlockAESConfig) {
+
         this.SECTOR_SIZE   = config.diskSectorSize
         this.HEAD_CONTENT  = config.diskSectorSize - Serialize.HEAD_META
         this.LINK_CONTENT  = config.diskSectorSize - Serialize.LINK_META
         this.STORE_CONTENT = config.diskSectorSize - Serialize.STORE_META
+
+        this.AES = new BlockAES({
+            iv: config.iv,
+            cipher: config.cipher
+        })
+
     }
 
     // Root sector ================================================================================
@@ -167,8 +183,8 @@ export default class Serialize {
     // Meta block =================================================================================
 
     /**
-     * Serializes a JSON object and produces a standard-sized 1MiB metadata block
-     * ready to be written to the disk.
+     * Serializes a JSON object and produces a metadata block guaranteed to be at least 
+     * 1MiB in size and is ready to be written to the disk.
      * @param block JSON object stored inside the block
      * @returns Buffer
      */
@@ -205,7 +221,36 @@ export default class Serialize {
 
     // Head block =================================================================================
 
-    public createHeadBlock(block: HeadBlock) {}
+    public createHeadBlock(blockData: HeadBlock & CommonWriteMeta): Buffer {
+
+        const block = Memory.alloc(blockData.blockRange)
+        const initialData = Memory.intake(blockData.data)
+
+        block.writeInt8(SectorType.HEAD)
+        block.writeInt32(0) // CRC
+        block.writeInt64(blockData.next)
+        block.writeInt64(blockData.created)
+        block.writeInt64(blockData.modified)
+        block.writeInt8(blockData.blockRange)
+        block.writeInt16(blockData.endPadding)
+        block.bytesWritten = Serialize.HEAD_META
+
+        // Redo it to account for smaller content capacity of the 1st sector in the block
+
+        for (let i = 0; i < blockData.blockRange; i++) {
+            const address = blockData.address
+            const sectorData = initialData.read(this.SECTOR_SIZE)
+            const sectorDataEnc = this.AES.encrypt(sectorData, blockData.aesKey!, address)
+            block.write(sectorDataEnc)
+        }
+
+        block.bytesWritten = 1
+        block.writeInt32(crc32(block.read(Infinity)))
+
+        return block.buffer
+
+    }
+
     public readHeadBlock(block: HeadBlock) {}
 
     public createLinkBlock(block: LinkBlock) {}

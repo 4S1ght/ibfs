@@ -130,7 +130,11 @@ export default class Memory {
         this.bytesRead += length
         return data
     }
-    /** Sequentially reads raw data. */
+    /** 
+     * Sequentially reads raw data. 
+     * Uses `Buffer.subarray` internally, modifying the content will
+     * cause changes to the original buffer due to shared memory.
+    */
     public read(length: number) {
         const data = this.buffer.subarray(this.bytesRead, this.bytesRead + length)
         this.bytesRead += length

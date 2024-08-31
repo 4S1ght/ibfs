@@ -44,6 +44,6 @@ describe('Meta block', () => {
     const buffer = s.createMetaBlock(original)
     const processed = s.readMetaBlock(buffer)
 
-    test('match content', () => expect(processed).toStrictEqual(original))
+    test('de/serialize', () => expect(processed).toStrictEqual(original))
 
 })
