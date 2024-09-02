@@ -258,7 +258,6 @@ export default class Serialize {
         }
 
         // Final sector (serialized separately due to variable content length)
-        src.bytesRead = Serialize.HEAD_META
         const lastAddress = blockData.address + blockData.blockRange
         const lastSectorData = Buffer.alloc(this.SECTOR_SIZE) // Makes sure of proper sector length
         src.read(this.SECTOR_SIZE).copy(lastSectorData)       // and only then reads data
