@@ -250,12 +250,20 @@ export default class Serialize {
         dist.write(headSectorDataEnc)
 
         // Raw sectors
-        for (let i = 1; i < blockData.blockRange; i++) {
+        for (let i = 1; i < blockData.blockRange - 1; i++) {
             const address = blockData.address + i
             const sectorData = src.read(this.SECTOR_SIZE)
             const sectorDataEnc = this.AES.encrypt(sectorData, blockData.aesKey!, address)
             dist.write(sectorDataEnc)
         }
+
+        // Final sector (serialized separately due to variable content length)
+        src.bytesRead = Serialize.HEAD_META
+        const lastAddress = blockData.address + blockData.blockRange
+        const lastSectorData = Buffer.alloc(this.SECTOR_SIZE) // Makes sure of proper sector length
+        src.read(this.SECTOR_SIZE).copy(lastSectorData)       // and only then reads data
+        const lastSectorDataEnc = this.AES.encrypt(lastSectorData, blockData.aesKey!, lastAddress)
+        dist.write(lastSectorDataEnc)
 
         // Read encrypted content...
         dist.bytesRead = Serialize.HEAD_META
