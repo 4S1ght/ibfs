@@ -5,6 +5,7 @@ import { crc32 } from "zlib"
 import Memory from "@L0/Memory.js"
 import BlockAES, { AESCipher, AESKeySize, BlockAESConfig } from "@L0/AES.js"
 import IBFSError from "@errors/IBFSError.js"
+import { sanitize } from "../Helpers.js"
 
 // Types ==========================================================================================
 
@@ -85,7 +86,7 @@ export interface HeadBlock extends CommonMeta {
 export interface LinkBlock extends CommonMeta {}
 export interface StorageBlock extends CommonMeta {}
 
-interface Finalizer<Data> {
+type Finalizer<Data extends CommonMeta & CommonReadMeta, Error extends IBFSError> = Eav<{
     /** Block metadata */
     metadata: Omit<Data, 'data'>
     /** 
@@ -93,8 +94,8 @@ interface Finalizer<Data> {
      * It needs to be supplied the trailing data sectors after the
      * head/link/storage descriptor sector to decrypt and process the data.
      */
-    final: (rawSectors: Buffer) => Data
-}
+    final: (rawSectors: Buffer) => Eav<Data, Error>, 
+}, Error>
 
 enum SectorType {
     HEAD = 1,
@@ -142,23 +143,28 @@ export default class Serialize {
      * @param sector Sector data object
      * @returns Sector data buffer
      */
-    public static createRootSector(sector: RootSector): Buffer {
+    public static createRootSector(sector: RootSector): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_ROOT'>> {
+        try {
+            
+            const data = Memory.alloc(sector.sectorSize)
 
-        const data = Memory.alloc(sector.sectorSize)
+            data.writeInt16(sector.specMajor)
+            data.writeInt16(sector.specMinor)
+            data.writeInt32(sector.sectorSize)
+            data.writeInt64(sector.sectorCount)
+            data.writeInt16(sector.metadataSectors)
+            data.writeInt64(sector.rootDirectory)
+            data.writeInt16(sector.aesCipher)
+            data.write(sector.aesIV)
+            data.write(sector.aesKeyCheck)
+            data.writeBool(sector.nodeCryptoCompatMode)
 
-        data.writeInt16(sector.specMajor)
-        data.writeInt16(sector.specMinor)
-        data.writeInt32(sector.sectorSize)
-        data.writeInt64(sector.sectorCount)
-        data.writeInt16(sector.metadataSectors)
-        data.writeInt64(sector.rootDirectory)
-        data.writeInt16(sector.aesCipher)
-        data.write(sector.aesIV)
-        data.write(sector.aesKeyCheck)
-        data.writeBool(sector.nodeCryptoCompatMode)
+            return [null, data.buffer]
 
-        return data.buffer
-
+        } 
+        catch (error) {
+            return [new IBFSError('L0_BS_CANT_SERIALIZE_ROOT', null, error as Error, sector), null]
+        }
     }
 
     /**
@@ -166,24 +172,28 @@ export default class Serialize {
      * @param sector Sector data buffer
      * @returns Sector daa object
      */
-    public static readRootSector(sector: Buffer): RootSector {
+    public static readRootSector(sector: Buffer): Eav<RootSector, IBFSError<'L0_BS_CANT_DESERIALIZE_ROOT'>> {
+        try {
+            
+            const props: Partial<RootSector> = {}
+            const data = Memory.intake(sector)
 
-        const props: Partial<RootSector> = {}
-        const data = Memory.intake(sector)
+            props.specMajor            = data.readInt16()
+            props.specMinor            = data.readInt16()
+            props.sectorSize           = data.readInt32() as SectorSize
+            props.sectorCount          = data.readInt64()
+            props.metadataSectors      = data.readInt16()
+            props.rootDirectory        = data.readInt64()
+            props.aesCipher            = data.readInt16() as AESCipher
+            props.aesIV                = data.read(16)
+            props.aesKeyCheck          = data.read(16)
+            props.nodeCryptoCompatMode = data.readBool()
 
-        props.specMajor            = data.readInt16()
-        props.specMinor            = data.readInt16()
-        props.sectorSize           = data.readInt32() as SectorSize
-        props.sectorCount          = data.readInt64()
-        props.metadataSectors      = data.readInt16()
-        props.rootDirectory        = data.readInt64()
-        props.aesCipher            = data.readInt16() as AESCipher
-        props.aesIV                = data.read(16)
-        props.aesKeyCheck          = data.read(16)
-        props.nodeCryptoCompatMode = data.readBool()
-
-        return props as RootSector
-
+            return [null, props as RootSector]
+        } 
+        catch (error) {
+            return [new IBFSError('L0_BS_CANT_DESERIALIZE_ROOT', null, error as Error, { sector }), null]
+        }
     }
 
     // Meta block =================================================================================
@@ -194,18 +204,23 @@ export default class Serialize {
      * @param block JSON object stored inside the block
      * @returns Buffer
      */
-    public createMetaBlock(block: Object) {
+    public createMetaBlock(block: Object): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_META'>> {
+        try {
+        
+            const size = this.SECTOR_SIZE * Math.ceil(1024*1024 / this.SECTOR_SIZE)
+            const data = Memory.alloc(size)
 
-        const size = this.SECTOR_SIZE * Math.ceil(1024*1024 / this.SECTOR_SIZE)
-        const data = Memory.alloc(size)
+            const jsonString = Buffer.from(JSON.stringify(block))
+            data.writeInt32(jsonString.length)
+            data.bytesWritten = Serialize.MDATA_META
+            data.write(jsonString)
 
-        const jsonString = Buffer.from(JSON.stringify(block))
-        data.writeInt32(jsonString.length)
-        data.bytesWritten = Serialize.MDATA_META
-        data.write(jsonString)
+            return [null, data.buffer]
 
-        return data.buffer
-
+        } 
+        catch (error) {
+            return [new IBFSError('L0_BS_CANT_SERIALIZE_META', null, error as Error, { block }), null]
+        }
     }
 
     /**
@@ -213,95 +228,133 @@ export default class Serialize {
      * @param block Raw metadata block
      * @returns Metadata object
      */
-    public readMetaBlock<Metadata extends Object = Object>(block: Buffer): Metadata {
+    public readMetaBlock<Metadata extends Object = Object>(block: Buffer): Eav<Metadata, IBFSError<'L0_BS_CANT_DESERIALIZE_META'>>  {
+        try {
+            
+            const data = Memory.intake(block)
 
-        const data = Memory.intake(block)
+            const size = data.readInt32()
+            data.bytesRead = Serialize.MDATA_META
+            const jsonString = data.readString(size)
 
-        const size = data.readInt32()
-        data.bytesRead = Serialize.MDATA_META
-        const jsonString = data.readString(size)
+            return [null, JSON.parse(jsonString)]
 
-        return JSON.parse(jsonString)
-
+        } 
+        catch (error) {
+            return [new IBFSError('L0_BS_CANT_DESERIALIZE_META', null, error as Error, { block }), null]
+        }
     }
 
     // Head block =================================================================================
 
-    public createHeadBlock(blockData: HeadBlock & CommonWriteMeta): Buffer {
+    public createHeadBlock(blockData: HeadBlock & CommonWriteMeta): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_HEAD'>> {
+        try {
+        
+            const dist = Memory.alloc(this.SECTOR_SIZE * (blockData.blockRange+1))
+            const src = Memory.intake(blockData.data)
 
-        const dist = Memory.alloc(this.SECTOR_SIZE * blockData.blockRange+1)
-        const src = Memory.intake(blockData.data)
+            // Metadata
+            dist.writeInt8(SectorType.HEAD)                                 // Block type
+            dist.writeInt32(0)                                              // CRC
+            dist.writeInt64(blockData.next)                                 // Next address
+            dist.writeInt64(blockData.created)                              // Creation date
+            dist.writeInt64(blockData.modified)                             // Modification date
+            dist.writeInt8(blockData.blockRange)                            // Sectors inside the block
+            dist.writeInt16(dist.length - Serialize.HEAD_META - src.length) // End sector padding (unencrypted)
+            dist.bytesWritten = Serialize.HEAD_META
 
-        // Metadata
-        dist.writeInt8(SectorType.HEAD)                                 // Block type
-        dist.writeInt32(0)                                              // CRC
-        dist.writeInt64(blockData.next)                                 // Next address
-        dist.writeInt64(blockData.created)                              // Creation date
-        dist.writeInt64(blockData.modified)                             // Modification date
-        dist.writeInt8(blockData.blockRange)                            // Sectors inside the block
-        dist.writeInt16(dist.length - Serialize.HEAD_META - src.length) // End sector padding (unencrypted)
-        dist.bytesWritten = Serialize.HEAD_META
+            // Head sector
+            src.bytesRead = Serialize.HEAD_META
+            const address = blockData.address
+            const headSectorData = src.read(this.HEAD_CONTENT)
+            const headSectorDataEnc = this.AES.encrypt(headSectorData, blockData.aesKey!, address)
+            dist.write(headSectorDataEnc)
 
-        // Head sector
-        src.bytesRead = Serialize.HEAD_META
-        const address = blockData.address
-        const headSectorData = src.read(this.HEAD_CONTENT)
-        const headSectorDataEnc = this.AES.encrypt(headSectorData, blockData.aesKey!, address)
-        dist.write(headSectorDataEnc)
+            // Raw sectors
+            for (let i = 1; i < blockData.blockRange - 1; i++) {
+                const address = blockData.address + i
+                const sectorData = src.read(this.SECTOR_SIZE)
+                const sectorDataEnc = this.AES.encrypt(sectorData, blockData.aesKey!, address)
+                dist.write(sectorDataEnc)
+            }
 
-        // Raw sectors
-        for (let i = 1; i < blockData.blockRange - 1; i++) {
-            const address = blockData.address + i
-            const sectorData = src.read(this.SECTOR_SIZE)
-            const sectorDataEnc = this.AES.encrypt(sectorData, blockData.aesKey!, address)
-            dist.write(sectorDataEnc)
+            // Final sector (serialized separately due to variable content length)
+            const lastAddress = blockData.address + blockData.blockRange
+            // Makes sure of proper sector length and only then reads data for encryption
+            const lastSectorData = Buffer.alloc(this.SECTOR_SIZE) 
+            src.read(this.SECTOR_SIZE).copy(lastSectorData)       
+            
+            const lastSectorDataEnc = this.AES.encrypt(lastSectorData, blockData.aesKey!, lastAddress)
+            dist.write(lastSectorDataEnc)
+
+            // Compute checksum from encrypted content.
+            dist.bytesRead = Serialize.HEAD_META
+            const crc32Sum = crc32(dist.read(Infinity))
+            dist.bytesWritten = 1
+            dist.writeInt32(crc32Sum)
+
+            return [null, dist.buffer]
+
+        } 
+        catch (error) {
+            return [new IBFSError('L0_BS_CANT_SERIALIZE_HEAD', null, error as Error, sanitize(blockData, ['data'])), null]
         }
-
-        // Final sector (serialized separately due to variable content length)
-        const lastAddress = blockData.address + blockData.blockRange
-        const lastSectorData = Buffer.alloc(this.SECTOR_SIZE) // Makes sure of proper sector length
-        src.read(this.SECTOR_SIZE).copy(lastSectorData)       // and only then reads data
-        const lastSectorDataEnc = this.AES.encrypt(lastSectorData, blockData.aesKey!, lastAddress)
-        dist.write(lastSectorDataEnc)
-
-        // Read encrypted content...
-        dist.bytesRead = Serialize.HEAD_META
-        const crc32Sum = crc32(dist.read(Infinity))
-        // ...and compute the checksum
-        dist.bytesWritten = 1
-        dist.writeInt32(crc32Sum)
-
-        return dist.buffer
-
     }
 
-    public readHeadBlock(headSector: Buffer): Finalizer<HeadBlock & CommonReadMeta> {
+    public readHeadBlock(headSector: Buffer, blockAddress: number, aesKey?: Buffer): Finalizer<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'>> {
+        try {
 
-        // @ts-expect-error - Populated later
-        const props: HeadBlock & CommonReadMeta = {}
-        const src = Memory.intake(headSector)
+            // @ts-expect-error - Populated later
+            const props: HeadBlock & CommonReadMeta = {}
+            const headSrc = Memory.intake(headSector)
 
-        props.blockType   = src.readInt8()
-        props.crc32Sum    = src.readInt32()
-        props.next        = src.readInt64()
-        props.created     = src.readInt64()
-        props.modified    = src.readInt64()
-        props.blockRange  = src.readInt8()
-        const endPadding  = src.readInt16()
+            props.blockType   = headSrc.readInt8()  // Block type
+            props.crc32Sum    = headSrc.readInt32() // CRC
+            props.next        = headSrc.readInt64() // Next address
+            props.created     = headSrc.readInt64() // Creation date
+            props.modified    = headSrc.readInt64() // Modification date
+            props.blockRange  = headSrc.readInt8()  // Sectors inside the block
+            const endPadding  = headSrc.readInt16() // End sector padding (unencrypted)
+            headSrc.bytesRead = Serialize.HEAD_META
 
-        const dist = Memory.alloc(props.blockRange+1)
-        
-        return {
-            metadata: props,
-            final: (sectors: Buffer) => {
+            const distSize = this.HEAD_CONTENT + this.SECTOR_SIZE * props.blockRange
+            const dist = Memory.alloc(distSize)
 
-                // TODO: parse the content
+            // Head sector data
+            const headSectorDataEnc = headSrc.read(this.HEAD_CONTENT)
+            const headSectorData = this.AES.decrypt(headSectorDataEnc, aesKey!, blockAddress)
+            dist.write(headSectorData)
+            
+            // Deserialize & decrypt trailing sectors
+            // in a second read step
+            return [null, {
+                metadata: props,
+                final: (sectors: Buffer) => {
+                    try {
+                        
+                        const trailSrc = Memory.intake(sectors)
 
-                props.data = dist.readFilled()
-                return props
-            }
+                        // Raw sectors
+                        for (let i = 0; i < props.blockRange - 1; i++) {
+                            const address = blockAddress + i
+                            const sectorDataEnc = trailSrc.read(this.SECTOR_SIZE)
+                            const sectorData = this.AES.decrypt(sectorDataEnc, aesKey!, address)
+                            dist.write(sectorData)
+                        }
+
+                        props.data = dist.read(distSize - endPadding)
+                        return [null, props]
+
+                    } 
+                    catch (error) {
+                        return [new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error), null]
+                    }
+                }
+            }]
+        } 
+        catch (error) {
+            return [new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error), null]
         }
-
     }
 
     public createLinkBlock(block: LinkBlock) {}
