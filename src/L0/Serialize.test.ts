@@ -19,10 +19,10 @@ describe('Root sector', () => {
     }
 
     const [sError, sectorMemory] = Serialize.createRootSector(settings)
-    if (sError) { throw sError}
+    if (sError) throw sError
 
     const [dsError, sectorObject] = Serialize.readRootSector(sectorMemory)
-    if (dsError) { throw sError}
+    if (dsError) throw sError
 
     test('sector length',        () => expect(sectorMemory.length)              .toBe(1024))
     test('sectorSize',           () => expect(sectorObject.sectorSize)          .toBe(settings.sectorSize))
@@ -38,22 +38,25 @@ describe('Root sector', () => {
 
 })
 
-// describe('Meta block', () => {
+describe('Meta block', () => {
 
-//     const s = new Serialize({ 
-//         diskSectorSize: 1024,
-//         cipher: '',
-//         iv: Buffer.alloc(16)
-//     })
+    const s = new Serialize({ 
+        diskSectorSize: 1024,
+        cipher: '',
+        iv: Buffer.alloc(16)
+    })
 
-//     // Arbitrary config
-//     const original = { ibfs: { forceFlush: true } }
-//     const buffer = s.createMetaBlock(original)
-//     const processed = s.readMetaBlock(buffer)
+    // Arbitrary config
+    const original = { ibfs: { forceFlush: true } }
 
-//     test('de/serialize match', () => expect(processed).toStrictEqual(original))
+    const [cError, buffer] = s.createMetaBlock(original)
+    if (cError) throw cError
+    const [rError, processed] = s.readMetaBlock(buffer)
+    if (rError) throw rError
 
-// })
+    test('de/serialize match', () => expect(processed).toStrictEqual(original))
+
+})
 
 // describe('Head block', () => {
 
