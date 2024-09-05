@@ -247,6 +247,12 @@ export default class Serialize {
 
     // Head block =================================================================================
 
+    /**
+     * Serializes a head block and produces a block that's ready to be written to the disk.  
+     * The size of usable `data` must be determined in advance and match the `blockSize`.
+     * @param blockData Block data and metadata
+     * @returns Buffer
+     */
     public createHeadBlock(blockData: HeadBlock & CommonWriteMeta): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_HEAD'>> {
         try {
         
@@ -301,6 +307,15 @@ export default class Serialize {
         }
     }
 
+    /**
+     * Deserializes a head sector and returns an object containing that sector's metadata and a `final` method.
+     * The metadata lists primarily the amount of sectors following the head sector that belong to the same block. 
+     * These must be read from the disk and passed to the `final` method to finish deserialization and return user data.
+     * @param headSector Block's head sector (in raw state)
+     * @param blockAddress Address of where the sector was read from
+     * @param aesKey Decryption key needed for decryption.
+     * @returns Head sector data
+     */
     public readHeadBlock(headSector: Buffer, blockAddress: number, aesKey?: Buffer): Finalizer<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'>> {
         try {
 
@@ -325,8 +340,7 @@ export default class Serialize {
             const headSectorData = this.AES.decrypt(headSectorDataEnc, aesKey!, blockAddress)
             dist.write(headSectorData)
             
-            // Deserialize & decrypt trailing sectors
-            // in a second read step
+            // Deserialize & decrypt trailing sectors in a second read step
             return [null, {
                 metadata: props,
                 final: (sectors: Buffer) => {
@@ -353,7 +367,42 @@ export default class Serialize {
             }]
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error), null]
+            return [new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress }), null]
+        }
+    }
+
+    public readHeadBlockInstant(headBlock: Buffer, blockRange: number, blockAddress: number, aesKey?: Buffer): Eav<Buffer, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'>> {
+        try {
+
+            // @ts-expect-error - Populated later
+            const props: HeadBlock & CommonReadMeta = {}
+            const src = Memory.intake(headBlock)
+
+            props.blockType   = src.readInt8()  // Block type
+            props.crc32Sum    = src.readInt32() // CRC
+            props.next        = src.readInt64() // Next address
+            props.created     = src.readInt64() // Creation date
+            props.modified    = src.readInt64() // Modification date
+            props.blockRange  = src.readInt8()  // Sectors inside the block
+            const endPadding  = src.readInt16() // End sector padding (unencrypted)
+            src.bytesRead     = Serialize.HEAD_META
+
+            const distSize = this.HEAD_CONTENT + this.SECTOR_SIZE * props.blockRange
+            const dist = Memory.alloc(distSize)
+
+            // Head sector data
+            const headSectorDataEnc = src.read(this.HEAD_CONTENT)
+            const headSectorData = this.AES.decrypt(headSectorDataEnc, aesKey!, blockAddress)
+            dist.write(headSectorData)
+
+            // TODO Deserialize trail sectors
+
+            const data = dist.read(distSize - endPadding)
+            return [null, data]
+
+        } 
+        catch (error) {
+            return [new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress }), null]
         }
     }
 
