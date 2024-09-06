@@ -94,7 +94,7 @@ type Finalizer<Data extends CommonMeta & CommonReadMeta, Error extends IBFSError
      * It needs to be supplied the trailing data sectors after the
      * head/link/storage descriptor sector to decrypt and process the data.
      */
-    final: (rawSectors: Buffer) => Eav<Data, Error>, 
+    final: (rawSectors: Buffer) => Eav<Buffer, Error>, 
 }, Error>
 
 enum SectorType {
@@ -270,7 +270,6 @@ export default class Serialize {
             dist.bytesWritten = Serialize.HEAD_META
 
             // Head sector
-            src.bytesRead = Serialize.HEAD_META
             const address = blockData.address
             const headSectorData = src.read(this.HEAD_CONTENT)
             const headSectorDataEnc = this.AES.encrypt(headSectorData, blockData.aesKey!, address)
@@ -356,8 +355,7 @@ export default class Serialize {
                             dist.write(sectorData)
                         }
 
-                        props.data = dist.read(distSize - endPadding)
-                        return [null, props]
+                        return [null, dist.read(distSize - endPadding)]
 
                     } 
                     catch (error) {
@@ -371,7 +369,7 @@ export default class Serialize {
         }
     }
 
-    public readHeadBlockInstant(headBlock: Buffer, blockAddress: number, blockRange: number, aesKey?: Buffer): Eav<Buffer, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'>> {
+    public readHeadBlockInstant(headBlock: Buffer, blockAddress: number, blockRange: number, aesKey?: Buffer): Eav<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'>> {
         try {
 
             // @ts-expect-error - Populated later
@@ -404,7 +402,9 @@ export default class Serialize {
             }
 
             const data = dist.read(distSize - endPadding)
-            return [null, data]
+            props.data = data
+
+            return [null, props]
 
         } 
         catch (error) {

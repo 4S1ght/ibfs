@@ -46,7 +46,7 @@ export default class Memory {
      * Depends on the value of the `Memory.bytesWritten` property which
      * can be changed by the user!
      */
-    public referenceFilled() {
+    public readFilled() {
         return this.buffer.subarray(0, this.bytesWritten)
     }
 
@@ -54,7 +54,7 @@ export default class Memory {
      * Reads out only the part of the buffer that hasn't yet been read from.
      * Depends in the value of the `Memory.bytesRead` property.
      */
-    public referenceRemaining() {
+    public readRemaining() {
         return this.buffer.subarray(this.bytesRead, this.length)
     }
 

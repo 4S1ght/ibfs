@@ -2,6 +2,7 @@
 import crypto from 'node:crypto'
 import Serialize, { CommonWriteMeta, HeadBlock, RootSector } from '@L0/Serialize.js'
 import { describe, test, expect } from 'vitest'
+import Memory from './Memory.js'
 
 describe('Root sector', () => {
 
@@ -58,32 +59,56 @@ describe('Meta block', () => {
 
 })
 
-// describe('Head block', () => {
+describe('Head block', () => {
 
-//     const s = new Serialize({ 
-//         diskSectorSize: 1024,
-//         cipher: '',
-//         iv: Buffer.alloc(16)
-//     })
+    const s = new Serialize({ 
+        diskSectorSize: 1024,
+        cipher: '',
+        iv: Buffer.alloc(16)
+    })
 
-//     const original: HeadBlock & CommonWriteMeta = {
-//         created: Math.floor(Date.now()/1000),
-//         modified: Math.floor(Date.now()/1000),
-//         data: Buffer.alloc(100).fill(1),
-//         next: 12345,
-//         blockRange: 1,
-//         address: 10_000
-//     }
+    const original: HeadBlock & CommonWriteMeta = {
+        created: Math.floor(Date.now()/1000),
+        modified: Math.floor(Date.now()/1000),
+        data: Buffer.alloc(2300).fill(1),
+        next: 12345,
+        blockRange: 5,
+        address: 10_000
+    }
 
-//     const buffer = s.createHeadBlock(original)
-//     const processed = s.readHeadBlock(buffer)
+    describe('de/serialize instant', () => {
 
-//     console.log(processed)
-    
-//     test('created',    () => expect(processed.created)   .toBe(original.created))
-//     test('modified',   () => expect(processed.modified)  .toBe(original.modified))
-//     test('next',       () => expect(processed.next)      .toBe(original.next))
-//     test('blockRange', () => expect(processed.blockRange).toBe(original.blockRange))
-//     test('created',    () => expect(processed.data)      .toStrictEqual(original.data))
+        const [cError, buffer] = s.createHeadBlock(original)
+        if (cError) throw cError
+        const [rError, processed] = s.readHeadBlockInstant(buffer, 10_000, 5)
+        if (rError) throw rError
 
-// })
+        test('created',    () => expect(processed.created)   .toBe(original.created))
+        test('modified',   () => expect(processed.modified)  .toBe(original.modified))
+        test('next',       () => expect(processed.next)      .toBe(original.next))
+        test('blockRange', () => expect(processed.blockRange).toBe(original.blockRange))
+        test('data',       () => expect(processed.data)      .toStrictEqual(original.data))
+
+    })
+
+    describe('de/serialize lazy', () => {
+
+        const [cError, buffer] = s.createHeadBlock(original)
+        if (cError) throw cError
+
+        const b = Memory.intake(buffer)
+
+        const [rError1, partial] = s.readHeadBlock(b.read(s.HEAD_CONTENT), 10_000)
+        if (rError1) throw rError1
+        const [rError2, finished] = partial.final(b.readRemaining())
+        if (rError2) throw rError2
+
+        test('created',    () => expect(partial.metadata.created)   .toBe(original.created))
+        test('modified',   () => expect(partial.metadata.modified)  .toBe(original.modified))
+        test('next',       () => expect(partial.metadata.next)      .toBe(original.next))
+        test('blockRange', () => expect(partial.metadata.blockRange).toBe(original.blockRange))
+        test('data',       () => expect(finished)                   .toStrictEqual(original.data))
+
+    })
+
+})
