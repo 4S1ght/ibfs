@@ -371,7 +371,7 @@ export default class Serialize {
         }
     }
 
-    public readHeadBlockInstant(headBlock: Buffer, blockRange: number, blockAddress: number, aesKey?: Buffer): Eav<Buffer, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'>> {
+    public readHeadBlockInstant(headBlock: Buffer, blockAddress: number, blockRange: number, aesKey?: Buffer): Eav<Buffer, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'>> {
         try {
 
             // @ts-expect-error - Populated later
@@ -395,7 +395,13 @@ export default class Serialize {
             const headSectorData = this.AES.decrypt(headSectorDataEnc, aesKey!, blockAddress)
             dist.write(headSectorData)
 
-            // TODO Deserialize trail sectors
+            // Raw sectors
+            for (let i = 1; i <= props.blockRange; i++) {
+                const address = blockAddress + i
+                const sectorDataEnc = src.read(this.SECTOR_SIZE)
+                const sectorData = this.AES.decrypt(sectorDataEnc, aesKey!, address)
+                dist.write(sectorData)
+            }
 
             const data = dist.read(distSize - endPadding)
             return [null, data]
