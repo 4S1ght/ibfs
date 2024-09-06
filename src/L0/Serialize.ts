@@ -315,27 +315,28 @@ export default class Serialize {
      * @param aesKey Decryption key needed for decryption.
      * @returns Head sector data
      */
-    public readHeadBlock(headSector: Buffer, blockAddress: number, aesKey?: Buffer): Finalizer<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'>> {
+    public readHeadBlock(headSector: Buffer, blockAddress: number, aesKey?: Buffer): Finalizer<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'|'L0_CRCSUM_MISMATCH'>> {
         try {
 
             // @ts-expect-error - Populated later
             const props: HeadBlock & CommonReadMeta = {}
-            const headSrc = Memory.intake(headSector)
+            const src = Memory.intake(headSector)
 
-            props.blockType   = headSrc.readInt8()  // Block type
-            props.crc32Sum    = headSrc.readInt32() // CRC
-            props.next        = headSrc.readInt64() // Next address
-            props.created     = headSrc.readInt64() // Creation date
-            props.modified    = headSrc.readInt64() // Modification date
-            props.blockRange  = headSrc.readInt8()  // Sectors inside the block
-            const endPadding  = headSrc.readInt16() // End sector padding (unencrypted)
-            headSrc.bytesRead = Serialize.HEAD_META
+            props.blockType   = src.readInt8()  // Block type
+            props.crc32Sum    = src.readInt32() // CRC
+            props.next        = src.readInt64() // Next address
+            props.created     = src.readInt64() // Creation date
+            props.modified    = src.readInt64() // Modification date
+            props.blockRange  = src.readInt8()  // Sectors inside the block
+            const endPadding  = src.readInt16() // End sector padding (unencrypted)
+            src.bytesRead = Serialize.HEAD_META
 
             const distSize = this.HEAD_CONTENT + this.SECTOR_SIZE * props.blockRange
             const dist = Memory.alloc(distSize)
 
             // Head sector data
-            const headSectorDataEnc = headSrc.read(this.HEAD_CONTENT)
+            const headSectorDataEnc = src.read(this.HEAD_CONTENT)
+            const crcHead = crc32(headSectorDataEnc)
             const headSectorData = this.AES.decrypt(headSectorDataEnc, aesKey!, blockAddress)
             dist.write(headSectorData)
             
@@ -346,6 +347,9 @@ export default class Serialize {
                     try {
                         
                         const trailSrc = Memory.intake(sectors)
+
+                        const crcFinal = crc32(trailSrc.buffer, crcHead)
+                        if (crcFinal !== props.crc32Sum) return [new IBFSError('L0_CRCSUM_MISMATCH'), null]
 
                         // Raw sectors
                         for (let i = 0; i < props.blockRange - 1; i++) {
@@ -369,7 +373,7 @@ export default class Serialize {
         }
     }
 
-    public readHeadBlockInstant(headBlock: Buffer, blockAddress: number, blockRange: number, aesKey?: Buffer): Eav<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'>> {
+    public readHeadBlockInstant(headBlock: Buffer, blockAddress: number, blockRange: number, aesKey?: Buffer): Eav<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'|'L0_CRCSUM_MISMATCH'>> {
         try {
 
             // @ts-expect-error - Populated later
@@ -390,16 +394,21 @@ export default class Serialize {
 
             // Head sector data
             const headSectorDataEnc = src.read(this.HEAD_CONTENT)
+            let crcSum = crc32(headSectorDataEnc)
             const headSectorData = this.AES.decrypt(headSectorDataEnc, aesKey!, blockAddress)
             dist.write(headSectorData)
 
             // Raw sectors
             for (let i = 1; i <= props.blockRange; i++) {
                 const address = blockAddress + i
-                const sectorDataEnc = src.read(this.SECTOR_SIZE)
+                const sectorDataEnc = src.read(this.SECTOR_SIZE) 
+                crcSum = crc32(sectorDataEnc, crcSum)
                 const sectorData = this.AES.decrypt(sectorDataEnc, aesKey!, address)
                 dist.write(sectorData)
             }
+
+            console.log(crcSum, props.crc32Sum)
+            if (crcSum !== props.crc32Sum) return [new IBFSError('L0_CRCSUM_MISMATCH'), null]
 
             const data = dist.read(distSize - endPadding)
             props.data = data

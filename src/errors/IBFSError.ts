@@ -3,14 +3,15 @@ enum ErrorCodes {
     // Level 0 errors
     L0_VCREATE_CANT_CREATE      = 101, // Can't create an IBFS volume
     L0_VCREATE_WS_ERROR         = 102, // Write stream error ocurred while the volume was being created.
+    L0_CRCSUM_MISMATCH          = 103, // CRC error detection triggered wen deserializing a data block.
 
-    L0_BS_CANT_SERIALIZE_ROOT   = 103, // Problem serializing a root sector.
-    L0_BS_CANT_DESERIALIZE_ROOT = 104, // Problem deserializing a root sector.
-    L0_BS_CANT_SERIALIZE_HEAD   = 105, // Problem serializing a head block.
-    L0_BS_CANT_DESERIALIZE_HEAD = 106, // Problem serializing a head block.
+    L0_BS_CANT_SERIALIZE_ROOT   = 104, // Problem serializing   a root sector.
+    L0_BS_CANT_DESERIALIZE_ROOT = 105, // Problem deserializing a root sector.
+    L0_BS_CANT_SERIALIZE_HEAD   = 106, // Problem serializing   a head block.
+    L0_BS_CANT_DESERIALIZE_HEAD = 107, // Problem deserializing a head block.
 
-    L0_BS_CANT_SERIALIZE_META   = 107, // Problem serializing metadata block.
-    L0_BS_CANT_DESERIALIZE_META = 108, // Problem serializing metadata block.
+    L0_BS_CANT_SERIALIZE_META   = 108, // Problem serializing   metadata block.
+    L0_BS_CANT_DESERIALIZE_META = 109, // Problem deserializing metadata block.
 
 }
 
