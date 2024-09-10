@@ -93,6 +93,21 @@ export default class Memory {
         value.copy(this.buffer, this.bytesWritten)
         this.bytesWritten += value.length
     }
+    /** 
+     * Copies N amount of bytes from the source to another memory instance.
+     * This can be done fully sequentially, as both the source and target
+     * `bytesRead` and `bytesWritten` values are synced respectively.
+     */
+    public copyTo(target: Memory, length: number) {
+        this.buffer.copy(
+            target.buffer, 
+            target.bytesWritten,
+            this.bytesRead,
+            this.bytesRead + length
+        )
+        this.bytesRead += length
+        target.bytesWritten += length
+    }
 
     // Sequential output ============================================
 
