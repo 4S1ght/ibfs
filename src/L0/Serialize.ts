@@ -310,6 +310,8 @@ export default class Serialize {
      * Deserializes a head sector and returns an object containing that sector's metadata and a `final` method.
      * The metadata lists primarily the amount of sectors following the head sector that belong to the same block. 
      * These must be read from the disk and passed to the `final` method to finish deserialization and return user data.
+     * This method is used when a block must be read but its size is not yet known, such as during seeking operations
+     * on the index blocks, the size is retrieved from head sector metadata.
      * @param headSector Block's head sector (in raw state)
      * @param blockAddress Address of where the sector was read from
      * @param aesKey Decryption key needed for decryption.
@@ -373,6 +375,15 @@ export default class Serialize {
         }
     }
 
+    /**
+     * Instantly deserializes a head block and returns an object containing that block's data and metadata.  
+     * Unlike `readHeadBlock`, this method is used when the size of the block is known.
+     * @param headBlock Block data
+     * @param blockAddress Block's head sector address
+     * @param blockRange Number of trail sectors following the head
+     * @param aesKey Optional AES decryption key
+     * @returns Head block data
+     */
     public readHeadBlockInstant(headBlock: Buffer, blockAddress: number, blockRange: number, aesKey?: Buffer): Eav<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'|'L0_CRCSUM_MISMATCH'>> {
         try {
 
@@ -407,7 +418,6 @@ export default class Serialize {
                 dist.write(sectorData)
             }
 
-            console.log(crcSum, props.crc32Sum)
             if (crcSum !== props.crc32Sum) return [new IBFSError('L0_CRCSUM_MISMATCH'), null]
 
             const data = dist.read(distSize - endPadding)
