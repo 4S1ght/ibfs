@@ -22,7 +22,12 @@
         "lib": ["es2022"],
 
         "outDir": "./dist",
-        "sourceMap": true
+        "sourceMap": true,
+
+        "paths": {
+            "@L0/*": ["./src/L0/*"],
+            "@errors/*": ["./src/errors/*"]
+        }
 
     }
 }

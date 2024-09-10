@@ -40,12 +40,20 @@ export default class Memory {
 
     // Misc =========================================================
 
-    /** Reads out only the part of the buffer that was written to. */
+    /** 
+     * Creates a reference of only the data that's been written
+     * to the internal buffer.  
+     * Depends on the value of the `Memory.bytesWritten` property which
+     * can be changed by the user!
+     */
     public readFilled() {
         return this.buffer.subarray(0, this.bytesWritten)
     }
 
-    /** Reads out only the part of the buffer that hasn't yet been read from. */
+    /** 
+     * Reads out only the part of the buffer that hasn't yet been read from.
+     * Depends in the value of the `Memory.bytesRead` property.
+     */
     public readRemaining() {
         return this.buffer.subarray(this.bytesRead, this.length)
     }
@@ -130,7 +138,11 @@ export default class Memory {
         this.bytesRead += length
         return data
     }
-    /** Sequentially reads raw data. */
+    /** 
+     * Sequentially reads raw data. 
+     * Uses `Buffer.subarray` internally, modifying the content will
+     * cause changes to the original buffer due to shared memory.
+    */
     public read(length: number) {
         const data = this.buffer.subarray(this.bytesRead, this.bytesRead + length)
         this.bytesRead += length
