@@ -75,7 +75,8 @@ describe('Head block', () => {
             modified: Math.floor(Date.now()/1000),
             data: Buffer.alloc(3200).fill(1),
             next: 12345,
-            blockRange: 3,
+            nextRange: 0,
+            headRange: 3,
             address: 10_000,
             aesKey: aesKey,
         }
@@ -84,14 +85,13 @@ describe('Head block', () => {
     
             const [cError, buffer] = s.createHeadBlock(original)
             if (cError) throw cError
-            console.log(buffer.join(','))
             const [rError, processed] = s.readHeadBlockInstant(buffer, 10_000, 3, aesKey)
             if (rError) throw rError
     
             test('created',    () => expect(processed.created)   .toBe(original.created))
             test('modified',   () => expect(processed.modified)  .toBe(original.modified))
             test('next',       () => expect(processed.next)      .toBe(original.next))
-            test('blockRange', () => expect(processed.blockRange).toBe(original.blockRange))
+            test('headRange',  () => expect(processed.headRange) .toBe(original.headRange))
             // test('data',       () => expect(processed.data)      .toStrictEqual(original.data))
     
         })
