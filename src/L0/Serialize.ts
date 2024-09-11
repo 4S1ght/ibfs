@@ -73,7 +73,7 @@ export interface CommonMeta {
     /** Address of the next block. */
     next: number
     /** The size of the next block (in sectors). */
-    nextRange: number
+    nextSize: number
 }
 
 export interface HeadBlock extends CommonMeta {
@@ -82,7 +82,7 @@ export interface HeadBlock extends CommonMeta {
     /** File modified date. */
     modified: number
     /** Size of the block (in sectors). */
-    headRange: number
+    headSize: number
 }
 
 export interface LinkBlock extends CommonMeta {}
@@ -260,17 +260,17 @@ export default class Serialize {
     public createHeadBlock(block: HeadBlock & CommonWriteMeta): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_HEAD'>> {
         try {
 
-            const dist = Memory.alloc(this.SECTOR_SIZE * (block.headRange+1))
+            const dist = Memory.alloc(this.SECTOR_SIZE * (block.headSize+1))
             const src = Memory.intake(block.data)
 
             // Metadata
             dist.writeInt8(SectorType.HEAD)                                 // Block type
             dist.writeInt32(0)                                              // CRC
             dist.writeInt64(block.next)                                     // Next block address
-            dist.writeInt8(block.nextRange)                                 // Next block range
+            dist.writeInt8(block.nextSize)                                  // Next block range
+            dist.writeInt8(block.headSize)                                  // Head block range
             dist.writeInt64(block.created)                                  // Creation date
             dist.writeInt64(block.modified)                                 // Modification date
-            dist.writeInt8(block.headRange)                                 // Sectors inside the block
             dist.writeInt16(dist.length - Serialize.HEAD_META - src.length) // End sector padding (unencrypted)
             dist.bytesWritten = Serialize.HEAD_META
             dist.bytesRead = Serialize.HEAD_META
@@ -280,7 +280,7 @@ export default class Serialize {
             this.AES.encrypt(dist.read(this.HEAD_CONTENT), block.aesKey!, block.address)
 
             // Raw sectors
-            for (let i = 1; i < block.headRange+1; i++) {
+            for (let i = 1; i <= block.headSize; i++) {
                 const address = block.address + i
                 src.copyTo(dist, this.SECTOR_SIZE)
                 this.AES.encrypt(dist.read(this.SECTOR_SIZE), block.aesKey!, address)
@@ -311,17 +311,61 @@ export default class Serialize {
      * @param aesKey Decryption key needed for decryption.
      * @returns Head sector data
      */
-    // public readHeadBlock(headSector: Buffer, blockAddress: number, aesKey?: Buffer): Finalizer<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'|'L0_CRCSUM_MISMATCH'>> {
-    //     try {
+    public readHeadBlock(headSector: Buffer, blockAddress: number, aesKey?: Buffer): Finalizer<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'|'L0_CRCSUM_MISMATCH'>> {
+        try {
 
-    //         const dist = Memory.alloc(this.SECTOR_SIZE * (headSector))
+            // @ts-expect-error - Populated later
+            const props: HeadBlock & CommonReadMeta = {}
+            const headSrc = Memory.intake(headSector)
             
+            props.blockType   = headSrc.readInt8()  // Block type
+            props.crc32Sum    = headSrc.readInt32() // CRC
+            props.next        = headSrc.readInt64() // Next address
+            props.nextSize    = headSrc.readInt8()  // Next block size
+            props.headSize    = headSrc.readInt8()  // Head block size
+            props.created     = headSrc.readInt64() // Creation date
+            props.modified    = headSrc.readInt64() // Modification date
+            const endPadding  = headSrc.readInt16() // End sector padding (unencrypted)
 
-    //     } 
-    //     catch (error) {
-    //         return [new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress }), null]
-    //     }
-    // }
+            const distSize = this.HEAD_CONTENT + this.SECTOR_SIZE * props.headSize
+            const dist = Memory.alloc(distSize)
+            let crc = 0
+
+            // Head sector data
+            headSrc.copyTo(dist, this.HEAD_CONTENT)
+            crc = this.AES.decryptCRC(dist.read(this.HEAD_CONTENT), aesKey!, blockAddress)
+
+            return {
+                metadata: props,
+                final: (sectors: Buffer) => {
+                    try {
+                        
+                        const trailSrc = Memory.intake(sectors)
+
+                        // Raw sectors
+                        for (let i = 0; i < props.headSize; i++) {
+                            trailSrc.copyTo(dist, this.SECTOR_SIZE)
+                            crc = this.AES.decryptCRC(dist.read(this.SECTOR_SIZE), aesKey!, blockAddress+i+1, crc)
+                        }
+
+                        return crc === props.crc32Sum
+                            ? [null, dist.read(distSize - endPadding)]
+                            : [new IBFSError('L0_CRCSUM_MISMATCH', null, null, { crc, props }), null]
+
+                    } 
+                    catch (error) {
+                        return [new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress }), null]
+                    }
+                }
+            }
+
+        } 
+        catch (error) {
+            return {
+                error: new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress })
+            }
+        }
+    }
 
     /**
      * Instantly deserializes a head block and returns an object containing that block's data and metadata.  

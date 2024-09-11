@@ -1,6 +1,7 @@
 // Imports ====================================================================
 
 import crypto from 'node:crypto'
+import zlib from 'node:zlib'
 
 // Types & Constants ==========================================================
 
@@ -48,6 +49,9 @@ export default class BlockAES {
         if (config.cipher === '') {
             this.encrypt = (buf) => buf
             this.decrypt = (buf) => buf
+            this.decryptCRC = (buf, key, addr, crcValue) => {
+                return zlib.crc32(buf, crcValue)
+            }
         }
 
     }
@@ -92,6 +96,23 @@ export default class BlockAES {
         const pos = decipher.update(input).copy(input, 0)
                     decipher.final().copy(input, pos)
         return input
+    }
+
+    /**
+     * Decrypts the `input` data and copies it back over to the same `input` 
+     * buffer in order to reuse already allocated memory.
+     * Returns the CRC-32 checksum of the original buffer before decryption.
+     * @param encrypted Encrypted sector bytes
+     * @param key Encryption/decryption key
+     * @param address Sector address
+     */
+    public decryptCRC(input: Buffer, key: Buffer, address: number, crcValue?: number) {
+        const crc = zlib.crc32(input, crcValue)
+        const iv = this.getIV(address)
+        const decipher = crypto.createDecipheriv(this.cipher, key, iv)
+        const pos = decipher.update(input).copy(input, 0)
+                    decipher.final().copy(input, pos)
+        return crc
     }
 
 }
