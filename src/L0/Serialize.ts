@@ -97,7 +97,10 @@ type Finalizer<Data extends CommonMeta & CommonReadMeta, Error extends IBFSError
      * head/link/storage descriptor sector to decrypt and process the data.
      */
     final: (rawSectors: Buffer) => Eav<Buffer, Error>
+    error?: undefined
 } | {
+    metadata?: undefined,
+    final?: undefined,
     error: Error
 }
 
@@ -277,20 +280,18 @@ export default class Serialize {
 
             // Head sector
             src.copyTo(dist, this.HEAD_CONTENT)
-            this.AES.encrypt(dist.read(this.HEAD_CONTENT), block.aesKey!, block.address)
+            let crc = this.AES.encryptCRC(dist.read(this.HEAD_CONTENT), block.aesKey!, block.address)
 
             // Raw sectors
             for (let i = 1; i <= block.headSize; i++) {
                 const address = block.address + i
                 src.copyTo(dist, this.SECTOR_SIZE)
-                this.AES.encrypt(dist.read(this.SECTOR_SIZE), block.aesKey!, address)
+                crc = this.AES.encryptCRC(dist.read(this.SECTOR_SIZE), block.aesKey!, address, crc)
             }
 
             // CRC-32 checksum (after encryption)
-            dist.bytesRead = Serialize.HEAD_META
-            const crc32Sum = crc32(dist.read(Infinity))
             dist.bytesWritten = 1
-            dist.writeInt32(crc32Sum)
+            dist.writeInt32(crc)
 
             return [null, dist.buffer]
 
@@ -326,14 +327,14 @@ export default class Serialize {
             props.created     = headSrc.readInt64() // Creation date
             props.modified    = headSrc.readInt64() // Modification date
             const endPadding  = headSrc.readInt16() // End sector padding (unencrypted)
+            headSrc.bytesRead = Serialize.HEAD_META
 
             const distSize = this.HEAD_CONTENT + this.SECTOR_SIZE * props.headSize
             const dist = Memory.alloc(distSize)
-            let crc = 0
 
             // Head sector data
             headSrc.copyTo(dist, this.HEAD_CONTENT)
-            crc = this.AES.decryptCRC(dist.read(this.HEAD_CONTENT), aesKey!, blockAddress)
+            let crc = this.AES.decryptCRC(dist.read(this.HEAD_CONTENT), aesKey!, blockAddress)
 
             return {
                 metadata: props,
@@ -343,11 +344,12 @@ export default class Serialize {
                         const trailSrc = Memory.intake(sectors)
 
                         // Raw sectors
-                        for (let i = 0; i < props.headSize; i++) {
+                        for (let i = 1; i <= props.headSize; i++) {
                             trailSrc.copyTo(dist, this.SECTOR_SIZE)
-                            crc = this.AES.decryptCRC(dist.read(this.SECTOR_SIZE), aesKey!, blockAddress+i+1, crc)
+                            crc = this.AES.decryptCRC(dist.read(this.SECTOR_SIZE), aesKey!, blockAddress+i, crc)
                         }
 
+                        dist.bytesRead = 0
                         return crc === props.crc32Sum
                             ? [null, dist.read(distSize - endPadding)]
                             : [new IBFSError('L0_CRCSUM_MISMATCH', null, null, { crc, props }), null]
@@ -364,26 +366,6 @@ export default class Serialize {
             return {
                 error: new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress })
             }
-        }
-    }
-
-    /**
-     * Instantly deserializes a head block and returns an object containing that block's data and metadata.  
-     * Unlike `readHeadBlock`, this method is used when the size of the block is known.
-     * @param headBlock Block data
-     * @param blockAddress Block's head sector address
-     * @param blockRange Number of trail sectors following the head
-     * @param aesKey Optional AES decryption key
-     * @returns Head block data
-     */
-    public readHeadBlockInstant(headBlock: Buffer, blockAddress: number, blockRange: number, aesKey?: Buffer): Eav<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'|'L0_CRCSUM_MISMATCH'>> {
-        try {
-            
-
-
-        } 
-        catch (error) {
-            return [new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress }), null]
         }
     }
 

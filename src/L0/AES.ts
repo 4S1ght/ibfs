@@ -49,9 +49,8 @@ export default class BlockAES {
         if (config.cipher === '') {
             this.encrypt = (buf) => buf
             this.decrypt = (buf) => buf
-            this.decryptCRC = (buf, key, addr, crcValue) => {
-                return zlib.crc32(buf, crcValue)
-            }
+            this.decryptCRC = (buf, key, addr, crcValue) => zlib.crc32(buf, crcValue)
+            this.encryptCRC = (buf, key, addr, crcValue) => zlib.crc32(buf, crcValue)
         }
 
     }
@@ -80,6 +79,24 @@ export default class BlockAES {
         const pos = cipher.update(input).copy(input, 0)
                     cipher.final().copy(input, pos)
         return input
+    }
+
+    /**
+     * Encrypts the `input` data and copies it back over to the same `input` 
+     * buffer in order to reuse already allocated memory.
+     * Returns the CRC-32 checksum of the original buffer after decryption.
+     * @param input Unencrypted sector bytes
+     * @param key Encryption/decryption key
+     * @param address Sector address
+     */
+    public encryptCRC(input: Buffer, key: Buffer, address: number, crcValue?: number) {
+        const iv = this.getIV(address)
+        const cipher = crypto.createCipheriv(this.cipher, key, iv)
+        const pos = cipher.update(input).copy(input, 0)
+                    cipher.final().copy(input, pos)
+
+        const crc = zlib.crc32(input, crcValue)
+        return crc
     }
 
     /**

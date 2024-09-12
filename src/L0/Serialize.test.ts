@@ -73,48 +73,30 @@ describe('Head block', () => {
         const original: HeadBlock & CommonWriteMeta = {
             created: Math.floor(Date.now()/1000),
             modified: Math.floor(Date.now()/1000),
-            data: Buffer.alloc(3200).fill(1),
+            data: crypto.randomBytes(3200),
             next: 12345,
-            nextRange: 0,
-            headRange: 3,
+            nextSize: 0,
+            headSize: 3,
             address: 10_000,
             aesKey: aesKey,
         }
     
-        describe('de/serialize instant', () => {
-    
-            const [cError, buffer] = s.createHeadBlock(original)
-            if (cError) throw cError
-            const [rError, processed] = s.readHeadBlockInstant(buffer, 10_000, 3, aesKey)
-            if (rError) throw rError
-    
-            test('created',    () => expect(processed.created)   .toBe(original.created))
-            test('modified',   () => expect(processed.modified)  .toBe(original.modified))
-            test('next',       () => expect(processed.next)      .toBe(original.next))
-            test('headRange',  () => expect(processed.headRange) .toBe(original.headRange))
-            // test('data',       () => expect(processed.data)      .toStrictEqual(original.data))
-    
-        })
-    
-        // describe('de/serialize lazy', () => {
-    
-        //     const [cError, buffer] = s.createHeadBlock(original)
-        //     if (cError) throw cError
-    
-        //     const b = Memory.intake(buffer)
-    
-        //     const [rError1, partial] = s.readHeadBlock(b.read(s.HEAD_CONTENT), 10_000)
-        //     if (rError1) throw rError1
-        //     const [rError2, finished] = partial.final(b.readRemaining())
-        //     if (rError2) throw rError2
-    
-        //     test('created',    () => expect(partial.metadata.created)   .toBe(original.created))
-        //     test('modified',   () => expect(partial.metadata.modified)  .toBe(original.modified))
-        //     test('next',       () => expect(partial.metadata.next)      .toBe(original.next))
-        //     test('blockRange', () => expect(partial.metadata.blockRange).toBe(original.blockRange))
-        //     test('data',       () => expect(finished)                   .toStrictEqual(original.data))
-    
-        // })
+        const [cError, headBlockRaw] = s.createHeadBlock(original)
+        if (cError) throw cError
+        const headBlock = Memory.intake(headBlockRaw)
+
+        const head = s.readHeadBlock(headBlock.read(1024), 10_000, aesKey)
+        if (head.error) throw head.error
+
+        const [finalError, final] = head.final(headBlock.readRemaining())
+        if (finalError) throw finalError
+
+        test('created',  () => expect(head.metadata.created)  .toBe(original.created))
+        test('modified', () => expect(head.metadata.modified) .toBe(original.modified))
+        test('next',     () => expect(head.metadata.next)     .toBe(original.next))
+        test('nextSize', () => expect(head.metadata.nextSize) .toBe(original.nextSize))
+        test('headSize', () => expect(head.metadata.headSize) .toBe(original.headSize))
+        test('data',     () => expect(final)                  .toStrictEqual(original.data))
 
     })
 
