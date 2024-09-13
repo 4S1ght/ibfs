@@ -5,13 +5,16 @@ enum ErrorCodes {
     L0_VCREATE_WS_ERROR         = 102, // Write stream error ocurred while the volume was being created.
     L0_CRCSUM_MISMATCH          = 103, // CRC error detection triggered wen deserializing a data block.
 
-    L0_BS_CANT_SERIALIZE_ROOT   = 104, // Problem serializing   a root sector.
+    L0_BS_CANT_SERIALIZE_ROOT   = 104, // Problem serializing a root sector.
     L0_BS_CANT_DESERIALIZE_ROOT = 105, // Problem deserializing a root sector.
-    L0_BS_CANT_SERIALIZE_HEAD   = 106, // Problem serializing   a head block.
+    L0_BS_CANT_SERIALIZE_HEAD   = 106, // Problem serializing a head block.
     L0_BS_CANT_DESERIALIZE_HEAD = 107, // Problem deserializing a head block.
 
-    L0_BS_CANT_SERIALIZE_META   = 108, // Problem serializing   metadata block.
-    L0_BS_CANT_DESERIALIZE_META = 109, // Problem deserializing metadata block.
+    L0_BS_CANT_SERIALIZE_LINK   = 108, // Problem serializing a link block.
+    L0_BS_CANT_DESERIALIZE_LINK = 109, // Problem serializing a link block.
+
+    L0_BS_CANT_SERIALIZE_META   = 110, // Problem serializing   metadata block.
+    L0_BS_CANT_DESERIALIZE_META = 111, // Problem deserializing metadata block.
 
 }
 

@@ -76,7 +76,7 @@ describe('Head block', () => {
             data: crypto.randomBytes(3200),
             next: 12345,
             nextSize: 0,
-            headSize: 3,
+            blockSize: 3,
             address: 10_000,
             aesKey: aesKey,
         }
@@ -91,12 +91,12 @@ describe('Head block', () => {
         const [finalError, final] = head.final(headBlock.readRemaining())
         if (finalError) throw finalError
 
-        test('created',  () => expect(head.metadata.created)  .toBe(original.created))
-        test('modified', () => expect(head.metadata.modified) .toBe(original.modified))
-        test('next',     () => expect(head.metadata.next)     .toBe(original.next))
-        test('nextSize', () => expect(head.metadata.nextSize) .toBe(original.nextSize))
-        test('headSize', () => expect(head.metadata.headSize) .toBe(original.headSize))
-        test('data',     () => expect(final)                  .toStrictEqual(original.data))
+        test('created',   () => expect(head.metadata.created)   .toBe(original.created))
+        test('modified',  () => expect(head.metadata.modified)  .toBe(original.modified))
+        test('next',      () => expect(head.metadata.next)      .toBe(original.next))
+        test('nextSize',  () => expect(head.metadata.nextSize)  .toBe(original.nextSize))
+        test('blockSize', () => expect(head.metadata.blockSize) .toBe(original.blockSize))
+        test('data',      () => expect(final)                   .toStrictEqual(original.data))
 
     })
 
