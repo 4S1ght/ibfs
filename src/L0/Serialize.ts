@@ -404,8 +404,8 @@ export default class Serialize {
             dist.writeInt8(block.blockSize)                                 // Block size
             dist.writeInt16(dist.length - Serialize.LINK_META - src.length) // End sector padding (unencrypted)
 
-            dist.bytesWritten = Serialize.HEAD_META
-            dist.bytesRead = Serialize.HEAD_META
+            dist.bytesWritten = Serialize.LINK_META
+            dist.bytesRead = Serialize.LINK_META
 
             // Link sector
             src.copyTo(dist, this.LINK_CONTENT)
@@ -447,7 +447,7 @@ export default class Serialize {
             props.blockType     = src.readInt8()
             props.crc32Sum      = src.readInt32()
             props.next          = src.readInt64()
-            props.nextSize      = src.readInt64()
+            props.nextSize      = src.readInt8()
             props.blockSize     = src.readInt8()
             const endPadding    = src.readInt16()
             src.bytesRead       = Serialize.LINK_META
@@ -554,4 +554,4 @@ export default class Serialize {
         }
     }
 
-}
+}   

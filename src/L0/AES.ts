@@ -129,6 +129,7 @@ export default class BlockAES {
         const decipher = crypto.createDecipheriv(this.cipher, key, iv)
         const pos = decipher.update(input).copy(input, 0)
                     decipher.final().copy(input, pos)
+                
         return crc
     }
 

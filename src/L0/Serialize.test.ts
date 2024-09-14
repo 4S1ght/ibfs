@@ -1,6 +1,6 @@
 
 import crypto from 'node:crypto'
-import Serialize, { CommonWriteMeta, HeadBlock, RootSector } from '@L0/Serialize.js'
+import Serialize, { CommonWriteMeta, HeadBlock, RootSector, LinkBlock } from '@L0/Serialize.js'
 import { describe, test, expect } from 'vitest'
 import Memory from './Memory.js'
 
@@ -52,6 +52,7 @@ describe('Meta block', () => {
 
     const [cError, buffer] = s.createMetaBlock(original)
     if (cError) throw cError
+
     const [rError, processed] = s.readMetaBlock(buffer)
     if (rError) throw rError
 
@@ -61,43 +62,97 @@ describe('Meta block', () => {
 
 describe('Head block', () => {
 
-    describe('AES', () => {
-
-        const s = new Serialize({ 
-            diskSectorSize: 1024,
-            cipher: 'aes-256-xts',
-            iv: Buffer.alloc(16)
-        })
-
-        const aesKey = Buffer.from('12345'.padEnd(64))
-        const original: HeadBlock & CommonWriteMeta = {
-            created: Math.floor(Date.now()/1000),
-            modified: Math.floor(Date.now()/1000),
-            data: crypto.randomBytes(3200),
-            next: 12345,
-            nextSize: 0,
-            blockSize: 3,
-            address: 10_000,
-            aesKey: aesKey,
-        }
-    
-        const [cError, headBlockRaw] = s.createHeadBlock(original)
-        if (cError) throw cError
-        const headBlock = Memory.intake(headBlockRaw)
-
-        const head = s.readHeadBlock(headBlock.read(1024), 10_000, aesKey)
-        if (head.error) throw head.error
-
-        const [finalError, final] = head.final(headBlock.readRemaining())
-        if (finalError) throw finalError
-
-        test('created',   () => expect(head.metadata.created)   .toBe(original.created))
-        test('modified',  () => expect(head.metadata.modified)  .toBe(original.modified))
-        test('next',      () => expect(head.metadata.next)      .toBe(original.next))
-        test('nextSize',  () => expect(head.metadata.nextSize)  .toBe(original.nextSize))
-        test('blockSize', () => expect(head.metadata.blockSize) .toBe(original.blockSize))
-        test('data',      () => expect(final)                   .toStrictEqual(original.data))
-
+    const s = new Serialize({ 
+        diskSectorSize: 1024,
+        cipher: 'aes-256-xts',
+        iv: Buffer.alloc(16)
     })
+
+    const aesKey = Buffer.from('12345'.padEnd(64))
+    const original: HeadBlock & CommonWriteMeta = {
+        created: Math.floor(Date.now()/1000),
+        modified: Math.floor(Date.now()/1000),
+        data: crypto.randomBytes(3200),
+        next: 12345,
+        nextSize: 0,
+        blockSize: 3,
+        address: 10_000,
+        aesKey: aesKey,
+    }
+
+    const [cError, headBlockRaw] = s.createHeadBlock(original)
+    if (cError) throw cError
+    const headBlock = Memory.intake(headBlockRaw)
+
+    const head = s.readHeadBlock(headBlock.read(1024), 10_000, aesKey)
+    if (head.error) throw head.error
+
+    const [finalError, final] = head.final(headBlock.readRemaining())
+    if (finalError) throw finalError
+
+    test('created',   () => expect(head.metadata.created)   .toBe(original.created))
+    test('modified',  () => expect(head.metadata.modified)  .toBe(original.modified))
+    test('next',      () => expect(head.metadata.next)      .toBe(original.next))
+    test('nextSize',  () => expect(head.metadata.nextSize)  .toBe(original.nextSize))
+    test('blockSize', () => expect(head.metadata.blockSize) .toBe(original.blockSize))
+    test('data',      () => expect(final)                   .toStrictEqual(original.data))
+
+})
+
+describe('Link block', () => {
+
+    const s = new Serialize({ 
+        diskSectorSize: 1024,
+        cipher: 'aes-256-xts',
+        iv: Buffer.alloc(16)
+    })
+
+    const aesKey = Buffer.from('12345'.padEnd(64))
+    const original: LinkBlock & CommonWriteMeta = {
+        data: crypto.randomBytes(3200),
+        next: 12345,
+        nextSize: 0,
+        blockSize: 3,
+        address: 10_000,
+        aesKey: aesKey,
+    }
+
+    const [createError, linkBlock] = s.createLinkBlock(original)
+    if (createError) throw createError
+    const [readError, linkData] = s.readLinkBlock(linkBlock, 10_000, aesKey)
+    if (readError) throw readError
+
+    test('next',      () => expect(linkData.next)      .toBe(original.next))
+    test('nextSize',  () => expect(linkData.nextSize)  .toBe(original.nextSize))
+    test('blockSize', () => expect(linkData.blockSize) .toBe(original.blockSize))
+    test('data',      () => expect(linkData.data)      .toStrictEqual(original.data))
+
+})
+
+describe('Store block', () => {
+
+    const s = new Serialize({ 
+        diskSectorSize: 1024,
+        cipher: 'aes-256-xts',
+        iv: Buffer.alloc(16)
+    })
+
+    const aesKey = Buffer.from('12345'.padEnd(64))
+    const original: LinkBlock & CommonWriteMeta = {
+        data: crypto.randomBytes(3200),
+        next: 12345,
+        nextSize: 0,
+        blockSize: 3,
+        address: 10_000,
+        aesKey: aesKey,
+    }
+
+    const [createError, linkBlock] = s.createStorageBlock(original)
+    if (createError) throw createError
+    const [readError, linkData] = s.readStorageBlock(linkBlock, 10_000, aesKey)
+    if (readError) throw readError
+
+    test('blockSize', () => expect(linkData.blockSize) .toBe(original.blockSize))
+    test('data',      () => expect(linkData.data)      .toStrictEqual(original.data))
 
 })
