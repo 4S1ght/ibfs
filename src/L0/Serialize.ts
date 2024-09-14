@@ -1,4 +1,4 @@
-// Imports ====================================================================
+// Imports ========================================================================================
 
 import { crc32 } from "zlib"
 
@@ -16,7 +16,7 @@ export interface BlockSerializeConfig {
     diskSectorSize: SectorSize
 }
 
-// Root sector ================================================================
+// Root sector ====================================================================================
 
 export interface RootSector {
     /** The size of individual sectors inside the volume. */
@@ -48,7 +48,42 @@ export interface RootSector {
     metadataSectors: number
 }
 
-// Data sectors ===============================================================
+// Data sectors ===================================================================================
+
+export interface HeadBlock {
+    /** File created date. */
+    created: number
+    /** File modified date. */
+    modified: number
+    /** Address of the next block. */
+    next: number
+    /** The size of the next block (in sectors). */
+    nextSize: number
+    /** Sector data. */
+    data: Buffer
+    /** Size of the block (in sectors) */
+    blockSize: number
+}
+
+export interface LinkBlock {
+    /** Address of the next block. */
+    next: number
+    /** The size of the next block (in sectors). */
+    nextSize: number
+    /** Sector data. */
+    data: Buffer
+    /** Size of the block (in sectors) */
+    blockSize: number
+}
+
+export interface StorageBlock {
+    /** Sector data. */
+    data: Buffer
+    /** Size of the block (in sectors) */
+    blockSize: number
+}
+
+// Metadata =======================================================================================
 
 export interface CommonReadMeta {
     /** 
@@ -67,35 +102,9 @@ export interface CommonWriteMeta {
     address: number
 }
 
-export interface CommonMeta {
-    /** Sector data. */
-    data: Buffer
-    /** Size of the block (in sectors) */
-    blockSize: number
-}
+// Helpers ========================================================================================
 
-export interface HeadBlock extends CommonMeta {
-    /** File created date. */
-    created: number
-    /** File modified date. */
-    modified: number
-    /** Address of the next block. */
-    next: number
-    /** The size of the next block (in sectors). */
-    nextSize: number
-}
-
-export interface LinkBlock extends CommonMeta {
-    /** Address of the next block. */
-    next: number
-    /** The size of the next block (in sectors). */
-    nextSize: number
-}
-
-export interface StorageBlock extends CommonMeta {
-}
-
-type Finalizer<Data extends CommonMeta & CommonReadMeta, Error extends IBFSError> = {
+type Finalizer<Data extends (HeadBlock|LinkBlock|StorageBlock) & CommonReadMeta, Error extends IBFSError> = {
     /** Block metadata */
     metadata: Omit<Data, 'data'>
     /** 
@@ -505,7 +514,7 @@ export default class Serialize {
             return [new IBFSError('L0_BS_CANT_SERIALIZE_STORE', null, error as Error, ssc(block, ['data', 'aesKey'])), null]
         }
     }
-    
+
     public readStorageBlock(storeBlock: Buffer, blockAddress: number, aesKey?: Buffer): Eav<StorageBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_STORE' | 'L0_CRCSUM_MISMATCH'>> {
         try {
             
