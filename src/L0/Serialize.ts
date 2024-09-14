@@ -70,10 +70,6 @@ export interface CommonWriteMeta {
 export interface CommonMeta {
     /** Sector data. */
     data: Buffer
-    /** Address of the next block. */
-    next: number
-    /** The size of the next block (in sectors). */
-    nextSize: number
     /** Size of the block (in sectors) */
     blockSize: number
 }
@@ -83,10 +79,21 @@ export interface HeadBlock extends CommonMeta {
     created: number
     /** File modified date. */
     modified: number
+    /** Address of the next block. */
+    next: number
+    /** The size of the next block (in sectors). */
+    nextSize: number
 }
 
-export interface LinkBlock extends CommonMeta {}
-export interface StorageBlock extends CommonMeta {}
+export interface LinkBlock extends CommonMeta {
+    /** Address of the next block. */
+    next: number
+    /** The size of the next block (in sectors). */
+    nextSize: number
+}
+
+export interface StorageBlock extends CommonMeta {
+}
 
 type Finalizer<Data extends CommonMeta & CommonReadMeta, Error extends IBFSError> = {
     /** Block metadata */
@@ -410,7 +417,7 @@ export default class Serialize {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_SERIALIZE_LINK', null, error as Error, ssc(block, ['data'])), null]
+            return [new IBFSError('L0_BS_CANT_SERIALIZE_LINK', null, error as Error, ssc(block, ['data', 'aesKey'])), null]
         }
     }
 
@@ -462,7 +469,80 @@ export default class Serialize {
         }
     }
 
-    public createStorageBlock(block: StorageBlock) {}
-    public readStorageBlock(block: StorageBlock) {}
+    public createStorageBlock(block: StorageBlock & CommonWriteMeta): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_STORE'>> {
+        try {
+            
+            const dist = Memory.alloc(this.SECTOR_SIZE * (block.blockSize+1))
+            const src = Memory.intake(block.data)
+            
+            dist.writeInt8(SectorType.STORE)                                 // Block type
+            dist.writeInt32(0)                                               // CRC
+            dist.writeInt8(block.blockSize)                                  // Block size
+            dist.writeInt16(dist.length - Serialize.STORE_META - src.length) // End sector padding (unencrypted)
+
+            dist.bytesWritten = Serialize.STORE_META
+            dist.bytesRead = Serialize.STORE_META
+
+            // Link sector
+            src.copyTo(dist, this.STORE_CONTENT)
+            let crc = this.AES.encryptCRC(dist.read(this.STORE_CONTENT), block.aesKey!, block.address)
+
+            // Raw sectors
+            for (let i = 1; i <= block.blockSize; i++) {
+                const address = block.address + i
+                src.copyTo(dist, this.SECTOR_SIZE)
+                crc = this.AES.encryptCRC(dist.read(this.SECTOR_SIZE), block.aesKey!, address, crc)
+            }
+
+            // CRC-32 checksum (after encryption)
+            dist.bytesWritten = 1
+            dist.writeInt32(crc)
+
+            return [null, dist.buffer]
+
+        } 
+        catch (error) {
+            return [new IBFSError('L0_BS_CANT_SERIALIZE_STORE', null, error as Error, ssc(block, ['data', 'aesKey'])), null]
+        }
+    }
+    
+    public readStorageBlock(storeBlock: Buffer, blockAddress: number, aesKey?: Buffer): Eav<StorageBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_STORE' | 'L0_CRCSUM_MISMATCH'>> {
+        try {
+            
+            // @ts-expect-error - Populated later
+            const props: StorageBlock & CommonReadMeta = {}
+            const src = Memory.intake(storeBlock)
+
+            props.blockType     = src.readInt8()
+            props.crc32Sum      = src.readInt32()
+            props.blockSize     = src.readInt8()
+            const endPadding    = src.readInt16()
+            src.bytesRead       = Serialize.STORE_META
+
+            const distSize = this.STORE_CONTENT + this.SECTOR_SIZE * props.blockSize
+            const dist = Memory.alloc(distSize)
+
+            // Link sector data
+            src.copyTo(dist, this.STORE_CONTENT)
+            let crc = this.AES.decryptCRC(dist.read(this.STORE_CONTENT), aesKey!, blockAddress)
+
+            // Raw sectors
+            for (let i = 1; i <= props.blockSize; i++) {
+                src.copyTo(dist, this.SECTOR_SIZE)
+                crc = this.AES.decryptCRC(dist.read(this.SECTOR_SIZE), aesKey!, blockAddress+i, crc)
+            }
+        
+            dist.bytesRead = 0
+            props.data = dist.read(distSize - endPadding)
+            
+            return crc === props.crc32Sum
+                ? [null, props]
+                : [new IBFSError('L0_CRCSUM_MISMATCH', null, null, { crc, props }), null]
+
+        } 
+        catch (error) {
+            return [new IBFSError('L0_BS_CANT_DESERIALIZE_STORE', null, error as Error, { blockAddress }), null]
+        }
+    }
 
 }
