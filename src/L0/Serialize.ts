@@ -48,7 +48,7 @@ export interface RootSector {
     metadataSectors: number
 }
 
-// Data sectors ===================================================================================
+// Data blocks ====================================================================================
 
 export interface HeadBlock {
     /** File created date. */
@@ -271,7 +271,7 @@ export default class Serialize {
     // Head block =================================================================================
 
     /**
-     * Serializes a head block and produces a buffer that's ready to be written to the disk.  
+     * Serializes head block data to produce a buffer that's ready to be written to the disk.   
      * The size of usable `data` must be determined in advance and match the `blockSize`.
      * @param blockData Block data and metadata
      * @returns Buffer
@@ -322,7 +322,7 @@ export default class Serialize {
      * Deserializes a head sector and returns an object containing that sector's metadata and a `final` method.
      * The metadata lists primarily the amount of sectors following the head sector that belong to the same block. 
      * These must be read from the disk and passed to the `final` method to finish deserialization and return user data.
-     * This method relies on the finalizer pattern because it's impossible to know the size of a head block in advance.
+     * This method relies on a conditional deserialization pattern because it's impossible to know the size of a head block in advance.
      * @param headSector Block's head sector (in raw state)
      * @param blockAddress Address of where the sector was read from
      * @param aesKey Decryption key needed for decryption.
@@ -345,8 +345,7 @@ export default class Serialize {
             const endPadding  = headSrc.readInt16() // End sector padding (unencrypted)
             headSrc.bytesRead = Serialize.HEAD_META
 
-            const distSize = this.HEAD_CONTENT + this.SECTOR_SIZE * props.blockSize
-            const dist = Memory.alloc(distSize)
+            const dist = Memory.alloc(this.HEAD_CONTENT + this.SECTOR_SIZE * props.blockSize)
 
             // Head sector data
             headSrc.copyTo(dist, this.HEAD_CONTENT)
@@ -367,7 +366,7 @@ export default class Serialize {
 
                         dist.bytesRead = 0
                         return crc === props.crc32Sum
-                            ? [null, dist.read(distSize - endPadding)]
+                            ? [null, dist.read(dist.length - endPadding)]
                             : [new IBFSError('L0_CRCSUM_MISMATCH', null, null, { crc, props }), null]
 
                     } 
@@ -386,7 +385,7 @@ export default class Serialize {
     }
 
     /**
-     * Serializes a link block and produces a buffer that's ready to be written to the disk.  
+     * Serializes link block data to produce a buffer that's ready to be written to the disk.  
      * The size of usable `data` must be determined in advance and match the `blockSize`.
      * @param blockData Block data and metadata
      * @returns Buffer
@@ -431,7 +430,7 @@ export default class Serialize {
     }
 
     /**
-     * Deserializes a link block and returns an containing that its data and metadata,
+     * Deserializes a link block and returns an object containing its data and metadata.
      * @param headSector Block's head sector (in raw state)
      * @param blockAddress Address of where the sector was read from
      * @param aesKey Decryption key needed for decryption.
@@ -452,8 +451,7 @@ export default class Serialize {
             const endPadding    = src.readInt16()
             src.bytesRead       = Serialize.LINK_META
 
-            const distSize = this.LINK_CONTENT + this.SECTOR_SIZE * props.blockSize
-            const dist = Memory.alloc(distSize)
+            const dist = Memory.alloc(this.LINK_CONTENT + this.SECTOR_SIZE * props.blockSize)
 
             // Link sector data
             src.copyTo(dist, this.LINK_CONTENT)
@@ -466,7 +464,7 @@ export default class Serialize {
             }
         
             dist.bytesRead = 0
-            props.data = dist.read(distSize - endPadding)
+            props.data = dist.read(dist.length - endPadding)
             
             return crc === props.crc32Sum
                 ? [null, props]
@@ -478,6 +476,13 @@ export default class Serialize {
         }
     }
 
+
+    /**
+     * Serializes storage block data to produce a buffer that's ready to be written to the disk.  
+     * The size of usable `data` must be determined in advance and match the `blockSize`.
+     * @param blockData Block data and metadata
+     * @returns Buffer
+     */
     public createStorageBlock(block: StorageBlock & CommonWriteMeta): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_STORE'>> {
         try {
             
@@ -515,6 +520,13 @@ export default class Serialize {
         }
     }
 
+    /**
+     * Deserializes a storage block and returns an object containing its data and metadata.
+     * @param headSector Block's head sector (in raw state)
+     * @param blockAddress Address of where the sector was read from
+     * @param aesKey Decryption key needed for decryption.
+     * @returns Head sector data
+     */
     public readStorageBlock(storeBlock: Buffer, blockAddress: number, aesKey?: Buffer): Eav<StorageBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_STORE' | 'L0_CRCSUM_MISMATCH'>> {
         try {
             
@@ -528,8 +540,7 @@ export default class Serialize {
             const endPadding    = src.readInt16()
             src.bytesRead       = Serialize.STORE_META
 
-            const distSize = this.STORE_CONTENT + this.SECTOR_SIZE * props.blockSize
-            const dist = Memory.alloc(distSize)
+            const dist = Memory.alloc(this.STORE_CONTENT + this.SECTOR_SIZE * props.blockSize)
 
             // Link sector data
             src.copyTo(dist, this.STORE_CONTENT)
@@ -542,7 +553,7 @@ export default class Serialize {
             }
         
             dist.bytesRead = 0
-            props.data = dist.read(distSize - endPadding)
+            props.data = dist.read(dist.length - endPadding)
             
             return crc === props.crc32Sum
                 ? [null, props]
