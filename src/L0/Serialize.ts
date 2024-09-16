@@ -34,7 +34,8 @@ export interface RootSector {
     /** 
      * Mode of compatibility with native NodeJS crypto APIs. 
      * In compatibility mode, only first 8 bytes of the IV are used 
-     * and tweak values for XTS encryption should be emulated.
+     * and tweak values for XTS encryption should be emulated by
+     * appending them to the end half of the IV.
     */
     nodeCryptoCompatMode: boolean
     /** 16 null bytes encrypted with the original key for key validity checks. */

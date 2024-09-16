@@ -1,9 +1,9 @@
-// Imports ====================================================================
+// Imports ========================================================================================
 
 import crypto from 'node:crypto'
 import zlib from 'node:zlib'
 
-// Types & Constants ==========================================================
+// Types & Constants ==============================================================================
 
 export type AESKeySize = typeof BlockAES.AES_KEY_SIZES[number]
 
@@ -26,7 +26,7 @@ export interface BlockAESConfig {
     iv: Buffer
 }
 
-// Module =====================================================================
+// Module =========================================================================================
 
 export default class BlockAES {
 
@@ -95,8 +95,7 @@ export default class BlockAES {
         const pos = cipher.update(input).copy(input, 0)
                     cipher.final().copy(input, pos)
 
-        const crc = zlib.crc32(input, crcValue)
-        return crc
+        return zlib.crc32(input, crcValue)
     }
 
     /**
@@ -131,6 +130,30 @@ export default class BlockAES {
                     decipher.final().copy(input, pos)
                 
         return crc
+    }
+
+    // Static ===================================
+
+    /**
+     * Digests a user provided AES encryption key to produce
+     * a constant length SHA-256 hash that can be used internally by
+     * the IBFS driver.
+     * @param key User-provided AES key
+     * @returns SHA-256 digest
+     */
+    public static derive256BitAESKey(key: string | Buffer): Buffer {
+        return crypto.createHash('sha256').update(key).digest()
+    }
+
+    /**
+     * Digests a user provided AES encryption key to produce
+     * a constant length SHA-512 hash that can be used internally by
+     * the IBFS driver.
+     * @param key User-provided AES key
+     * @returns SHA-512 digest
+     */
+    public static derive512BitAESKey(key: string | Buffer): Buffer {
+        return crypto.createHash('sha512').update(key).digest()
     }
 
 }
