@@ -87,15 +87,15 @@ describe('Head block', () => {
     const head = s.readHeadBlock(headBlock.read(1024), 10_000, aesKey)
     if (head.error) throw head.error
 
-    const [finalError, final] = head.final(headBlock.readRemaining())
+    const finalError = head.final(headBlock.readRemaining())
     if (finalError) throw finalError
 
-    test('created',   () => expect(head.metadata.created)   .toBe(original.created))
-    test('modified',  () => expect(head.metadata.modified)  .toBe(original.modified))
-    test('next',      () => expect(head.metadata.next)      .toBe(original.next))
-    test('nextSize',  () => expect(head.metadata.nextSize)  .toBe(original.nextSize))
-    test('blockSize', () => expect(head.metadata.blockSize) .toBe(original.blockSize))
-    test('data',      () => expect(final)                   .toStrictEqual(original.data))
+    test('created',   () => expect(head.meta.created)   .toBe(original.created))
+    test('modified',  () => expect(head.meta.modified)  .toBe(original.modified))
+    test('next',      () => expect(head.meta.next)      .toBe(original.next))
+    test('nextSize',  () => expect(head.meta.nextSize)  .toBe(original.nextSize))
+    test('blockSize', () => expect(head.meta.blockSize) .toBe(original.blockSize))
+    test('data',      () => expect(head.meta.data)      .toStrictEqual(original.data))
 
 })
 

@@ -26,7 +26,9 @@
 
         "paths": {
             "@L0/*": ["./src/L0/*"],
-            "@errors/*": ["./src/errors/*"]
+            "@errors/*": ["./src/errors/*"],
+            "@helpers": ["./src/Helpers.ts"],
+            "@constants": ["./src/Constants.ts"]
         }
 
     }

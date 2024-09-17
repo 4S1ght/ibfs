@@ -1,11 +1,9 @@
 // Imports ========================================================================================
 
-import { crc32 } from "zlib"
-
-import Memory from "@L0/Memory.js"
-import BlockAES, { AESCipher, AESKeySize, BlockAESConfig } from "@L0/AES.js"
-import IBFSError from "@errors/IBFSError.js"
-import { ssc } from "../Helpers.js"
+import Memory                                               from "@L0/Memory.js"
+import BlockAES, { AESCipher, AESKeySize, BlockAESConfig }  from "@L0/AES.js"
+import IBFSError                                            from "@errors/IBFSError.js"
+import { ssc }                                              from "@helpers"
 
 // Types ==========================================================================================
 
@@ -105,20 +103,20 @@ export interface CommonWriteMeta {
 
 // Helpers ========================================================================================
 
-type Finalizer<Data extends (HeadBlock|LinkBlock|StorageBlock) & CommonReadMeta, Error extends IBFSError> = {
+type Finalizer<ErrorCode extends IBFSError['code']> = {
     /** Block metadata */
-    metadata: Omit<Data, 'data'>
+    meta: Optional<HeadBlock & CommonReadMeta, 'data'>
     /** 
      * Finalizer function that finishes deserializing the block.
      * It needs to be supplied the trailing data sectors after the
      * head/link/storage descriptor sector to decrypt and process the data.
      */
-    final: (rawSectors: Buffer) => Eav<Buffer, Error>
+    final: (rawSectors: Buffer) => IBFSError<ErrorCode> | undefined
     error?: undefined
 } | {
-    metadata?: undefined,
+    meta?: undefined,
     final?: undefined,
-    error: Error
+    error: IBFSError<ErrorCode>
 }
 
 enum SectorType {
@@ -320,16 +318,20 @@ export default class Serialize {
     }
 
     /**
-     * Deserializes a head sector and returns an object containing that sector's metadata and a `final` method.
-     * The metadata lists primarily the amount of sectors following the head sector that belong to the same block. 
-     * These must be read from the disk and passed to the `final` method to finish deserialization and return user data.
-     * This method relies on a conditional deserialization pattern because it's impossible to know the size of a head block in advance.
+     * Deserializes a head sector and returns an object containing that sector's metadata a `final` method or possibly a 
+     * single error. The metadata contains all head sector information except for the file data.
+     * For the file data to be fully serialized and become available in the returned metadata object, the `final` method
+     * must be called and supplied the rest of the block sectors to finish block deserialization.
+     * 
+     * This method relies on dual-stage deserialization because it's impossible to know the size of a head block in 
+     * advance before reading the main head sector.
+     * 
      * @param headSector Block's head sector (in raw state)
      * @param blockAddress Address of where the sector was read from
      * @param aesKey Decryption key needed for decryption.
      * @returns Head sector data
      */
-    public readHeadBlock(headSector: Buffer, blockAddress: number, aesKey?: Buffer): Finalizer<HeadBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_HEAD'|'L0_CRCSUM_MISMATCH'>> {
+    public readHeadBlock(headSector: Buffer, blockAddress: number, aesKey?: Buffer): Finalizer<'L0_BS_CANT_DESERIALIZE_HEAD'> {
         try {
 
             // @ts-expect-error - Populated later
@@ -353,7 +355,7 @@ export default class Serialize {
             let crc = this.AES.decryptCRC(dist.read(this.HEAD_CONTENT), aesKey!, blockAddress)
 
             return {
-                metadata: props,
+                meta: props,
                 final: (sectors: Buffer) => {
                     try {
                         
@@ -366,13 +368,11 @@ export default class Serialize {
                         }
 
                         dist.bytesRead = 0
-                        return crc === props.crc32Sum
-                            ? [null, dist.read(dist.length - endPadding)]
-                            : [new IBFSError('L0_CRCSUM_MISMATCH', null, null, { crc, props }), null]
+                        props.data = dist.read(dist.length - endPadding)
 
                     } 
                     catch (error) {
-                        return [new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress }), null]
+                        return new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress })
                     }
                 }
             }
@@ -477,7 +477,6 @@ export default class Serialize {
         }
     }
 
-
     /**
      * Serializes storage block data to produce a buffer that's ready to be written to the disk.  
      * The size of usable `data` must be determined in advance and match the `blockSize`.
@@ -535,12 +534,12 @@ export default class Serialize {
             const props: StorageBlock & CommonReadMeta = {}
             const src = Memory.intake(storeBlock)
 
-            props.blockType     = src.readInt8()
-            props.crc32Sum      = src.readInt32()
-            props.blockSize     = src.readInt8()
-            const endPadding    = src.readInt16()
-            src.bytesRead       = Serialize.STORE_META
+            props.blockType     = src.readInt8()        // Block type
+            props.crc32Sum      = src.readInt32()       // CRC
+            props.blockSize     = src.readInt8()        // Block size
+            const endPadding    = src.readInt16()       // End sector padding (unencrypted)
 
+            src.bytesRead       = Serialize.STORE_META
             const dist = Memory.alloc(this.STORE_CONTENT + this.SECTOR_SIZE * props.blockSize)
 
             // Link sector data

@@ -4,15 +4,14 @@
 import path                         from "node:path"
 import fs                           from "node:fs/promises"
 import crypto                       from "node:crypto"
-import zlib                         from "node:zlib"
 import type { WriteStream }         from "node:fs"
 
-import * as C                       from "../Constants.js"
 import IBFSError                    from "@errors/IBFSError.js"
 import Serialize, { SectorSize }    from "@L0/Serialize.js"
 import AES, { AESCipher }           from "@L0/AES.js"
 import Memory                       from "@L0/Memory.js"
-import { ssc } from "../Helpers.js"
+import * as h                       from "@helpers"
+import * as C                       from "@constants"
 
 // Types ==========================================================================================
 
@@ -100,12 +99,12 @@ export default class Volume {
                 aesKeyCheck:            aesKeyCheck,
                 rootDirectory:          rootDirHeadAddress
             })           
-            if (rootError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, rootError, ssc(init, ['aesKey']))
+            if (rootError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, rootError, h.ssc(init, ['aesKey']))
 
             // Metadata block =======================================
 
             const [metaError, metaBlock] = serialize.createMetaBlock({ ibfs: {} })
-            if (metaError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, metaError, ssc(init, ['aesKey']))
+            if (metaError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, metaError, h.ssc(init, ['aesKey']))
 
             // Root directory head block ============================
 
@@ -123,7 +122,7 @@ export default class Volume {
                 blockSize: 0,
                 address: rootDirHeadAddress
             })
-            if (dirHeadError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirHeadError, ssc(init, ['aesKey']))
+            if (dirHeadError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirHeadError, h.ssc(init, ['aesKey']))
 
 
             // Root directory content block =========================
@@ -133,7 +132,7 @@ export default class Volume {
                 blockSize: 1,
                 address: rootDirStoreAddress
             })            
-            if (dirStoreError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirStoreError, ssc(init, ['aesKey']))
+            if (dirStoreError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirStoreError, h.ssc(init, ['aesKey']))
 
 
             // File write ===========================================
@@ -182,12 +181,11 @@ export default class Volume {
                     'L0_VCREATE_WS_ERROR', 
                     'WriteStream error while creating the volume.', 
                     wsError.error, 
-                    ssc({ ...init, failedAtSector: wsError.i }, ['aesKey'])
+                    h.ssc({ ...init, failedAtSector: wsError.i }, ['aesKey'])
                 )
             }
 
             update('done', ws.bytesWritten)
-
 
         } 
         catch (error) {

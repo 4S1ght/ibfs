@@ -27,4 +27,9 @@ type DInt = [number, number]
 /**
  * Extracts enum values.
  */
-type Values<T> = T[keyof T];
+type Values<T> = T[keyof T]
+
+/** 
+ * Makes selected keys optional.
+*/
+type Optional<O, K extends keyof O> = Omit<O, K> & Partial<Pick<O, K>>

@@ -16,8 +16,8 @@ enum ErrorCodes {
     L0_BS_CANT_SERIALIZE_STORE   = 110, // Problem serializing a store block.
     L0_BS_CANT_DESERIALIZE_STORE = 111, // Problem deserializing a store block.
  
-    L0_BS_CANT_SERIALIZE_META    = 111, // Problem serializing metadata block.
-    L0_BS_CANT_DESERIALIZE_META  = 112, // Problem deserializing metadata block.
+    L0_BS_CANT_SERIALIZE_META    = 112, // Problem serializing metadata block.
+    L0_BS_CANT_DESERIALIZE_META  = 113, // Problem deserializing metadata block.
 
 }
 
