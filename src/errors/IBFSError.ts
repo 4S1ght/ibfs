@@ -21,17 +21,17 @@ enum ErrorCodes {
 
 }
 
-type ErrorCode = keyof typeof ErrorCodes
-type ErrorMetadata = { [key: string]: any }
+export type IBFSErrorCode = keyof typeof ErrorCodes
+export type IBFSErrorMetadata = { [key: string]: any }
 
-export default class IBFSError<Code extends ErrorCode = ErrorCode> extends Error {
+export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> extends Error {
 
     public readonly errno: number
     public readonly code: Code
     public readonly causes: Error[] = []
-    public readonly meta: ErrorMetadata = {}
+    public readonly meta: IBFSErrorMetadata = {}
 
-    constructor(code: Code, message?: string|null, cause?: Error | null, meta?: ErrorMetadata) {
+    constructor(code: Code, message?: string|null, cause?: Error | null, meta?: IBFSErrorMetadata) {
         
         super(message || undefined)
         this.name = this.constructor.name

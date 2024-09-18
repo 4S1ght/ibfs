@@ -1,7 +1,7 @@
 // Imports ========================================================================================
 
 import crypto from 'node:crypto'
-import zlib from 'node:zlib'
+import zlib   from 'node:zlib'
 
 // Types & Constants ==============================================================================
 

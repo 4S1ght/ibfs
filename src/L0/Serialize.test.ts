@@ -119,13 +119,15 @@ describe('Link block', () => {
 
     const [createError, linkBlock] = s.createLinkBlock(original)
     if (createError) throw createError
-    const [readError, linkData] = s.readLinkBlock(linkBlock, 10_000, aesKey)
-    if (readError) throw readError
 
-    test('next',      () => expect(linkData.next)      .toBe(original.next))
-    test('nextSize',  () => expect(linkData.nextSize)  .toBe(original.nextSize))
-    test('blockSize', () => expect(linkData.blockSize) .toBe(original.blockSize))
-    test('data',      () => expect(linkData.data)      .toStrictEqual(original.data))
+    const lr = s.readLinkBlock(linkBlock, 10_000, aesKey)
+    if (lr.error) throw lr.error
+
+    test('next',      () => expect(lr.meta.next)      .toBe(original.next))
+    test('nextSize',  () => expect(lr.meta.nextSize)  .toBe(original.nextSize))
+    test('blockSize', () => expect(lr.meta.blockSize) .toBe(original.blockSize))
+    test('data',      () => expect(lr.meta.data)      .toStrictEqual(original.data))
+    test('crc',       () => expect(lr.crcMismatch)    .toBe(false))
 
 })
 
@@ -149,10 +151,14 @@ describe('Store block', () => {
 
     const [createError, linkBlock] = s.createStorageBlock(original)
     if (createError) throw createError
-    const [readError, linkData] = s.readStorageBlock(linkBlock, 10_000, aesKey)
-    if (readError) throw readError
 
-    test('blockSize', () => expect(linkData.blockSize) .toBe(original.blockSize))
-    test('data',      () => expect(linkData.data)      .toStrictEqual(original.data))
+    const sr = s.readStorageBlock(linkBlock, 10_000, aesKey)
+    if (sr.error) throw sr.error
+
+    test('blockSize', () => expect(sr.meta.blockSize) .toBe(original.blockSize))
+    test('data',      () => expect(sr.meta.data)      .toStrictEqual(original.data))
+    test('crc',       () => expect(sr.crcMismatch)    .toBe(false))
+
+    console.log(sr)
 
 })

@@ -2,7 +2,8 @@
 
 import Memory                                               from "@L0/Memory.js"
 import BlockAES, { AESCipher, AESKeySize, BlockAESConfig }  from "@L0/AES.js"
-import IBFSError                                            from "@errors/IBFSError.js"
+import ReadResult, { DSResult }                             from "@L0/ReadResult.js"
+import IBFSError                                            from "@errors"
 import { ssc }                                              from "@helpers"
 
 // Types ==========================================================================================
@@ -58,7 +59,7 @@ export interface HeadBlock {
     next: number
     /** The size of the next block (in sectors). */
     nextSize: number
-    /** Sector data. */
+    /** Block data. */
     data: Buffer
     /** Size of the block (in sectors) */
     blockSize: number
@@ -69,14 +70,14 @@ export interface LinkBlock {
     next: number
     /** The size of the next block (in sectors). */
     nextSize: number
-    /** Sector data. */
+    /** Block data. */
     data: Buffer
     /** Size of the block (in sectors) */
     blockSize: number
 }
 
 export interface StorageBlock {
-    /** Sector data. */
+    /** Block data. */
     data: Buffer
     /** Size of the block (in sectors) */
     blockSize: number
@@ -437,7 +438,7 @@ export default class Serialize {
      * @param aesKey Decryption key needed for decryption.
      * @returns Head sector data
      */
-    public readLinkBlock(linkBlock: Buffer, blockAddress: number, aesKey?: Buffer): Eav<LinkBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_LINK' | 'L0_CRCSUM_MISMATCH'>> {
+    public readLinkBlock(linkBlock: Buffer, blockAddress: number, aesKey?: Buffer): DSResult<LinkBlock, 'L0_BS_CANT_DESERIALIZE_LINK'>{
         try {
             
             // @ts-expect-error - Populated later
@@ -466,14 +467,12 @@ export default class Serialize {
         
             dist.bytesRead = 0
             props.data = dist.read(dist.length - endPadding)
-            
-            return crc === props.crc32Sum
-                ? [null, props]
-                : [new IBFSError('L0_CRCSUM_MISMATCH', null, null, { crc, props }), null]
+
+            return ReadResult.success(props, crc)
 
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_DESERIALIZE_LINK', null, error as Error, { blockAddress }), null]
+            return ReadResult.failure('L0_BS_CANT_DESERIALIZE_LINK', null, error as Error, { blockAddress })
         }
     }
 
@@ -527,7 +526,7 @@ export default class Serialize {
      * @param aesKey Decryption key needed for decryption.
      * @returns Head sector data
      */
-    public readStorageBlock(storeBlock: Buffer, blockAddress: number, aesKey?: Buffer): Eav<StorageBlock & CommonReadMeta, IBFSError<'L0_BS_CANT_DESERIALIZE_STORE' | 'L0_CRCSUM_MISMATCH'>> {
+    public readStorageBlock(storeBlock: Buffer, blockAddress: number, aesKey?: Buffer): DSResult<StorageBlock, 'L0_BS_CANT_DESERIALIZE_STORE'> {
         try {
             
             // @ts-expect-error - Populated later
@@ -555,13 +554,11 @@ export default class Serialize {
             dist.bytesRead = 0
             props.data = dist.read(dist.length - endPadding)
             
-            return crc === props.crc32Sum
-                ? [null, props]
-                : [new IBFSError('L0_CRCSUM_MISMATCH', null, null, { crc, props }), null]
+            return ReadResult.success(props, crc)
 
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_DESERIALIZE_STORE', null, error as Error, { blockAddress }), null]
+            return ReadResult.failure('L0_BS_CANT_DESERIALIZE_STORE', null, error as Error, { blockAddress })
         }
     }
 
