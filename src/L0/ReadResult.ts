@@ -19,7 +19,12 @@ export interface DSFailure<ErrorCode extends IBFSErrorCode> {
     readonly error:         IBFSError<ErrorCode>
 }
 
-export type DSResult<Meta extends LinkBlock|StorageBlock, ErrorCode extends IBFSErrorCode> = 
+/** 
+ * Read results are of unknown type until checked against.  
+ * A read operation can either result in a failure or a success.
+ * A failure is indicated by an `error` property on the returned object.
+ */
+export type UnknownReadResult<Meta extends LinkBlock|StorageBlock, ErrorCode extends IBFSErrorCode> = 
     | DSSuccess<Meta>
     | DSFailure<ErrorCode>
 

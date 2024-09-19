@@ -159,6 +159,4 @@ describe('Store block', () => {
     test('data',      () => expect(sr.meta.data)      .toStrictEqual(original.data))
     test('crc',       () => expect(sr.crcMismatch)    .toBe(false))
 
-    console.log(sr)
-
 })

@@ -6,7 +6,7 @@ import fs                           from "node:fs/promises"
 import crypto                       from "node:crypto"
 import type { WriteStream }         from "node:fs"
 
-import IBFSError                    from "@errors/IBFSError.js"
+import IBFSError                    from "@errors"
 import Serialize, { SectorSize }    from "@L0/Serialize.js"
 import AES, { AESCipher }           from "@L0/AES.js"
 import Memory                       from "@L0/Memory.js"
@@ -26,8 +26,16 @@ export interface VolumeInit {
     aesCipher: keyof typeof AESCipher
     /** AES encryption key used. */
     aesKey?: Buffer | string
-    /** A callback called on each update as the volume is being created. */
-    onUpdate?: (status: VolumeCreateStatus, written: number) => any
+    /** Progress update configuration. */
+    update?: {
+        /** 
+         * Specifies every how many bytes written to the disk to call an update callback. 
+         * @default 25_000_000
+         */
+        frequency?: number
+        /** A callback called on each update as the volume is being created. */
+        callback: (status: VolumeCreateStatus, written: number) => any
+    }
 }
 
 type VolumeCreateStatus = 
@@ -49,9 +57,10 @@ export default class Volume {
 
         try {
             
-            const update = init.onUpdate || (() => {})
+            const update = init.update?.callback || (() => {})
 
             // Setup ================================================
+            
             update('setup', 0)
 
             // Ensure file EXT
@@ -59,10 +68,10 @@ export default class Volume {
 
             const aesIV = crypto.randomBytes(16)
             const aesKey = {
-                'aes-128-xts': AES.derive256BitAESKey(init.aesKey!),
-                'aes-256-xts': AES.derive512BitAESKey(init.aesKey!),
-                '':            Buffer.alloc(0)
-            }[init.aesCipher!]
+                'aes-128-xts': () => AES.derive256BitAESKey(init.aesKey!),
+                'aes-256-xts': () => AES.derive512BitAESKey(init.aesKey!),
+                '':            () => Buffer.alloc(0)
+            }[init.aesCipher!]()
 
             // deps setup
             const serialize = new Serialize({ 
@@ -126,7 +135,7 @@ export default class Volume {
 
 
             // Root directory content block =========================
-
+    
             const [dirStoreError, dirStore] = serialize.createStorageBlock({
                 data: Buffer.from(JSON.stringify({})),
                 blockSize: 1,
@@ -171,8 +180,6 @@ export default class Volume {
                     ws.removeAllListeners('drain')
                     resume()
                 }))
-                
-                update('bootstrap', ws.bytesWritten)
 
             }
 
@@ -191,6 +198,7 @@ export default class Volume {
         catch (error) {
             if (ws!) ws.close()
             if (file!) file.close()
+            return new IBFSError('L0_VCREATE_CANT_CREATE', null, error as Error, h.ssc(init, ['aesKey']))
         }
 
     }

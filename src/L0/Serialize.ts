@@ -2,7 +2,7 @@
 
 import Memory                                               from "@L0/Memory.js"
 import BlockAES, { AESCipher, AESKeySize, BlockAESConfig }  from "@L0/AES.js"
-import ReadResult, { DSResult }                             from "@L0/ReadResult.js"
+import ReadResult, { UnknownReadResult }                    from "@L0/ReadResult.js"
 import IBFSError                                            from "@errors"
 import { ssc }                                              from "@helpers"
 
@@ -288,8 +288,8 @@ export default class Serialize {
             dist.writeInt64(block.next)                                     // Next block address
             dist.writeInt8(block.nextSize)                                  // Next block size
             dist.writeInt8(block.blockSize)                                 // Head block size
-            dist.writeInt64(block.created)                                  // Creation date
-            dist.writeInt64(block.modified)                                 // Modification date
+            dist.writeInt64(block.created | 0)                              // Creation date
+            dist.writeInt64(block.modified | 0)                             // Modification date
             dist.writeInt16(dist.length - Serialize.HEAD_META - src.length) // End sector padding (unencrypted)
 
             dist.bytesWritten = Serialize.HEAD_META
@@ -438,7 +438,7 @@ export default class Serialize {
      * @param aesKey Decryption key needed for decryption.
      * @returns Head sector data
      */
-    public readLinkBlock(linkBlock: Buffer, blockAddress: number, aesKey?: Buffer): DSResult<LinkBlock, 'L0_BS_CANT_DESERIALIZE_LINK'>{
+    public readLinkBlock(linkBlock: Buffer, blockAddress: number, aesKey?: Buffer): UnknownReadResult<LinkBlock, 'L0_BS_CANT_DESERIALIZE_LINK'>{
         try {
             
             // @ts-expect-error - Populated later
@@ -526,7 +526,7 @@ export default class Serialize {
      * @param aesKey Decryption key needed for decryption.
      * @returns Head sector data
      */
-    public readStorageBlock(storeBlock: Buffer, blockAddress: number, aesKey?: Buffer): DSResult<StorageBlock, 'L0_BS_CANT_DESERIALIZE_STORE'> {
+    public readStorageBlock(storeBlock: Buffer, blockAddress: number, aesKey?: Buffer): UnknownReadResult<StorageBlock, 'L0_BS_CANT_DESERIALIZE_STORE'> {
         try {
             
             // @ts-expect-error - Populated later
