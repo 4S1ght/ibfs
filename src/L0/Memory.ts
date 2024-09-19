@@ -99,14 +99,14 @@ export default class Memory {
      * `bytesRead` and `bytesWritten` values are synced respectively.
      */
     public copyTo(target: Memory, length: number) {
-        this.buffer.copy(
+        const copied = this.buffer.copy(
             target.buffer, 
             target.bytesWritten,
             this.bytesRead,
             this.bytesRead + length
         )
-        this.bytesRead += length
-        target.bytesWritten += length
+        this.bytesRead += copied
+        target.bytesWritten += copied
     }
 
     // Sequential output ============================================
