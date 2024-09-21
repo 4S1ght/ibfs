@@ -30,7 +30,7 @@ export interface VolumeInit {
     update?: {
         /** 
          * Specifies every how many bytes written to the disk to call an update callback. 
-         * @default 25_000_000
+         * @default 5_000_000
          */
         frequency?: number
         /** A callback called on each update as the volume is being created. */
@@ -57,7 +57,8 @@ export default class Volume {
 
         try {
             
-            const update = init.update?.callback || (() => {})
+            const update     = init.update ? init.update.callback : (() => {})
+            const updateFreq = init.update ? init.update.frequency || 5_000_000 : 5_000_000
 
             // Setup ================================================
             
@@ -67,11 +68,8 @@ export default class Volume {
             if (path.extname(init.file) !== C.VD_FILE_EXT) init.file != C.VD_FILE_EXT
 
             const aesIV = crypto.randomBytes(16)
-            const aesKey = {
-                'aes-128-xts': () => AES.derive256BitAESKey(init.aesKey!),
-                'aes-256-xts': () => AES.derive512BitAESKey(init.aesKey!),
-                '':            () => Buffer.alloc(0)
-            }[init.aesCipher!]()
+            const [aesKeyError, aesKey] = AES.deriveAESKey(init.aesCipher, init.aesKey)
+            if (aesKeyError) return aesKeyError
 
             // deps setup
             const serialize = new Serialize({ 
@@ -81,6 +79,7 @@ export default class Volume {
             })
 
             // Root sector ==========================================
+            
             update('bootstrap', 0)
 
             // Deps
@@ -129,7 +128,8 @@ export default class Volume {
                 next: 0,
                 nextSize: 0,
                 blockSize: 0,
-                address: rootDirHeadAddress
+                address: rootDirHeadAddress,
+                aesKey
             })
             if (dirHeadError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirHeadError, h.ssc(init, ['aesKey']))
 
@@ -139,7 +139,8 @@ export default class Volume {
             const [dirStoreError, dirStore] = serialize.createStorageBlock({
                 data: Buffer.from(JSON.stringify({})),
                 blockSize: 1,
-                address: rootDirStoreAddress
+                address: rootDirStoreAddress,
+                aesKey
             })            
             if (dirStoreError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirStoreError, h.ssc(init, ['aesKey']))
 
@@ -154,8 +155,9 @@ export default class Volume {
             let canWrite = true
             let broken = false
             let wsError: { i: number, error: Error }
+            let bw = 0
 
-            file.write(Buffer.concat([
+            const { bytesWritten: bwBootstrapped } = await file.write(Buffer.concat([
                 rootSector,
                 metaBlock,
                 dirHead,
@@ -181,6 +183,12 @@ export default class Volume {
                     resume()
                 }))
 
+                // Report amount of bytes written.
+                if (ws.bytesWritten - bw >= updateFreq) {
+                    update('write', ws.bytesWritten)
+                    bw = ws.bytesWritten
+                }
+
             }
 
             if (wsError!) {
@@ -192,13 +200,15 @@ export default class Volume {
                 )
             }
 
-            update('done', ws.bytesWritten)
+            update('done', ws.bytesWritten + bwBootstrapped)
 
         } 
         catch (error) {
+            return new IBFSError('L0_VCREATE_CANT_CREATE', null, error as Error, h.ssc(init, ['aesKey']))
+        }
+        finally {
             if (ws!) ws.close()
             if (file!) file.close()
-            return new IBFSError('L0_VCREATE_CANT_CREATE', null, error as Error, h.ssc(init, ['aesKey']))
         }
 
     }

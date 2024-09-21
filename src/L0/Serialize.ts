@@ -42,8 +42,8 @@ export interface RootSector {
     /** Number of sectors inside the volume. */
     sectorCount: number
     /** 
-     * Number of sectors following the root sector.  
-     * `metadataSectors * sectorSize` must amount to `>512kiB`.
+     * Number of sectors following the root sector.
+     * `metadataSectors * sectorSize` must amount to `>1MiB`.
      */
     metadataSectors: number
 }

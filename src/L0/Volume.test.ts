@@ -14,19 +14,18 @@ describe('Create volume', async () => {
         file: path.join(dirname, '../../tests/Volume.ibfs'),
         sectorSize: 1024,
         sectorCount: 1000,
-        aesCipher: '',
+        aesCipher: 'aes-128-xts',
+        aesKey: 'Hello world!',
         update: {
             frequency: 10_000,
             callback: (status, written) => {
-                // console.log(status, written)
+                console.log(status, written)
             }
         }
     })
 
     if (createError) throw createError
     test('createError', () => expect(createError).toBe(undefined))
-
-    await new Promise(r => setTimeout(r, 500))
 
 
 })

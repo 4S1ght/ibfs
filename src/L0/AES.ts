@@ -1,7 +1,8 @@
 // Imports ========================================================================================
 
-import crypto from 'node:crypto'
-import zlib   from 'node:zlib'
+import crypto    from 'node:crypto'
+import zlib      from 'node:zlib'
+import IBFSError from '@errors'
 
 // Types & Constants ==============================================================================
 
@@ -141,7 +142,7 @@ export default class BlockAES {
      * @param key User-provided AES key
      * @returns SHA-256 digest
      */
-    public static derive256BitAESKey(key: string | Buffer): Buffer {
+    private static derive256BitAESKey(key: string | Buffer): Buffer {
         return crypto.createHash('sha256').update(key).digest()
     }
 
@@ -152,8 +153,35 @@ export default class BlockAES {
      * @param key User-provided AES key
      * @returns SHA-512 digest
      */
-    public static derive512BitAESKey(key: string | Buffer): Buffer {
+    private static derive512BitAESKey(key: string | Buffer): Buffer {
         return crypto.createHash('sha512').update(key).digest()
+    }
+
+    /**
+     * Given an encryption algorithm the method digests a user-provided key using a `SHA-256` or `SHA-512`
+     * hashing algorithm to match key sizes required for respective encryption types.
+     * @param cipher AES cipher used (leave empty for no encryption key)
+     * @param key encryption key
+     * @returns [Error | Key]
+     */
+    public static deriveAESKey(cipher: keyof typeof AESCipher, key: string | Buffer | undefined): 
+        Eav<Buffer, IBFSError<'L0_CRYPTO_KEY_REQUIRED'|'L0_CRYPTO_KEY_CANT_DIGEST'>> {
+        try {
+            if (cipher && !key) throw new IBFSError(
+                'L0_CRYPTO_KEY_REQUIRED', 
+                `Volume created in ${cipher} mode requires an AES key that was ` +
+                `not provided or is of a wrong type (${typeof key}).`
+            )
+            const ciphers = {
+                'aes-128-xts': () => this.derive256BitAESKey(key!),
+                'aes-256-xts': () => this.derive512BitAESKey(key!),
+                '':            () => Buffer.alloc(0)
+            }
+            return [null, ciphers[cipher]()]
+        } 
+        catch (error) {
+            return [new IBFSError('L0_CRYPTO_KEY_CANT_DIGEST', null, error as Error), null]
+        }
     }
 
 }
