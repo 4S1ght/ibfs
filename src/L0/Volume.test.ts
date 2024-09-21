@@ -6,9 +6,7 @@ import url from 'node:url'
 
 const dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
-describe('Create volume', async () => { 
-
-    test('x', () => expect(true).toBe(true))
+describe('Create/open volume', async () => { 
 
     const createError = await Volume.create({
         file: path.join(dirname, '../../tests/Volume.ibfs'),
@@ -16,16 +14,21 @@ describe('Create volume', async () => {
         sectorCount: 1000,
         aesCipher: 'aes-128-xts',
         aesKey: 'Hello world!',
-        update: {
-            frequency: 10_000,
-            callback: (status, written) => {
-                console.log(status, written)
-            }
-        }
+        // update: {
+            // frequency: 10_000,
+            // callback: (status, written) => {
+            //     console.log(status, written)
+            // }
+        // }
     })
-
     if (createError) throw createError
-    test('createError', () => expect(createError).toBe(undefined))
 
+    const [volumeError, volume] = await Volume.open(path.join(dirname, '../../tests/Volume.ibfs'))
+    if (volumeError) {
+        console.error(volumeError)
+        throw volumeError
+    }
+
+    test('volume.rs', () => expect(volume.rs).toBeDefined())
 
 })

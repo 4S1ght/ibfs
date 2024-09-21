@@ -1,21 +1,21 @@
 /// <reference path="../types.d.ts"/>
 // Imports ========================================================================================
 
-import path                         from "node:path"
-import fs                           from "node:fs/promises"
-import crypto                       from "node:crypto"
-import type { WriteStream }         from "node:fs"
+import path                                     from "node:path"
+import fs                                       from "node:fs/promises"
+import crypto                                   from "node:crypto"
+import type { WriteStream }                     from "node:fs"
 
-import IBFSError                    from "@errors"
-import Serialize, { SectorSize }    from "@L0/Serialize.js"
-import AES, { AESCipher }           from "@L0/AES.js"
-import Memory                       from "@L0/Memory.js"
-import * as h                       from "@helpers"
-import * as C                       from "@constants"
+import Serialize, { RootSector, SectorSize }    from "@L0/Serialize.js"
+import AES, { AESCipher }                       from "@L0/AES.js"
+import Memory                                   from "@L0/Memory.js"
+import IBFSError                                from "@errors"
+import * as h                                   from "@helpers"
+import * as C                                   from "@constants"
 
 // Types ==========================================================================================
 
-export interface VolumeInit {
+export interface VolumeCreateInit {
     /** The location of the virtual disk file. */
     file: string
     /** Size of individual sectors inside the virtual disk file. */
@@ -48,9 +48,13 @@ type VolumeCreateStatus =
 
 export default class Volume {
 
+    private declare handle: fs.FileHandle
+    private declare bs: Serialize
+    public  declare rs: RootSector
+
     private constructor() {}
 
-    public static async create(init: VolumeInit): EavSingleAsync<IBFSError> {
+    public static async create(init: VolumeCreateInit): EavSingleAsync<IBFSError> {
 
         let file: fs.FileHandle
         let ws: WriteStream
@@ -138,7 +142,7 @@ export default class Volume {
     
             const [dirStoreError, dirStore] = serialize.createStorageBlock({
                 data: Buffer.from(JSON.stringify({})),
-                blockSize: 1,
+                blockSize: 0,
                 address: rootDirStoreAddress,
                 aesKey
             })            
@@ -164,7 +168,7 @@ export default class Volume {
                 dirStore
             ]))
 
-            for (let i = 0; i < init.sectorCount; i++) {
+            for (let i = 2; i < init.sectorCount; i++) {
 
                 if (broken) break
 
@@ -208,9 +212,53 @@ export default class Volume {
         }
         finally {
             if (ws!) ws.close()
-            if (file!) file.close()
+            if (file!) await file.close()
         }
 
+    }
+
+    public static async open(image: string): EavAsync<Volume, IBFSError> {
+
+        const self = new this()
+
+        try {
+
+            self.handle = await fs.open(image, 'r+', 0o600)
+
+            const rsData = Buffer.alloc(1024)
+            await self.handle.read({ offset: 0, length: 1024, buffer: rsData })
+            const [rsError, rs] = Serialize.readRootSector(rsData)
+
+            if (rsError) return IBFSError.eav(
+                'L0_VOPEN_ROOT_DESERIALIZE',
+                'Failed to deserialize the root sector needed for further initialization.',
+                rsError, { image }
+            )
+            if (rs.nodeCryptoCompatMode === false) return IBFSError.eav(
+                'L0_VOPEN_MODE_INCOMPATIBLE',
+                'The IBFS image was created without compatibility for NodeJS crypto APIs and is impossible to be decrypted by this driver.',
+                null, { image }
+            )
+
+            // Expected size     Root sector     Metadata block                                     User data
+            const expectedSize = rs.sectorSize + rs.sectorSize*Math.ceil(1024*1024/rs.sectorSize) + rs.sectorSize*rs.sectorCount
+            const { size } = await self.handle.stat()
+
+            if (size !== expectedSize) return IBFSError.eav(
+                'L0_VOPEN_SIZE_MISMATCH',
+                `Volume file size differs from size expected from volume metadata.`,
+                null, { size, expectedSize, diff: Math.abs(size - expectedSize) }
+            )
+
+
+            self.rs = rs
+
+            return [null, self]
+        } 
+        catch (error) {
+            if (self.handle) await self.handle.close()
+            return [new IBFSError('L0_VOPEN_CANT_OPEN', `Can't initialize the volume.`, error as Error, { image }), null] 
+        }
     }
 
 }

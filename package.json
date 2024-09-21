@@ -4,6 +4,9 @@
   "description": "Virtual indirect-block filesystem.",
   "main": "dist/index.json",
   "type": "module",
+  "engines": {
+    "node": ">=22.7.0"
+  },
   "scripts": {
     "test": "vitest"
   },

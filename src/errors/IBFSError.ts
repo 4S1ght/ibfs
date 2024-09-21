@@ -6,20 +6,24 @@ enum ErrorCodes {
     L0_CRYPTO_KEY_REQUIRED       = 104, // A key is required but was not provided.
     L0_CRYPTO_KEY_CANT_DIGEST    = 105, // An error was thrown while digesting an AES key.
     L0_CRCSUM_MISMATCH           = 106, // CRC error detection triggered wen deserializing a data block.
+    L0_VOPEN_CANT_OPEN           = 107, // Can't open the volume image and initialize the Volume class.
+    L0_VOPEN_ROOT_DESERIALIZE    = 108, // Failed to deserialize the root sector needed for further initialization.
+    L0_VOPEN_MODE_INCOMPATIBLE   = 109, // The volume is incompatible with the NodeJS crypto APIs.
+    L0_VOPEN_SIZE_MISMATCH       = 110, // Image file size differs from expected.
  
-    L0_BS_CANT_SERIALIZE_ROOT    = 107, // Problem serializing a root sector.
-    L0_BS_CANT_DESERIALIZE_ROOT  = 108, // Problem deserializing a root sector.
-    L0_BS_CANT_SERIALIZE_HEAD    = 109, // Problem serializing a head block.
-    L0_BS_CANT_DESERIALIZE_HEAD  = 110, // Problem deserializing a head block.
+    L0_BS_CANT_SERIALIZE_ROOT    = 111, // Problem serializing a root sector.
+    L0_BS_CANT_DESERIALIZE_ROOT  = 112, // Problem deserializing a root sector.
+    L0_BS_CANT_SERIALIZE_HEAD    = 113, // Problem serializing a head block.
+    L0_BS_CANT_DESERIALIZE_HEAD  = 114, // Problem deserializing a head block.
 
-    L0_BS_CANT_SERIALIZE_LINK    = 111, // Problem serializing a link block.
-    L0_BS_CANT_DESERIALIZE_LINK  = 112, // Problem deserializing a link block.
+    L0_BS_CANT_SERIALIZE_LINK    = 115, // Problem serializing a link block.
+    L0_BS_CANT_DESERIALIZE_LINK  = 116, // Problem deserializing a link block.
 
-    L0_BS_CANT_SERIALIZE_STORE   = 113, // Problem serializing a store block.
-    L0_BS_CANT_DESERIALIZE_STORE = 114, // Problem deserializing a store block.
+    L0_BS_CANT_SERIALIZE_STORE   = 117, // Problem serializing a store block.
+    L0_BS_CANT_DESERIALIZE_STORE = 118, // Problem deserializing a store block.
  
-    L0_BS_CANT_SERIALIZE_META    = 115, // Problem serializing metadata block.
-    L0_BS_CANT_DESERIALIZE_META  = 116, // Problem deserializing metadata block.
+    L0_BS_CANT_SERIALIZE_META    = 119, // Problem serializing metadata block.
+    L0_BS_CANT_DESERIALIZE_META  = 120, // Problem deserializing metadata block.
 
 }
 
@@ -30,6 +34,7 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
 
     public readonly errno: number
     public readonly code: Code
+    public readonly rootCause?: IBFSError
     public readonly causes: Error[] = []
     public readonly meta: IBFSErrorMetadata = {}
 
@@ -40,6 +45,7 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
         this.code = code
         this.errno = ErrorCodes[code]
         meta && (this.meta = meta)
+        cause instanceof IBFSError && (this.rootCause = (cause.causes[cause.causes.length-1] || cause) as IBFSError)
         
         Error.captureStackTrace(this, this.constructor)
 
@@ -57,10 +63,18 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
     }
 
     private static messageCause(cause: Error | IBFSError) {
-        return cause.message.indexOf('[Root cause') !== 0
+        return cause.message.startsWith('[Root cause')
             // @ts-ignore
             ? cause.code ? `[Root cause <${cause.code}>] ${cause.message}` : `[Root cause] ${cause.message}`
             : cause.message
+    }
+
+    /**
+     * Constructs a new IBFSError instance in an Eav (error-as-value) format. 
+     * @returns [IBFSError, null]
+     */
+    public static eav(...params: ConstructorParameters<typeof IBFSError>): [IBFSError<IBFSErrorCode>, null] {
+        return [new this(...params), null]
     }
 
 }
