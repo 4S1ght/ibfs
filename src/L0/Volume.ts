@@ -35,6 +35,31 @@ export interface VolumeCreateInit {
         frequency?: number
         /** A callback called on each update as the volume is being created. */
         callback: (status: VolumeCreateStatus, written: number) => any
+    },
+    /** IBFS driver configuration. */
+    driver?: {
+        /** 
+         * Specifies the size of individual chunks the free sector address pool is split into. 
+         * These pools are loaded into memory individually, while the rest is stored on the disk 
+         * next to the IBFS volume, similarly to SWAP memory. This helps preserve system memory
+         * when large volumes are open.
+         * 
+         * @default 32768 // (8 bytes per address X 32768 = 256kiB memory used)
+         */
+        memoryPoolSwapSize?: number
+        /** 
+         * Specifies the number of addresses left from draining or filling a pool chunk that must 
+         * be reached before another pool chunk is preloaded into memory.
+         * @default 1024
+         */
+        memoryPoolPreloadThreshold?: number
+        /** 
+         * Specifies the number of addresses left from draining or filling a pool chunk that must 
+         * be reached before a standby preloaded chunk is unloaded.
+         * This value **must** be higher than that of `memoryPoolPreloadThreshold`.
+         * @default 2048
+         */
+        memoryPoolUnloadThreshold?: number
     }
 }
 
@@ -54,6 +79,13 @@ export default class Volume {
 
     private constructor() {}
 
+    // Factory ================================================================
+
+    /**
+     * Creates an empty volume in a specified location.
+     * @param init Initial volume information.
+     * @returns Error (if ocurred)
+     */
     public static async create(init: VolumeCreateInit): EavSingleAsync<IBFSError> {
 
         let file: fs.FileHandle
@@ -107,7 +139,7 @@ export default class Volume {
                 metadataSectors:        metadataSectors,
                 aesCipher:              AESCipher[init.aesCipher || ''],
                 aesIV:                  aesIV,
-                nodeCryptoCompatMode:   true,
+                cryptoCompatMode:       true,
                 aesKeyCheck:            aesKeyCheck,
                 rootDirectory:          rootDirHeadAddress
             })           
@@ -115,7 +147,20 @@ export default class Volume {
 
             // Metadata block =======================================
 
-            const [metaError, metaBlock] = serialize.createMetaBlock({ ibfs: {} })
+            const metadata = {
+                memoryPoolSwapSize:         init.driver ? (init.driver.memoryPoolSwapSize         || 32768) : 32768,
+                memoryPoolPreloadThreshold: init.driver ? (init.driver.memoryPoolPreloadThreshold || 1024)  : 1024,
+                memoryPoolUnloadThreshold:  init.driver ? (init.driver.memoryPoolUnloadThreshold  || 2048)  : 2048
+            }
+
+            if (metadata.memoryPoolPreloadThreshold >= metadata.memoryPoolUnloadThreshold)
+                return new IBFSError(
+                    'L0_VCREATE_DRIVER_MISCONFIG', 
+                    `Memory pool preload threshold must greater than the unload threshold.`, 
+                    null, h.ssc(init, ['aesKey'])
+                )
+
+            const [metaError, metaBlock] = serialize.createMetaBlock({ ibfs: metadata })
             if (metaError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, metaError, h.ssc(init, ['aesKey']))
 
             // Root directory head block ============================
@@ -217,13 +262,18 @@ export default class Volume {
 
     }
 
+    /**
+     * Opens an IBFS volume and exposes a low-level IO API for manipulating raw data.
+     * @param image IBFS volume image path
+     * @returns [Error | Volume]
+     */
     public static async open(image: string): EavAsync<Volume, IBFSError> {
 
         const self = new this()
 
         try {
 
-            self.handle = await fs.open(image, 'r+', 0o600)
+            self.handle = await fs.open(image, 'r+')
 
             const rsData = Buffer.alloc(1024)
             await self.handle.read({ offset: 0, length: 1024, buffer: rsData })
@@ -234,7 +284,7 @@ export default class Volume {
                 'Failed to deserialize the root sector needed for further initialization.',
                 rsError, { image }
             )
-            if (rs.nodeCryptoCompatMode === false) return IBFSError.eav(
+            if (rs.cryptoCompatMode === false) return IBFSError.eav(
                 'L0_VOPEN_MODE_INCOMPATIBLE',
                 'The IBFS image was created without compatibility for NodeJS crypto APIs and is impossible to be decrypted by this driver.',
                 null, { image }
@@ -246,13 +296,11 @@ export default class Volume {
 
             if (size !== expectedSize) return IBFSError.eav(
                 'L0_VOPEN_SIZE_MISMATCH',
-                `Volume file size differs from size expected from volume metadata.`,
+                `Volume file size differs from size expected size calculated using volume metadata.`,
                 null, { size, expectedSize, diff: Math.abs(size - expectedSize) }
             )
 
-
             self.rs = rs
-
             return [null, self]
         } 
         catch (error) {
@@ -260,5 +308,19 @@ export default class Volume {
             return [new IBFSError('L0_VOPEN_CANT_OPEN', `Can't initialize the volume.`, error as Error, { image }), null] 
         }
     }
+
+    // Instance ===============================================================
+
+    public async readMetaBlock() {}
+    public async writeMeatBlock() {}
+
+    public async readHeadBlock() {}
+    public async writeHeadBlock() {}
+
+    public async readLinkBlock() {}
+    public async writeLinkBlock() {}
+
+    public async readStoreBlock() {}
+    public async writeStoreBlock() {}
 
 }

@@ -36,7 +36,7 @@ export interface RootSector {
      * and tweak values for XTS encryption should be emulated by
      * appending them to the end half of the IV.
     */
-    nodeCryptoCompatMode: boolean
+    cryptoCompatMode: boolean
     /** 16 null bytes encrypted with the original key for key validity checks. */
     aesKeyCheck: Buffer
     /** Number of sectors inside the volume. */
@@ -180,7 +180,7 @@ export default class Serialize {
             data.writeInt16(sector.aesCipher)
             data.write(sector.aesIV)
             data.write(sector.aesKeyCheck)
-            data.writeBool(sector.nodeCryptoCompatMode)
+            data.writeBool(sector.cryptoCompatMode)
 
             return [null, data.buffer]
 
@@ -210,7 +210,7 @@ export default class Serialize {
             props.aesCipher            = data.readInt16() as AESCipher
             props.aesIV                = data.read(16)
             props.aesKeyCheck          = data.read(16)
-            props.nodeCryptoCompatMode = data.readBool()
+            props.cryptoCompatMode = data.readBool()
 
             return [null, props as RootSector]
         } 

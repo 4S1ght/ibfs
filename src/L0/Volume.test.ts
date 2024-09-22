@@ -12,14 +12,12 @@ describe('Create/open volume', async () => {
         file: path.join(dirname, '../../tests/Volume.ibfs'),
         sectorSize: 1024,
         sectorCount: 1000,
-        aesCipher: 'aes-128-xts',
-        aesKey: 'Hello world!',
-        // update: {
-            // frequency: 10_000,
-            // callback: (status, written) => {
-            //     console.log(status, written)
-            // }
-        // }
+        aesCipher: 'aes-256-xts',
+        aesKey: 'Top secret!',
+        driver: {
+            memoryPoolPreloadThreshold: 1024,
+            memoryPoolUnloadThreshold: 1025,
+        }
     })
     if (createError) throw createError
 
@@ -29,6 +27,9 @@ describe('Create/open volume', async () => {
         throw volumeError
     }
 
-    test('volume.rs', () => expect(volume.rs).toBeDefined())
+    test('volume.rs.sectorSize',       () => expect(volume.rs.sectorSize)      .toBe(1024))
+    test('volume.rs.sectorCount',      () => expect(volume.rs.sectorCount)     .toBe(1000))
+    test('volume.rs.aesCipher',        () => expect(volume.rs.aesCipher)       .toBe(256))
+    test('volume.rs.cryptoCompatMode', () => expect(volume.rs.cryptoCompatMode).toBe(true))
 
 })

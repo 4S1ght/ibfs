@@ -16,7 +16,7 @@ describe('Root sector', () => {
         aesKeyCheck: crypto.randomBytes(16),
         aesIV: crypto.randomBytes(16),
         metadataSectors: 1024,
-        nodeCryptoCompatMode: true
+        cryptoCompatMode: true
     }
 
     const [sError, sectorMemory] = Serialize.createRootSector(settings)
@@ -35,7 +35,7 @@ describe('Root sector', () => {
     test('aesKeyCheck',          () => expect(sectorObject.aesKeyCheck)         .toStrictEqual(settings.aesKeyCheck))
     test('aesIV',                () => expect(sectorObject.aesIV)               .toStrictEqual(settings.aesIV))
     test('metadataSectors',      () => expect(sectorObject.metadataSectors)     .toBe(settings.metadataSectors))
-    test('nodeCryptoCompatMode', () => expect(sectorObject.nodeCryptoCompatMode).toBe(settings.nodeCryptoCompatMode))
+    test('cryptoCompatMode', () => expect(sectorObject.cryptoCompatMode).toBe(settings.cryptoCompatMode))
 
 })
 

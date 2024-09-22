@@ -3,6 +3,7 @@ enum ErrorCodes {
     // Level 0 errors
     L0_VCREATE_CANT_CREATE       = 101, // Can't create an IBFS volume
     L0_VCREATE_WS_ERROR          = 102, // Write stream error ocurred while the volume was being created.
+    L0_VCREATE_DRIVER_MISCONFIG  = 103, // Driver misconfiguration.
     L0_CRYPTO_KEY_REQUIRED       = 104, // A key is required but was not provided.
     L0_CRYPTO_KEY_CANT_DIGEST    = 105, // An error was thrown while digesting an AES key.
     L0_CRCSUM_MISMATCH           = 106, // CRC error detection triggered wen deserializing a data block.
