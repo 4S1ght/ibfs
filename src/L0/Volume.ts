@@ -1,5 +1,6 @@
-/// <reference path="../types.d.ts"/>
 // Imports ========================================================================================
+
+/// <reference path="../types.d.ts"/>
 
 import path                                     from "node:path"
 import fs                                       from "node:fs/promises"
@@ -10,7 +11,7 @@ import Serialize, { RootSector, SectorSize }    from "@L0/Serialize.js"
 import AES, { AESCipher }                       from "@L0/AES.js"
 import Memory                                   from "@L0/Memory.js"
 import IBFSError                                from "@errors"
-import * as h                                   from "@helpers"
+import * as m                                   from "@misc"
 import * as C                                   from "@constants"
 
 // Types ==========================================================================================
@@ -43,7 +44,6 @@ export interface VolumeCreateInit {
          * These pools are loaded into memory individually, while the rest is stored on the disk 
          * next to the IBFS volume, similarly to SWAP memory. This helps preserve system memory
          * when large volumes are open.
-         * 
          * @default 32768 // (8 bytes per address X 32768 = 256kiB memory used)
          */
         memoryPoolSwapSize?: number
@@ -76,6 +76,8 @@ export default class Volume {
     private declare handle: fs.FileHandle
     private declare bs: Serialize
     public  declare rs: RootSector
+
+    private mLock = new m.Lock(5000)
 
     private constructor() {}
 
@@ -143,7 +145,7 @@ export default class Volume {
                 aesKeyCheck:            aesKeyCheck,
                 rootDirectory:          rootDirHeadAddress
             })           
-            if (rootError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, rootError, h.ssc(init, ['aesKey']))
+            if (rootError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, rootError, m.ssc(init, ['aesKey']))
 
             // Metadata block =======================================
 
@@ -157,11 +159,11 @@ export default class Volume {
                 return new IBFSError(
                     'L0_VCREATE_DRIVER_MISCONFIG', 
                     `Memory pool preload threshold must greater than the unload threshold.`, 
-                    null, h.ssc(init, ['aesKey'])
+                    null, m.ssc(init, ['aesKey'])
                 )
 
             const [metaError, metaBlock] = serialize.createMetaBlock({ ibfs: metadata })
-            if (metaError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, metaError, h.ssc(init, ['aesKey']))
+            if (metaError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, metaError, m.ssc(init, ['aesKey']))
 
             // Root directory head block ============================
 
@@ -180,7 +182,7 @@ export default class Volume {
                 address: rootDirHeadAddress,
                 aesKey
             })
-            if (dirHeadError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirHeadError, h.ssc(init, ['aesKey']))
+            if (dirHeadError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirHeadError, m.ssc(init, ['aesKey']))
 
 
             // Root directory content block =========================
@@ -191,7 +193,7 @@ export default class Volume {
                 address: rootDirStoreAddress,
                 aesKey
             })            
-            if (dirStoreError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirStoreError, h.ssc(init, ['aesKey']))
+            if (dirStoreError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirStoreError, m.ssc(init, ['aesKey']))
 
 
             // File write ===========================================
@@ -245,7 +247,7 @@ export default class Volume {
                     'L0_VCREATE_WS_ERROR', 
                     'WriteStream error while creating the volume.', 
                     wsError.error, 
-                    h.ssc({ ...init, failedAtSector: wsError.i }, ['aesKey'])
+                    m.ssc({ ...init, failedAtSector: wsError.i }, ['aesKey'])
                 )
             }
 
@@ -253,7 +255,7 @@ export default class Volume {
 
         } 
         catch (error) {
-            return new IBFSError('L0_VCREATE_CANT_CREATE', null, error as Error, h.ssc(init, ['aesKey']))
+            return new IBFSError('L0_VCREATE_CANT_CREATE', null, error as Error, m.ssc(init, ['aesKey']))
         }
         finally {
             if (ws!) ws.close()
@@ -309,9 +311,50 @@ export default class Volume {
         }
     }
 
-    // Instance ===============================================================
+    // Misc ===================================================================
 
-    public async readMetaBlock() {}
+    private async read(position: number, length: number): EavAsync<Buffer> {
+        try {
+            const buffer = Buffer.allocUnsafe(length)
+            const result = await this.handle.read({ position, length, buffer })
+            return [null, result.buffer]
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_READ', null, error as Error, { position, length })
+        }
+    }
+
+    // I/O ====================================================================
+    
+    /**
+     * Reads the metadata block and returns its data.  
+     * If the metadata block os occupied (read from/written to) by 
+     * a different part of the program an error will be returned.
+     * @returns [Error?, Data?]
+     */
+    public async readMetaBlock<Meta extends Object = Object>(): EavAsync<Meta, IBFSError> {
+
+        const lock = this.mLock.acquire()
+        if (!lock) return IBFSError.eav('L0_IO_RESOURCE_BUSY', 'Meta block occupied or lock-stale.')
+
+        try {
+            const address = this.bs.resolveAddr(1)
+            const [readError, metaBlock] = await this.read(address, this.bs.META_SIZE)
+            if (readError) return IBFSError.eav('L0_IO_READ_META', 'Could not read meta block.', readError)
+
+            const [dsError, data] = this.bs.readMetaBlock<Meta>(metaBlock)
+            if (dsError) return IBFSError.eav('L0_IO_READ_DS', 'Data was read but could not be deserialized.', readError)
+            
+            return [null, data]
+        }
+        catch (error) {
+            return IBFSError.eav('L0_IO_UNKNOWN', null, error as Error)
+        }
+        finally {
+            lock.release()
+        }
+    }
+
     public async writeMeatBlock() {}
 
     public async readHeadBlock() {}

@@ -8,7 +8,8 @@
     "node": ">=22.7.0"
   },
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "dev": "tspc -w"
   },
   "repository": {
     "type": "git",
@@ -27,7 +28,9 @@
   "homepage": "https://github.com/4S1ght/ibfs#readme",
   "devDependencies": {
     "@types/node": "^22.4.1",
+    "ts-patch": "^3.2.1",
     "typescript": "^5.5.4",
+    "typescript-transform-paths": "^3.5.1",
     "vite-tsconfig-paths": "^5.0.1",
     "vitest": "^2.0.5"
   }

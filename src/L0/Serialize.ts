@@ -4,7 +4,7 @@ import Memory                                               from "@L0/Memory.js"
 import BlockAES, { AESCipher, AESKeySize, BlockAESConfig }  from "@L0/AES.js"
 import ReadResult, { UnknownReadResult }                    from "@L0/ReadResult.js"
 import IBFSError                                            from "@errors"
-import { ssc }                                              from "@helpers"
+import { ssc }                                              from "@misc"
 
 // Types ==========================================================================================
 
@@ -142,6 +142,7 @@ export default class Serialize {
     public readonly HEAD_CONTENT:  number
     public readonly LINK_CONTENT:  number
     public readonly STORE_CONTENT: number
+    public readonly META_SIZE:     number
 
     public readonly AES: BlockAES
 
@@ -151,6 +152,7 @@ export default class Serialize {
         this.HEAD_CONTENT  = config.diskSectorSize - Serialize.HEAD_META
         this.LINK_CONTENT  = config.diskSectorSize - Serialize.LINK_META
         this.STORE_CONTENT = config.diskSectorSize - Serialize.STORE_META
+        this.META_SIZE     = this.SECTOR_SIZE * Math.ceil(1024*1024 / this.SECTOR_SIZE)
 
         this.AES = new BlockAES({
             iv: config.iv,
@@ -230,8 +232,7 @@ export default class Serialize {
     public createMetaBlock(block: Object): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_META'>> {
         try {
         
-            const size = this.SECTOR_SIZE * Math.ceil(1024*1024 / this.SECTOR_SIZE)
-            const data = Memory.alloc(size)
+            const data = Memory.alloc(this.META_SIZE)
 
             const jsonString = Buffer.from(JSON.stringify(block))
             data.writeInt32(jsonString.length)
@@ -561,5 +562,11 @@ export default class Serialize {
             return ReadResult.failure('L0_BS_CANT_DESERIALIZE_STORE', null, error as Error, { blockAddress })
         }
     }
+
+    /**
+     * Resolves resource location by its address.
+     * @param address Sector address
+     */
+    public resolveAddr = (address: number) => this.SECTOR_SIZE * address
 
 }   

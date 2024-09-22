@@ -20,11 +20,6 @@ type EavSingle<E extends Error = Error> = E | void
 type EavSingleAsync<E extends Error = Error> = Promise<E | void>
 
 /**
- * A two-number array for storing ranges.
- */
-type DInt = [number, number]
-
-/**
  * Extracts enum values.
  */
 type Values<T> = T[keyof T]
