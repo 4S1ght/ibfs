@@ -24,7 +24,7 @@ export interface DSFailure<ErrorCode extends IBFSErrorCode> {
  * A read operation can either result in a failure or a success.
  * A failure is indicated by an `error` property on the returned object.
  */
-export type UnknownReadResult<Meta extends LinkBlock|StorageBlock, ErrorCode extends IBFSErrorCode> = 
+export type UnknownDSResult<Meta extends LinkBlock|StorageBlock, ErrorCode extends IBFSErrorCode> = 
     | DSSuccess<Meta>
     | DSFailure<ErrorCode>
 
@@ -33,7 +33,7 @@ export type UnknownReadResult<Meta extends LinkBlock|StorageBlock, ErrorCode ext
 /**
  * Represents deserialization results of either a link or storage block.
  */
-export default class ReadResult<Meta extends LinkBlock|StorageBlock, ErrorCode extends IBFSErrorCode> {
+export default class DSResult<Meta extends LinkBlock|StorageBlock, ErrorCode extends IBFSErrorCode> {
 
     /** Block metadata (includes deserialized block data) */
     public readonly meta: null | Meta & CommonReadMeta

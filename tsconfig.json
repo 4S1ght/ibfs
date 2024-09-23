@@ -39,6 +39,7 @@
             "@errors": ["./src/errors/IBFSError.ts"],
             "@misc": ["./src/Misc.ts"],
             "@constants": ["./src/Constants.ts"],
+            "@types": ["./src/types.d.ts"]
         }
 
     }

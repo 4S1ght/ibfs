@@ -1,6 +1,6 @@
 // Imports ========================================================================================
 
-/// <reference path="../types.d.ts"/>
+import * as T from "@types"
 
 import path                                     from "node:path"
 import fs                                       from "node:fs/promises"
@@ -90,7 +90,7 @@ export default class Volume {
      * @param init Initial volume information.
      * @returns Error (if ocurred)
      */
-    public static async create(init: VolumeCreateInit): EavSingleAsync<IBFSError> {
+    public static async create(init: VolumeCreateInit): T.EavSA<IBFSError> {
 
         let file: fs.FileHandle
         let ws: WriteStream
@@ -271,7 +271,8 @@ export default class Volume {
      * @param image IBFS volume image path
      * @returns [Error | Volume]
      */
-    public static async open(image: string): EavAsync<Volume, IBFSError> {
+    public static async open(image: string): 
+        T.XEavA<Volume, 'L0_VOPEN_ROOT_DESERIALIZE'|'L0_VOPEN_MODE_INCOMPATIBLE'|'L0_VOPEN_SIZE_MISMATCH'|'L0_VOPEN_UNKNOWN'> {
 
         const self = new this()
 
@@ -315,13 +316,13 @@ export default class Volume {
         } 
         catch (error) {
             if (self.handle) await self.handle.close()
-            return [new IBFSError('L0_VOPEN_CANT_OPEN', `Can't initialize the volume.`, error as Error, { image }), null] 
+            return [new IBFSError('L0_VOPEN_UNKNOWN', `Can't initialize the volume.`, error as Error, { image }), null] 
         }
     }
 
     // Misc ===================================================================
 
-    private async read(position: number, length: number): EavAsync<Buffer> {
+    private async read(position: number, length: number): T.XEavA<Buffer, 'L0_IO_READ'> {
         try {
             const buffer = Buffer.allocUnsafe(length)
             const result = await this.handle.read({ position, length, buffer })
@@ -332,7 +333,7 @@ export default class Volume {
         }
     }
 
-    private async write(position: number, data: Buffer): EavSingleAsync<IBFSError> {
+    private async write(position: number, data: Buffer): T.XEavSA<'L0_IO_WRITE'> {
         try {
             await this.handle.write(data, 0, data.length, position)
         } 
@@ -349,7 +350,8 @@ export default class Volume {
      * a different part of the program an error will be returned.
      * @returns [Error?, Data?]
      */
-    public async readMetaBlock<Meta extends Object = Object>(): EavAsync<Meta, IBFSError> {
+    public async readMetaBlock<Meta extends Object = Object>(): 
+        T.XEavA<Meta, 'L0_IO_RESOURCE_BUSY'|'L0_IO_READ_META'|'L0_IO_READ_DS'|'L0_IO_UNKNOWN'> {
 
         const lock = this.mLock.acquire()
         if (!lock) return IBFSError.eav('L0_IO_RESOURCE_BUSY', 'Meta block occupied or lock-stale.')
@@ -370,9 +372,11 @@ export default class Volume {
         finally {
             lock.release()
         }
+
     }
 
-    public async writeMeatBlock(meta: Object): EavSingleAsync<IBFSError> {
+    public async writeMeatBlock(meta: Object): 
+        T.XEavSA<'L0_IO_RESOURCE_BUSY'|'L0_IO_WRITE_SR'|'L0_IO_WRITE_META'|'L0_IO_UNKNOWN'> {
 
         const lock = this.mLock.acquire()
         if (!lock) return new IBFSError('L0_IO_RESOURCE_BUSY', 'Meta block occupied or lock-stale.')
@@ -383,7 +387,7 @@ export default class Volume {
 
             const address = this.bs.resolveAddr(1)
             const writeError = await this.write(address, data)
-            if (writeError) return new IBFSError('L0_WRITE_META', 'Could not write meta block.', writeError)
+            if (writeError) return new IBFSError('L0_IO_WRITE_META', 'Could not write meta block.', writeError)
         }
         catch (error) {
             return new IBFSError('L0_IO_UNKNOWN', null, error as Error)

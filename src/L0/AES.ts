@@ -1,8 +1,9 @@
 // Imports ========================================================================================
 
-import crypto    from 'node:crypto'
-import zlib      from 'node:zlib'
-import IBFSError from '@errors'
+import crypto      from 'node:crypto'
+import zlib        from 'node:zlib'
+import IBFSError   from '@errors'
+import type * as T from '@types'
 
 // Types & Constants ==============================================================================
 
@@ -165,7 +166,7 @@ export default class BlockAES {
      * @returns [Error | Key]
      */
     public static deriveAESKey(cipher: keyof typeof AESCipher, key: string | Buffer | undefined): 
-        Eav<Buffer, IBFSError<'L0_CRYPTO_KEY_REQUIRED'|'L0_CRYPTO_KEY_CANT_DIGEST'>> {
+        T.Eav<Buffer, IBFSError<'L0_CRYPTO_KEY_REQUIRED'|'L0_CRYPTO_KEY_CANT_DIGEST'>> {
         try {
             if (cipher && !key) throw new IBFSError(
                 'L0_CRYPTO_KEY_REQUIRED', 
