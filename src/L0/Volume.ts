@@ -16,7 +16,7 @@ import * as C                                   from "@constants"
 
 // Types ==========================================================================================
 
-export interface VolumeCreateInit {
+export interface VolumeCreateInit extends VolumeMetadata {
     /** The location of the virtual disk file. */
     file: string
     /** Size of individual sectors inside the virtual disk file. */
@@ -37,6 +37,9 @@ export interface VolumeCreateInit {
         /** A callback called on each update as the volume is being created. */
         callback: (status: VolumeCreateStatus, written: number) => any
     },
+}
+
+interface VolumeMetadata {
     /** IBFS driver configuration. */
     driver?: {
         /** 
@@ -62,7 +65,6 @@ export interface VolumeCreateInit {
         memoryPoolUnloadThreshold?: number
     }
 }
-
 type VolumeCreateStatus = 
     | 'setup'
     | 'bootstrap'
@@ -302,6 +304,12 @@ export default class Volume {
                 null, { size, expectedSize, diff: Math.abs(size - expectedSize) }
             )
 
+            self.bs = new Serialize({
+                diskSectorSize: rs.sectorSize,
+                cipher: AES.getCipher(rs.aesCipher),
+                iv: rs.aesIV
+            })
+
             self.rs = rs
             return [null, self]
         } 
@@ -324,6 +332,15 @@ export default class Volume {
         }
     }
 
+    private async write(position: number, data: Buffer): EavSingleAsync<IBFSError> {
+        try {
+            await this.handle.write(data, 0, data.length, position)
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_WRITE', null, error as Error, { position })
+        }
+    }
+
     // I/O ====================================================================
     
     /**
@@ -343,7 +360,7 @@ export default class Volume {
             if (readError) return IBFSError.eav('L0_IO_READ_META', 'Could not read meta block.', readError)
 
             const [dsError, data] = this.bs.readMetaBlock<Meta>(metaBlock)
-            if (dsError) return IBFSError.eav('L0_IO_READ_DS', 'Data was read but could not be deserialized.', readError)
+            if (dsError) return IBFSError.eav('L0_IO_READ_DS', 'Data was read but could not be deserialized.', dsError)
             
             return [null, data]
         }
@@ -355,7 +372,27 @@ export default class Volume {
         }
     }
 
-    public async writeMeatBlock() {}
+    public async writeMeatBlock(meta: Object): EavSingleAsync<IBFSError> {
+
+        const lock = this.mLock.acquire()
+        if (!lock) return new IBFSError('L0_IO_RESOURCE_BUSY', 'Meta block occupied or lock-stale.')
+
+        try {
+            const [sError, data] = this.bs.createMetaBlock(meta)
+            if (sError) return new IBFSError('L0_IO_WRITE_SR', 'Could not serialize meta block before write.', sError)
+
+            const address = this.bs.resolveAddr(1)
+            const writeError = await this.write(address, data)
+            if (writeError) return new IBFSError('L0_WRITE_META', 'Could not write meta block.', writeError)
+        }
+        catch (error) {
+            return new IBFSError('L0_IO_UNKNOWN', null, error as Error)
+        }
+        finally {
+            lock.release()
+        }
+        
+    }
 
     public async readHeadBlock() {}
     public async writeHeadBlock() {}

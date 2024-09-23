@@ -184,4 +184,11 @@ export default class BlockAES {
         }
     }
 
+    /**
+     * Translates supported digit/string cipher types.
+     */
+    public static getCipher<T extends keyof typeof AESCipher>(key: number): T {
+        return AESCipher[key] as T
+    }
+
 }

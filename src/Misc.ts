@@ -10,6 +10,9 @@ export function ssc<Obj extends Record<any, any>, Except extends keyof Obj>
         return copy
 }
 
+/**
+ * Creates a simple lock with automatic unlock timeout.
+ */
 export class Lock {
 
     private locked = false
