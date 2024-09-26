@@ -113,7 +113,7 @@ type Finalizer<ErrorCode extends IBFSError['code']> = {
      * It needs to be supplied the trailing data sectors after the
      * head/link/storage descriptor sector to decrypt and process the data.
      */
-    final: (rawSectors: Buffer) => IBFSError<ErrorCode> | undefined
+    final: (rawSectors?: Buffer) => IBFSError<ErrorCode> | undefined
     error?: undefined
 } | {
     meta?: undefined,
@@ -153,7 +153,7 @@ export default class Serialize {
         this.HEAD_CONTENT  = config.diskSectorSize - Serialize.HEAD_META
         this.LINK_CONTENT  = config.diskSectorSize - Serialize.LINK_META
         this.STORE_CONTENT = config.diskSectorSize - Serialize.STORE_META
-        this.META_SIZE     = this.SECTOR_SIZE * Math.ceil(1024*1024 / this.SECTOR_SIZE)
+        this.META_SIZE     = config.diskSectorSize * Math.ceil(1024*1024 / config.diskSectorSize)
 
         this.AES = new BlockAES({
             iv: config.iv,
@@ -359,15 +359,17 @@ export default class Serialize {
 
             return {
                 meta: props,
-                final: (sectors: Buffer) => {
+                final: (sectors?: Buffer) => {
                     try {
-                        
-                        const trailSrc = Memory.intake(sectors)
 
-                        // Raw sectors
-                        for (let i = 1; i <= props.blockSize; i++) {
-                            trailSrc.copyTo(dist, this.SECTOR_SIZE)
-                            crc = this.AES.decryptCRC(dist.read(this.SECTOR_SIZE), aesKey!, blockAddress+i, crc)
+                        if (sectors) {
+                            const trailSrc = Memory.intake(sectors)
+
+                            // Raw sectors
+                            for (let i = 1; i <= props.blockSize; i++) {
+                                trailSrc.copyTo(dist, this.SECTOR_SIZE)
+                                crc = this.AES.decryptCRC(dist.read(this.SECTOR_SIZE), aesKey!, blockAddress+i, crc)
+                            }
                         }
 
                         dist.bytesRead = 0
@@ -447,12 +449,12 @@ export default class Serialize {
             const props: LinkBlock & CommonReadMeta = {}
             const src = Memory.intake(linkBlock)
 
-            props.blockType     = src.readInt8()
-            props.crc32Sum      = src.readInt32()
-            props.next          = src.readInt64()
-            props.nextSize      = src.readInt8()
-            props.blockSize     = src.readInt8()
-            const endPadding    = src.readInt16()
+            props.blockType     = src.readInt8()    // Block type
+            props.crc32Sum      = src.readInt32()   // CRC
+            props.next          = src.readInt64()   // Next block address
+            props.nextSize      = src.readInt8()    // Next block size
+            props.blockSize     = src.readInt8()    // Block size
+            const endPadding    = src.readInt16()   // End sector padding (unencrypted)
             src.bytesRead       = Serialize.LINK_META
 
             const dist = Memory.alloc(this.LINK_CONTENT + this.SECTOR_SIZE * props.blockSize)
@@ -470,11 +472,11 @@ export default class Serialize {
             dist.bytesRead = 0
             props.data = dist.read(dist.length - endPadding)
 
-            return ReadResult.success(props, crc)
+            return DSResult.success(props, crc)
 
         } 
         catch (error) {
-            return ReadResult.failure('L0_BS_LINK_DS', null, error as Error, { blockAddress })
+            return DSResult.failure('L0_BS_LINK_DS', null, error as Error, { blockAddress })
         }
     }
 
@@ -556,11 +558,11 @@ export default class Serialize {
             dist.bytesRead = 0
             props.data = dist.read(dist.length - endPadding)
             
-            return ReadResult.success(props, crc)
+            return DSResult.success(props, crc)
 
         } 
         catch (error) {
-            return ReadResult.failure('L0_BS_STORE_DS', null, error as Error, { blockAddress })
+            return DSResult.failure('L0_BS_STORE_DS', null, error as Error, { blockAddress })
         }
     }
 

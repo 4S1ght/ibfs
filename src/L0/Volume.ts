@@ -2,17 +2,17 @@
 
 import * as T from "@types"
 
-import path                                     from "node:path"
-import fs                                       from "node:fs/promises"
-import crypto                                   from "node:crypto"
-import type { WriteStream }                     from "node:fs"
+import path                                                             from "node:path"
+import fs                                                               from "node:fs/promises"
+import crypto                                                           from "node:crypto"
+import type { WriteStream }                                             from "node:fs"
 
-import Serialize, { RootSector, SectorSize }    from "@L0/Serialize.js"
-import AES, { AESCipher }                       from "@L0/AES.js"
-import Memory                                   from "@L0/Memory.js"
-import IBFSError                                from "@errors"
-import * as m                                   from "@misc"
-import * as C                                   from "@constants"
+import Serialize, { CommonReadMeta, HeadBlock, RootSector, SectorSize } from "@L0/Serialize.js"
+import AES, { AESCipher }                                               from "@L0/AES.js"
+import Memory                                                           from "@L0/Memory.js"
+import IBFSError                                                        from "@errors"
+import * as m                                                           from "@misc"
+import * as C                                                           from "@constants"
 
 // Types ==========================================================================================
 
@@ -357,12 +357,12 @@ export default class Volume {
         if (!lock) return IBFSError.eav('L0_IO_RESOURCE_BUSY', 'Meta block occupied or lock-stale.')
 
         try {
-            const address = this.bs.resolveAddr(1)
-            const [readError, metaBlock] = await this.read(address, this.bs.META_SIZE)
+            const position = this.bs.resolveAddr(1)
+            const [readError, metaBlock] = await this.read(position, this.bs.META_SIZE)
             if (readError) return IBFSError.eav('L0_IO_READ_META', 'Could not read meta block.', readError)
 
             const [dsError, data] = this.bs.readMetaBlock<Meta>(metaBlock)
-            if (dsError) return IBFSError.eav('L0_IO_READ_DS', 'Data was read but could not be deserialized.', dsError)
+            if (dsError) return IBFSError.eav('L0_IO_READ_DS', 'Metadata was read but could not be deserialized.', dsError)
             
             return [null, data]
         }
@@ -398,7 +398,38 @@ export default class Volume {
         
     }
 
-    public async readHeadBlock() {}
+    public async readHeadBlock(address: number, aesKey?: Buffer):
+        T.XEavA<HeadBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_HEAD'|'L0_IO_READ_DS'|'L0_IO_READ_HEAD_TRAIL'> {
+        try {
+            
+            const headPosition = this.bs.resolveAddr(address)
+            const [headError, headSector] = await this.read(headPosition, this.bs.SECTOR_SIZE)
+            if (headError) return IBFSError.eav('L0_IO_READ_HEAD', `Could not read head block's first sector.`, headError, { address })
+
+            const head = this.bs.readHeadBlock(headSector, address, aesKey)
+            if (head.error) return IBFSError.eav('L0_IO_READ_DS', 'Head sector was read but could not be deserialized.', head.error, { address })
+
+            // Resolve early if head is a single-sector block
+            if (head.meta.blockSize === 0) {
+                head.final()
+                return [null, head.meta as Required<typeof head['meta']>]
+            }
+
+            // Continue if found to have trailing sectors.
+            const trailPosition = this.bs.resolveAddr(address+1)
+            const [trailError, trailSectors] = await this.read(trailPosition, head.meta.blockSize)
+            if (trailError) return IBFSError.eav('L0_IO_READ_HEAD_TRAIL', `Could not read head block's trailing sectors.`, trailError, { address })
+            
+            const finalError = head.final(trailSectors)
+            if (finalError) return IBFSError.eav('L0_IO_READ_DS', 'Could not finalize deserialization of the head block.', finalError, { address })
+
+            return [null, head.meta as Required<typeof head['meta']>]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_UNKNOWN', null, error as Error, { address })
+        }
+    }   
     public async writeHeadBlock() {}
 
     public async readLinkBlock() {}

@@ -27,15 +27,16 @@ enum ErrorCodes {
     L0_BS_META_SR                = 119, // Problem serializing metadata block
     L0_BS_META_DS                = 120, // Problem deserializing metadata block
 
-    L0_IO_RESOURCE_BUSY          = 121, // Attempted to access a resource that was 
-    L0_IO_UNKNOWN                = 122, // Unknown I/O error
-                                        // occupied by a different part of the program
+    L0_IO_UNKNOWN                = 121, // Unknown I/O error
+    L0_IO_RESOURCE_BUSY          = 122, // Attempted to access an occupied resource 
     L0_IO_READ                   = 123, // Failed to read data
     L0_IO_READ_DS                = 125, // Data was read but could not be deserialized
     L0_IO_READ_META              = 124, // Failed to read meta block
-    L0_IO_WRITE                  = 126, // Failed to write data
-    L0_IO_WRITE_SR               = 126, // Could not serialize block data before write
-    L0_IO_WRITE_META             = 127, // Failed to write meta block
+    L0_IO_READ_HEAD              = 125, // Failed to read head block's first sector
+    L0_IO_READ_HEAD_TRAIL        = 126, // Could not read head block's trailing sectors.
+    L0_IO_WRITE                  = 127, // Failed to write data
+    L0_IO_WRITE_SR               = 128, // Could not serialize block data before write
+    L0_IO_WRITE_META             = 129, // Failed to write meta block
 
 }
 
