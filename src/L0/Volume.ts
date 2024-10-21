@@ -79,7 +79,7 @@ export default class Volume {
     private declare bs: Serialize
     public  declare rs: RootSector
 
-    private mLock = new m.Lock(5000)
+    private mLock = new m.Lock(10_000)
 
     private constructor() {}
 
@@ -245,12 +245,7 @@ export default class Volume {
             }
 
             if (wsError!) {
-                return new IBFSError(
-                    'L0_VCREATE_WS_ERROR', 
-                    'WriteStream error while creating the volume.', 
-                    wsError.error, 
-                    m.ssc({ ...init, failedAtSector: wsError.i }, ['aesKey'])
-                )
+                return new IBFSError('L0_VCREATE_WS_ERROR', null, wsError.error, m.ssc({ ...init, failedAtSector: wsError.i }, ['aesKey']))
             }
 
             update('done', ws.bytesWritten + bwBootstrapped)
@@ -284,26 +279,14 @@ export default class Volume {
             await self.handle.read({ offset: 0, length: 1024, buffer: rsData })
             const [rsError, rs] = Serialize.readRootSector(rsData)
 
-            if (rsError) return IBFSError.eav(
-                'L0_VOPEN_ROOT_DESERIALIZE',
-                'Failed to deserialize the root sector needed for further initialization.',
-                rsError, { image }
-            )
-            if (rs.cryptoCompatMode === false) return IBFSError.eav(
-                'L0_VOPEN_MODE_INCOMPATIBLE',
-                'The IBFS image was created without compatibility for NodeJS crypto APIs and is impossible to be decrypted by this driver.',
-                null, { image }
-            )
+            if (rsError)                       return IBFSError.eav('L0_VOPEN_ROOT_DESERIALIZE', null, rsError, { image })
+            if (rs.cryptoCompatMode === false) return IBFSError.eav('L0_VOPEN_MODE_INCOMPATIBLE', null, null, { image })
 
             // Expected size     Root sector     Metadata block                                     User data
             const expectedSize = rs.sectorSize + rs.sectorSize*Math.ceil(1024*1024/rs.sectorSize) + rs.sectorSize*rs.sectorCount
             const { size } = await self.handle.stat()
 
-            if (size !== expectedSize) return IBFSError.eav(
-                'L0_VOPEN_SIZE_MISMATCH',
-                `Volume file size differs from size expected size calculated using volume metadata.`,
-                null, { size, expectedSize, diff: Math.abs(size - expectedSize) }
-            )
+            if (size !== expectedSize) return IBFSError.eav('L0_VOPEN_SIZE_MISMATCH', null, null, { size, expectedSize, diff: Math.abs(size - expectedSize) })
 
             self.bs = new Serialize({
                 diskSectorSize: rs.sectorSize,
@@ -316,7 +299,7 @@ export default class Volume {
         } 
         catch (error) {
             if (self.handle) await self.handle.close()
-            return [new IBFSError('L0_VOPEN_UNKNOWN', `Can't initialize the volume.`, error as Error, { image }), null] 
+            return [new IBFSError('L0_VOPEN_UNKNOWN', null, error as Error, { image }), null] 
         }
     }
 
@@ -354,15 +337,15 @@ export default class Volume {
         T.XEavA<Meta, 'L0_IO_RESOURCE_BUSY'|'L0_IO_READ_META'|'L0_IO_READ_DS'|'L0_IO_UNKNOWN'> {
 
         const lock = this.mLock.acquire()
-        if (!lock) return IBFSError.eav('L0_IO_RESOURCE_BUSY', 'Meta block occupied or lock-stale.')
+        if (!lock) return IBFSError.eav('L0_IO_RESOURCE_BUSY')
 
         try {
             const position = this.bs.resolveAddr(1)
             const [readError, metaBlock] = await this.read(position, this.bs.META_SIZE)
-            if (readError) return IBFSError.eav('L0_IO_READ_META', 'Could not read meta block.', readError)
+            if (readError) return IBFSError.eav('L0_IO_READ_META', null, readError)
 
             const [dsError, data] = this.bs.readMetaBlock<Meta>(metaBlock)
-            if (dsError) return IBFSError.eav('L0_IO_READ_DS', 'Metadata was read but could not be deserialized.', dsError)
+            if (dsError) return IBFSError.eav('L0_IO_READ_DS', null, dsError)
             
             return [null, data]
         }
@@ -379,15 +362,15 @@ export default class Volume {
         T.XEavSA<'L0_IO_RESOURCE_BUSY'|'L0_IO_WRITE_SR'|'L0_IO_WRITE_META'|'L0_IO_UNKNOWN'> {
 
         const lock = this.mLock.acquire()
-        if (!lock) return new IBFSError('L0_IO_RESOURCE_BUSY', 'Meta block occupied or lock-stale.')
+        if (!lock) return new IBFSError('L0_IO_RESOURCE_BUSY')
 
         try {
             const [sError, data] = this.bs.createMetaBlock(meta)
-            if (sError) return new IBFSError('L0_IO_WRITE_SR', 'Could not serialize meta block before write.', sError)
+            if (sError) return new IBFSError('L0_IO_WRITE_SR', null, sError)
 
             const address = this.bs.resolveAddr(1)
             const writeError = await this.write(address, data)
-            if (writeError) return new IBFSError('L0_IO_WRITE_META', 'Could not write meta block.', writeError)
+            if (writeError) return new IBFSError('L0_IO_WRITE_META', null, writeError)
         }
         catch (error) {
             return new IBFSError('L0_IO_UNKNOWN', null, error as Error)
@@ -404,7 +387,7 @@ export default class Volume {
             
             const headPosition = this.bs.resolveAddr(address)
             const [headError, headSector] = await this.read(headPosition, this.bs.SECTOR_SIZE)
-            if (headError) return IBFSError.eav('L0_IO_READ_HEAD', `Could not read head block's first sector.`, headError, { address })
+            if (headError) return IBFSError.eav('L0_IO_READ_HEAD', null, headError, { address })
 
             const head = this.bs.readHeadBlock(headSector, address, aesKey)
             if (head.error) return IBFSError.eav('L0_IO_READ_DS', 'Head sector was read but could not be deserialized.', head.error, { address })
@@ -418,7 +401,7 @@ export default class Volume {
             // Continue if found to have trailing sectors.
             const trailPosition = this.bs.resolveAddr(address+1)
             const [trailError, trailSectors] = await this.read(trailPosition, head.meta.blockSize)
-            if (trailError) return IBFSError.eav('L0_IO_READ_HEAD_TRAIL', `Could not read head block's trailing sectors.`, trailError, { address })
+            if (trailError) return IBFSError.eav('L0_IO_READ_HEAD_TRAIL', null, trailError, { address })
             
             const finalError = head.final(trailSectors)
             if (finalError) return IBFSError.eav('L0_IO_READ_DS', 'Could not finalize deserialization of the head block.', finalError, { address })
