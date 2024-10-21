@@ -9,12 +9,12 @@ enum ErrorCodes {
     
     L0_CRYPTO_KEY_REQUIRED       = 'An AES key is required for the operation but was not provided.',
     L0_CRYPTO_KEY_CANT_DIGEST    = 'An error ocurred while digesting an AES key',
-    L0_CRCSUM_MISMATCH           = '-', // CRC error detection triggered when deserializing a data block
+    L0_CRCSUM_MISMATCH           = "Block CRC checksum does not match the contents - Possible corruption",
     
     L0_VOPEN_UNKNOWN             = 'Could not open the IBFS volume.',
     L0_VOPEN_ROOT_DESERIALIZE    = 'Failed to deserialize the root sector data required for further driver initialization.',
-    L0_VOPEN_MODE_INCOMPATIBLE   = 'The IBFS voilume was not in NodeJS crypto API compatibility mode and is impossible to be decrypted by this driver',
-    L0_VOPEN_SIZE_MISMATCH       = 'Volume metadata describes a different IBFS volume size than what was found on the host FS (Highly possible data corruption)', 
+    L0_VOPEN_MODE_INCOMPATIBLE   = 'The IBFS volume was not in NodeJS crypto API compatibility mode and is impossible to be decrypted by this driver',
+    L0_VOPEN_SIZE_MISMATCH       = 'Volume metadata describes different IBFS volume size than what was found on the host FS - This *MEANS* data corruption or loss.', 
  
     L0_BS_ROOT_SR                = 'Could not serialize root sector data.',
     L0_BS_ROOT_DS                = 'Could not deserialize root sector data.',
@@ -32,11 +32,12 @@ enum ErrorCodes {
     L0_IO_READ                   = 'Failed to read data from the disk.',
     L0_IO_READ_DS                = 'Failed to deserialize data from the disk - Data was read but failed deserialization',
     L0_IO_READ_META              = 'Failed to read volume metadata.',
-    L0_IO_READ_HEAD              = "Could not read metadata sector of a head block.",
+    L0_IO_READ_HEAD              = 'Could not read metadata sector of a head block.',
     L0_IO_READ_HEAD_TRAIL        = 'Could not read trailing sectors of a head block.',
     L0_IO_WRITE                  = 'Failed to write data to the disk',
     L0_IO_WRITE_SR               = 'Failed to serialize data before write.',
     L0_IO_WRITE_META             = 'Could not write volume metadata.',
+    L0_IO_WRITE_HEAD             = 'Failed to write the head block.',
 
 }
 

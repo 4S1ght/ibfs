@@ -2,17 +2,24 @@
 
 import * as T from "@types"
 
-import path                                                             from "node:path"
-import fs                                                               from "node:fs/promises"
-import crypto                                                           from "node:crypto"
-import type { WriteStream }                                             from "node:fs"
+import path                 from "node:path"
+import fs                   from "node:fs/promises"
+import crypto               from "node:crypto"
+import type { WriteStream } from "node:fs"
 
-import Serialize, { CommonReadMeta, HeadBlock, RootSector, SectorSize } from "@L0/Serialize.js"
-import AES, { AESCipher }                                               from "@L0/AES.js"
-import Memory                                                           from "@L0/Memory.js"
-import IBFSError                                                        from "@errors"
-import * as m                                                           from "@misc"
-import * as C                                                           from "@constants"
+import AES, { AESCipher }   from "@L0/AES.js"
+import Memory               from "@L0/Memory.js"
+import IBFSError            from "@errors"
+import * as m               from "@misc"
+import * as C               from "@constants"
+
+import Serialize, { 
+    CommonReadMeta, 
+    CommonWriteMeta, 
+    HeadBlock, 
+    RootSector, 
+    SectorSize 
+} from "@L0/Serialize.js"
 
 // Types ==========================================================================================
 
@@ -79,6 +86,12 @@ export default class Volume {
     private declare bs: Serialize
     public  declare rs: RootSector
 
+    /** 
+     * Lock used for locking the metadata sector.
+     * While file locking happens on higher levels, implementing metadata block locking 
+     * there would introduce needless complexity as this block is not expected to
+     * receive high traffic - It's used exclusively to store arbitrary driver configuration.
+     */
     private mLock = new m.Lock(10_000)
 
     private constructor() {}
@@ -358,7 +371,13 @@ export default class Volume {
 
     }
 
-    public async writeMeatBlock(meta: Object): 
+    /**
+     * Overwrites the data in the metadata block.
+     * If the metadata block os occupied (read from/written to) by 
+     * a different part of the program an error will be returned.
+     * @returns Error?
+     */
+    public async writeMetaBlock(meta: Object): 
         T.XEavSA<'L0_IO_RESOURCE_BUSY'|'L0_IO_WRITE_SR'|'L0_IO_WRITE_META'|'L0_IO_UNKNOWN'> {
 
         const lock = this.mLock.acquire()
@@ -381,6 +400,11 @@ export default class Volume {
         
     }
 
+
+    /**
+     * Reads a head block and returns its data.
+     * @returns Error?
+     */
     public async readHeadBlock(address: number, aesKey?: Buffer):
         T.XEavA<HeadBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_HEAD'|'L0_IO_READ_DS'|'L0_IO_READ_HEAD_TRAIL'|'L0_CRCSUM_MISMATCH'> {
         try {
@@ -417,7 +441,22 @@ export default class Volume {
             return IBFSError.eav('L0_IO_UNKNOWN', null, error as Error, { address })
         }
     }   
-    public async writeHeadBlock() {}
+    
+    public async writeHeadBlock(meta: HeadBlock & CommonWriteMeta): T.XEavSA<'L0_IO_UNKNOWN'|'L0_IO_WRITE_SR'|'L0_IO_WRITE_HEAD'> {
+        try {
+
+            const [sError, data] = this.bs.createHeadBlock(meta)
+            if (sError) return new IBFSError('L0_IO_WRITE_SR', null, sError)
+
+            const address = this.bs.resolveAddr(meta.address)
+            const writeError = await this.write(address, data)
+            if (writeError) return new IBFSError('L0_IO_WRITE_HEAD', null, writeError)
+
+        }
+        catch (error) {
+            return new IBFSError('L0_IO_UNKNOWN', null, error as Error, m.ssc(meta, ['data', 'aesKey']))
+        }
+    }
 
     public async readLinkBlock() {}
     public async writeLinkBlock() {}

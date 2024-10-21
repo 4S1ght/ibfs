@@ -325,13 +325,14 @@ export default class Serialize {
     }
 
     /**
-     * Deserializes a head sector and returns an object containing that sector's metadata a `final` method or possibly a 
-     * single error. The metadata contains all head sector information except for the file data.
+     * Deserializes a head sector and returns either object containing that sector's metadata a `final` method or a 
+     * single error. The metadata contains all head sector information except for the file data (yet).
      * For the file data to be fully serialized and become available in the returned metadata object, the `final` method
      * must be called and supplied the rest of the block sectors to finish block deserialization.
      * 
      * This method relies on dual-stage deserialization because it's impossible to know the size of a head block in 
-     * advance before reading the main head sector.
+     * advance before reading the main head sector. This does not apply to link/storage blocks, as their length is
+     * stored also in preceding blocks.
      * 
      * @param headSector Block's head sector (in raw state)
      * @param blockAddress Address of where the sector was read from
@@ -572,7 +573,9 @@ export default class Serialize {
     }
 
     /**
-     * Resolves resource location by its address.
+     * Resolves resource location by its address.  
+     * Given sector size of `1024 Bytes`, an example address `100` 
+     * would resolve to the physical location of `102400` on the disk.
      * @param address Sector address
      */
     public resolveAddr = (address: number) => this.SECTOR_SIZE * address
