@@ -382,7 +382,7 @@ export default class Volume {
     }
 
     public async readHeadBlock(address: number, aesKey?: Buffer):
-        T.XEavA<HeadBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_HEAD'|'L0_IO_READ_DS'|'L0_IO_READ_HEAD_TRAIL'> {
+        T.XEavA<HeadBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_HEAD'|'L0_IO_READ_DS'|'L0_IO_READ_HEAD_TRAIL'|'L0_CRCSUM_MISMATCH'> {
         try {
             
             const headPosition = this.bs.resolveAddr(address)
@@ -392,10 +392,12 @@ export default class Volume {
             const head = this.bs.readHeadBlock(headSector, address, aesKey)
             if (head.error) return IBFSError.eav('L0_IO_READ_DS', 'Head sector was read but could not be deserialized.', head.error, { address })
 
+            type Meta = Required<typeof head['meta']>
+
             // Resolve early if head is a single-sector block
             if (head.meta.blockSize === 0) {
                 head.final()
-                return [null, head.meta as Required<typeof head['meta']>]
+                return [null, head.meta as Meta]
             }
 
             // Continue if found to have trailing sectors.
@@ -406,7 +408,9 @@ export default class Volume {
             const finalError = head.final(trailSectors)
             if (finalError) return IBFSError.eav('L0_IO_READ_DS', 'Could not finalize deserialization of the head block.', finalError, { address })
 
-            return [null, head.meta as Required<typeof head['meta']>]
+            if ((head.meta as Meta).crcMismatch) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address })
+        
+            return [null, head.meta as Meta]
 
         } 
         catch (error) {

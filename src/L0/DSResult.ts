@@ -51,7 +51,6 @@ export default class DSResult<Meta extends LinkBlock|StorageBlock, ErrorCode ext
         this.crcMismatch = meta?.crc32Sum !== crc
     }
 
-    // Factory method with explicit return type
     static success<Meta extends LinkBlock | StorageBlock>(meta: Meta & CommonReadMeta, crc: number): DSSuccess<Meta> {
         return new this(meta, crc, null) as DSSuccess<Meta>
     }

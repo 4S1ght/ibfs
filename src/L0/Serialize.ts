@@ -103,11 +103,15 @@ export interface CommonWriteMeta {
     address: number
 }
 
+export interface HeadReadMeta {
+    crcMismatch: boolean
+}
+
 // Helpers ========================================================================================
 
 type Finalizer<ErrorCode extends IBFSError['code']> = {
     /** Block metadata */
-    meta: T.Optional<HeadBlock & CommonReadMeta, 'data'>
+    meta: T.Optional<HeadBlock & CommonReadMeta & HeadReadMeta, 'data' | 'crcMismatch'>
     /** 
      * Finalizer function that finishes deserializing the block.
      * It needs to be supplied the trailing data sectors after the
@@ -338,7 +342,7 @@ export default class Serialize {
         try {
 
             // @ts-expect-error - Populated later
-            const props: HeadBlock & CommonReadMeta = {}
+            const props: HeadBlock & CommonReadMeta & HeadReadMeta = {}
             const headSrc = Memory.intake(headSector)
             
             props.blockType   = headSrc.readInt8()  // Block type
@@ -374,6 +378,7 @@ export default class Serialize {
 
                         dist.bytesRead = 0
                         props.data = dist.read(dist.length - endPadding)
+                        props.crcMismatch = props.crc32Sum !== crc
 
                     } 
                     catch (error) {
