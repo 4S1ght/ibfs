@@ -5,7 +5,7 @@ import { CommonReadMeta, LinkBlock, StorageBlock }      from "@L0/Serialize.js"
 
 // Types ==========================================================================================
 
-export interface DSSuccess<Meta extends LinkBlock | StorageBlock> {
+export interface DSComplete<Meta extends LinkBlock | StorageBlock> {
     readonly meta:          Meta & CommonReadMeta
     readonly crc:           number
     readonly crcMismatch:   boolean
@@ -25,7 +25,7 @@ export interface DSFailure<ErrorCode extends IBFSErrorCode> {
  * A failure is indicated by an `error` property on the returned object.
  */
 export type UnknownDSResult<Meta extends LinkBlock|StorageBlock, ErrorCode extends IBFSErrorCode> = 
-    | DSSuccess<Meta>
+    | DSComplete<Meta>
     | DSFailure<ErrorCode>
 
 // Module =========================================================================================
@@ -48,11 +48,15 @@ export default class DSResult<Meta extends LinkBlock|StorageBlock, ErrorCode ext
         this.meta        = meta
         this.error       = error || null
         this.crc         = crc
-        this.crcMismatch = meta?.crc32Sum !== crc
+        this.crcMismatch = meta ? meta.crc32Sum !== crc : false
     }
 
-    static success<Meta extends LinkBlock | StorageBlock>(meta: Meta & CommonReadMeta, crc: number): DSSuccess<Meta> {
-        return new this(meta, crc, null) as DSSuccess<Meta>
+    /**
+     * **Note:** A complete deserialization result does not mean a success.  
+     * Data may still be corrupted, so CRC must be checked for mismatch.
+     */
+    static complete<Meta extends LinkBlock | StorageBlock>(meta: Meta & CommonReadMeta, crc: number): DSComplete<Meta> {
+        return new this(meta, crc, null) as DSComplete<Meta>
     }
 
     static failure<ErrorCode extends IBFSErrorCode>(code: IBFSErrorCode, message?: string|null, cause?: Error | null, meta?: IBFSErrorMetadata): DSFailure<ErrorCode> {

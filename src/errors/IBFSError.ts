@@ -34,6 +34,7 @@ enum ErrorCodes {
     L0_IO_READ_META              = 'Failed to read volume metadata.',
     L0_IO_READ_HEAD              = 'Could not read metadata sector of a head block.',
     L0_IO_READ_HEAD_TRAIL        = 'Could not read trailing sectors of a head block.',
+    L0_IO_READ_LINK              = 'Could not read a link block from the disk.',
     L0_IO_WRITE                  = 'Failed to write data to the disk',
     L0_IO_WRITE_SR               = 'Failed to serialize data before write.',
     L0_IO_WRITE_META             = 'Could not write volume metadata.',

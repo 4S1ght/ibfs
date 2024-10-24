@@ -17,6 +17,7 @@ import Serialize, {
     CommonReadMeta, 
     CommonWriteMeta, 
     HeadBlock, 
+    LinkBlock, 
     RootSector, 
     SectorSize 
 } from "@L0/Serialize.js"
@@ -402,8 +403,10 @@ export default class Volume {
 
 
     /**
-     * Reads a head block and returns its data.
-     * @returns Error?
+     * Returns a head block after reading it from the disk, deserializing and decrypting it.
+     * @param address Block address
+     * @param aesKey Decrypt key
+     * @returns [Error?, Data?]
      */
     public async readHeadBlock(address: number, aesKey?: Buffer):
         T.XEavA<HeadBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_HEAD'|'L0_IO_READ_DS'|'L0_IO_READ_HEAD_TRAIL'|'L0_CRCSUM_MISMATCH'> {
@@ -426,7 +429,7 @@ export default class Volume {
 
             // Continue if found to have trailing sectors.
             const trailPosition = this.bs.resolveAddr(address+1)
-            const [trailError, trailSectors] = await this.read(trailPosition, head.meta.blockSize)
+            const [trailError, trailSectors] = await this.read(trailPosition, this.bs.SECTOR_SIZE * head.meta.blockSize)
             if (trailError) return IBFSError.eav('L0_IO_READ_HEAD_TRAIL', null, trailError, { address })
             
             const finalError = head.final(trailSectors)
@@ -442,15 +445,24 @@ export default class Volume {
         }
     }   
     
-    public async writeHeadBlock(meta: HeadBlock & CommonWriteMeta): T.XEavSA<'L0_IO_UNKNOWN'|'L0_IO_WRITE_SR'|'L0_IO_WRITE_HEAD'> {
+    /**
+     * Serializes a head block and writes it to the disk.  
+     * 
+     * **Note** - The size of usable `data` must be determined in advance and match the `blockSize`.  
+     * A mismatch will result in either an error or truncated data being written to the disk which may cause data loss.
+     * @param meta Block metadata **and** user data.
+     * @returns Error?
+     */
+    public async writeHeadBlock(meta: HeadBlock & CommonWriteMeta): 
+        T.XEavSA<'L0_IO_UNKNOWN'|'L0_IO_WRITE_SR'|'L0_IO_WRITE_HEAD'> {
         try {
 
             const [sError, data] = this.bs.createHeadBlock(meta)
-            if (sError) return new IBFSError('L0_IO_WRITE_SR', null, sError)
+            if (sError) return new IBFSError('L0_IO_WRITE_SR', null, sError, m.ssc(meta, ['data', 'aesKey']))
 
             const address = this.bs.resolveAddr(meta.address)
             const writeError = await this.write(address, data)
-            if (writeError) return new IBFSError('L0_IO_WRITE_HEAD', null, writeError)
+            if (writeError) return new IBFSError('L0_IO_WRITE_HEAD', null, writeError, m.ssc(meta, ['data', 'aesKey']))
 
         }
         catch (error) {
@@ -458,7 +470,33 @@ export default class Volume {
         }
     }
 
-    public async readLinkBlock() {}
+    /**
+     * Returns a link block after reading it from the disk, deserializing and decrypting it.
+     * @param address Block address
+     * @param blockSize blocks size (in sectors)
+     * @param aesKey decrypt key
+     * @returns [Error?, Data?]
+     */
+    public async readLinkBlock(address: number, blockSize: number, aesKey?: Buffer):
+        T.XEavA<LinkBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_LINK'|'L0_IO_READ_DS'|'L0_CRCSUM_MISMATCH'> {
+        try {
+
+            const position = this.bs.resolveAddr(address)
+            const [linkError, linkBlock] = await this.read(position, this.bs.SECTOR_SIZE * blockSize)
+            if (linkError) return IBFSError.eav('L0_IO_READ_LINK', null, linkError, { address, blockSize })
+            
+            const readResult = this.bs.readLinkBlock(linkBlock, address, aesKey)
+            if (readResult.error) return IBFSError.eav('L0_IO_READ_DS', null, readResult.error, { address, blockSize })
+            if (readResult.crcMismatch) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address, blockSize })
+
+            return [null, readResult.meta]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_UNKNOWN')
+        }
+    }
+
     public async writeLinkBlock() {}
 
     public async readStoreBlock() {}

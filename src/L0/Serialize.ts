@@ -326,7 +326,7 @@ export default class Serialize {
 
     /**
      * Deserializes a head sector and returns either object containing that sector's metadata a `final` method or a 
-     * single error. The metadata contains all head sector information except for the file data (yet).
+     * single error. The metadata contains all head sector information except for the file data (so far).
      * For the file data to be fully serialized and become available in the returned metadata object, the `final` method
      * must be called and supplied the rest of the block sectors to finish block deserialization.
      * 
@@ -478,7 +478,7 @@ export default class Serialize {
             dist.bytesRead = 0
             props.data = dist.read(dist.length - endPadding)
 
-            return DSResult.success(props, crc)
+            return DSResult.complete(props, crc)
 
         } 
         catch (error) {
@@ -564,7 +564,7 @@ export default class Serialize {
             dist.bytesRead = 0
             props.data = dist.read(dist.length - endPadding)
             
-            return DSResult.success(props, crc)
+            return DSResult.complete(props, crc)
 
         } 
         catch (error) {
