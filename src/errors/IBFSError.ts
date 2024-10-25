@@ -40,7 +40,8 @@ enum ErrorCodes {
     L0_IO_WRITE_SR               = 'Failed to serialize data before write.',
     L0_IO_WRITE_META             = 'Could not write volume metadata.',
     L0_IO_WRITE_HEAD             = 'Failed to write a head block.',
-    L0_IO_WRITE_LINK             = 'Failed to write a link lock',
+    L0_IO_WRITE_LINK             = 'Failed to write a link block',
+    L0_IO_WRITE_STORAGE          = 'Failed to write a storage block.'
 
 }
 

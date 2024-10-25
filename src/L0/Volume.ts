@@ -1,3 +1,6 @@
+// TODOs
+// - Add block type checks (check block type int8 on block reads) to prevent misreads & corruption.
+//
 // Imports ========================================================================================
 
 import * as T from "@types"
@@ -506,7 +509,7 @@ export default class Volume {
     }
 
     /**
-     * Serializes a lin block and writes it to the disk.
+     * Serializes a link block and writes it to the disk.
      * 
      * **Important** - The size of usable `data` must be determined in advance and match the `blockSize`.  
      * A mismatch will result in either an error or truncated data being written to the disk which may cause data loss.
@@ -533,6 +536,13 @@ export default class Volume {
         }
     }
 
+    /**
+     * Returns a storage block after reading it from the disk, deserializing and decrypting it.
+     * @param address Block address
+     * @param blockSize blocks size (in sectors)
+     * @param aesKey decrypt key
+     * @returns [Error?, Data?]
+     */
     public async readStoreBlock(address: number, blockSize: number, aesKey?: Buffer):
         T.XEavA<StorageBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_STORAGE'|'L0_IO_READ_DS'|'L0_CRCSUM_MISMATCH'> {
         try {
@@ -554,6 +564,32 @@ export default class Volume {
     }
 
 
-    public async writeStoreBlock() {}
+    /**
+     * Serializes a storage block and writes it to the disk.
+     * 
+     * **Important** - The size of usable `data` must be determined in advance and match the `blockSize`.  
+     * A mismatch will result in either an error or truncated data being written to the disk which may cause data loss.
+     * There must be enough user data to occupy all of the sectors in the block, but not overflow it. The last sector in 
+     * the does not have to be filled entirely and will be padded if needed.
+     * ```
+     * @param meta Block metadata **and** user data.
+     * @returns Error?
+     */
+    public async writeStoreBlock(meta: StorageBlock & CommonWriteMeta): 
+        T.XEavSA<'L0_IO_UNKNOWN'|'L0_IO_WRITE_SR'|'L0_IO_WRITE_STORAGE'> {
+        try {
+            
+            const [sError, data] = this.bs.createStorageBlock(meta)
+            if (sError) return new IBFSError('L0_IO_WRITE_SR', null, sError, m.ssc(meta, ['data', 'aesKey']))
+
+            const position = this.bs.resolveAddr(meta.address)
+            const writeError = await this.write(position, data)
+            if (writeError) return new IBFSError('L0_IO_WRITE_STORAGE', null, writeError, m.ssc(meta, ['data', 'aesKey']))
+
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_UNKNOWN', null, error as Error, m.ssc(meta, ['data', 'aesKey']))
+        }
+    }
 
 }
