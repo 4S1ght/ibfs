@@ -2,9 +2,10 @@
 
 import Memory                                               from "@L0/Memory.js"
 import BlockAES, { AESCipher, AESKeySize, BlockAESConfig }  from "@L0/AES.js"
-import ReadResult, { UnknownReadResult }                    from "@L0/ReadResult.js"
+import DSResult, { UnknownDSResult }                        from "@L0/DSResult.js"
 import IBFSError                                            from "@errors"
-import { ssc }                                              from "@helpers"
+import { ssc }                                              from "@misc"
+import type * as T                                          from '@types'
 
 // Types ==========================================================================================
 
@@ -90,7 +91,7 @@ export interface CommonReadMeta {
      * Metadata providing information about the sector's type and its role. 
      * Exists purely for identification and potential data recovery tooling.
      */
-    blockType: Values<typeof SectorType>
+    blockType: T.Values<typeof SectorType>
     /** CRC32 checksum of the block's content (after encryption) */
     crc32Sum: number
 }
@@ -102,17 +103,21 @@ export interface CommonWriteMeta {
     address: number
 }
 
+export interface HeadReadMeta {
+    crcMismatch: boolean
+}
+
 // Helpers ========================================================================================
 
 type Finalizer<ErrorCode extends IBFSError['code']> = {
     /** Block metadata */
-    meta: Optional<HeadBlock & CommonReadMeta, 'data'>
+    meta: T.Optional<HeadBlock & CommonReadMeta & HeadReadMeta, 'data' | 'crcMismatch'>
     /** 
      * Finalizer function that finishes deserializing the block.
      * It needs to be supplied the trailing data sectors after the
      * head/link/storage descriptor sector to decrypt and process the data.
      */
-    final: (rawSectors: Buffer) => IBFSError<ErrorCode> | undefined
+    final: (rawSectors?: Buffer) => IBFSError<ErrorCode> | undefined
     error?: undefined
 } | {
     meta?: undefined,
@@ -142,6 +147,7 @@ export default class Serialize {
     public readonly HEAD_CONTENT:  number
     public readonly LINK_CONTENT:  number
     public readonly STORE_CONTENT: number
+    public readonly META_SIZE:     number
 
     public readonly AES: BlockAES
 
@@ -151,6 +157,7 @@ export default class Serialize {
         this.HEAD_CONTENT  = config.diskSectorSize - Serialize.HEAD_META
         this.LINK_CONTENT  = config.diskSectorSize - Serialize.LINK_META
         this.STORE_CONTENT = config.diskSectorSize - Serialize.STORE_META
+        this.META_SIZE     = config.diskSectorSize * Math.ceil(1024*1024 / config.diskSectorSize)
 
         this.AES = new BlockAES({
             iv: config.iv,
@@ -166,7 +173,7 @@ export default class Serialize {
      * @param sector Sector data object
      * @returns Sector data buffer
      */
-    public static createRootSector(sector: RootSector): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_ROOT'>> {
+    public static createRootSector(sector: RootSector): T.XEav<Buffer, 'L0_BS_ROOT_SR'> {
         try {
             
             const data = Memory.alloc(sector.sectorSize)
@@ -186,7 +193,7 @@ export default class Serialize {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_SERIALIZE_ROOT', null, error as Error, sector), null]
+            return [new IBFSError('L0_BS_ROOT_SR', null, error as Error, sector), null]
         }
     }
 
@@ -195,7 +202,7 @@ export default class Serialize {
      * @param sector Sector data buffer
      * @returns Sector daa object
      */
-    public static readRootSector(sector: Buffer): Eav<RootSector, IBFSError<'L0_BS_CANT_DESERIALIZE_ROOT'>> {
+    public static readRootSector(sector: Buffer): T.XEav<RootSector, 'L0_BS_ROOT_DS'> {
         try {
             
             const props: Partial<RootSector> = {}
@@ -215,7 +222,7 @@ export default class Serialize {
             return [null, props as RootSector]
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_DESERIALIZE_ROOT', null, error as Error, { sector }), null]
+            return [new IBFSError('L0_BS_ROOT_DS', null, error as Error, { sector }), null]
         }
     }
 
@@ -227,11 +234,10 @@ export default class Serialize {
      * @param block JSON object stored inside the block
      * @returns Buffer
      */
-    public createMetaBlock(block: Object): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_META'>> {
+    public createMetaBlock(block: Object): T.XEav<Buffer, 'L0_BS_META_SR'> {
         try {
         
-            const size = this.SECTOR_SIZE * Math.ceil(1024*1024 / this.SECTOR_SIZE)
-            const data = Memory.alloc(size)
+            const data = Memory.alloc(this.META_SIZE)
 
             const jsonString = Buffer.from(JSON.stringify(block))
             data.writeInt32(jsonString.length)
@@ -242,7 +248,7 @@ export default class Serialize {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_SERIALIZE_META', null, error as Error, { block }), null]
+            return [new IBFSError('L0_BS_META_SR', null, error as Error, { block }), null]
         }
     }
 
@@ -251,7 +257,7 @@ export default class Serialize {
      * @param block Raw metadata block
      * @returns Metadata object
      */
-    public readMetaBlock<Metadata extends Object = Object>(block: Buffer): Eav<Metadata, IBFSError<'L0_BS_CANT_DESERIALIZE_META'>>  {
+    public readMetaBlock<Metadata extends Object = Object>(block: Buffer): T.XEav<Metadata, 'L0_BS_META_DS'>  {
         try {
             
             const data = Memory.intake(block)
@@ -264,7 +270,7 @@ export default class Serialize {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_DESERIALIZE_META', null, error as Error, { block }), null]
+            return [new IBFSError('L0_BS_META_DS', null, error as Error, { block }), null]
         }
     }
 
@@ -276,7 +282,7 @@ export default class Serialize {
      * @param blockData Block data and metadata
      * @returns Buffer
      */
-    public createHeadBlock(block: HeadBlock & CommonWriteMeta): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_HEAD'>> {
+    public createHeadBlock(block: HeadBlock & CommonWriteMeta): T.XEav<Buffer, 'L0_BS_HEAD_SR'> {
         try {
 
             const dist = Memory.alloc(this.SECTOR_SIZE * (block.blockSize+1))
@@ -314,29 +320,30 @@ export default class Serialize {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_SERIALIZE_HEAD', null, error as Error, ssc(block, ['data', 'aesKey'])), null]
+            return [new IBFSError('L0_BS_HEAD_SR', null, error as Error, ssc(block, ['data', 'aesKey'])), null]
         }
     }
 
     /**
-     * Deserializes a head sector and returns an object containing that sector's metadata a `final` method or possibly a 
-     * single error. The metadata contains all head sector information except for the file data.
+     * Deserializes a head sector and returns either object containing that sector's metadata a `final` method or a 
+     * single error. The metadata contains all head sector information except for the file data (so far).
      * For the file data to be fully serialized and become available in the returned metadata object, the `final` method
      * must be called and supplied the rest of the block sectors to finish block deserialization.
      * 
      * This method relies on dual-stage deserialization because it's impossible to know the size of a head block in 
-     * advance before reading the main head sector.
+     * advance before reading the main head sector. This does not apply to link/storage blocks, as their length is
+     * stored also in preceding blocks.
      * 
      * @param headSector Block's head sector (in raw state)
      * @param blockAddress Address of where the sector was read from
      * @param aesKey Decryption key needed for decryption.
      * @returns Head sector data
      */
-    public readHeadBlock(headSector: Buffer, blockAddress: number, aesKey?: Buffer): Finalizer<'L0_BS_CANT_DESERIALIZE_HEAD'> {
+    public readHeadBlock(headSector: Buffer, blockAddress: number, aesKey?: Buffer): Finalizer<'L0_BS_HEAD_DS'> {
         try {
 
             // @ts-expect-error - Populated later
-            const props: HeadBlock & CommonReadMeta = {}
+            const props: HeadBlock & CommonReadMeta & HeadReadMeta = {}
             const headSrc = Memory.intake(headSector)
             
             props.blockType   = headSrc.readInt8()  // Block type
@@ -357,23 +364,26 @@ export default class Serialize {
 
             return {
                 meta: props,
-                final: (sectors: Buffer) => {
+                final: (sectors?: Buffer) => {
                     try {
-                        
-                        const trailSrc = Memory.intake(sectors)
 
-                        // Raw sectors
-                        for (let i = 1; i <= props.blockSize; i++) {
-                            trailSrc.copyTo(dist, this.SECTOR_SIZE)
-                            crc = this.AES.decryptCRC(dist.read(this.SECTOR_SIZE), aesKey!, blockAddress+i, crc)
+                        if (sectors) {
+                            const trailSrc = Memory.intake(sectors)
+
+                            // Raw sectors
+                            for (let i = 1; i <= props.blockSize; i++) {
+                                trailSrc.copyTo(dist, this.SECTOR_SIZE)
+                                crc = this.AES.decryptCRC(dist.read(this.SECTOR_SIZE), aesKey!, blockAddress+i, crc)
+                            }
                         }
 
                         dist.bytesRead = 0
                         props.data = dist.read(dist.length - endPadding)
+                        props.crcMismatch = props.crc32Sum !== crc
 
                     } 
                     catch (error) {
-                        return new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress })
+                        return new IBFSError('L0_BS_HEAD_DS', null, error as Error, { blockAddress })
                     }
                 }
             }
@@ -381,7 +391,7 @@ export default class Serialize {
         } 
         catch (error) {
             return {
-                error: new IBFSError('L0_BS_CANT_DESERIALIZE_HEAD', null, error as Error, { blockAddress })
+                error: new IBFSError('L0_BS_HEAD_DS', null, error as Error, { blockAddress })
             }
         }
     }
@@ -392,7 +402,7 @@ export default class Serialize {
      * @param blockData Block data and metadata
      * @returns Buffer
      */
-    public createLinkBlock(block: LinkBlock & CommonWriteMeta): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_LINK'>> {
+    public createLinkBlock(block: LinkBlock & CommonWriteMeta): T.XEav<Buffer, 'L0_BS_LINK_SR'> {
         try {
             
             const dist = Memory.alloc(this.SECTOR_SIZE * (block.blockSize+1))
@@ -427,7 +437,7 @@ export default class Serialize {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_SERIALIZE_LINK', null, error as Error, ssc(block, ['data', 'aesKey'])), null]
+            return [new IBFSError('L0_BS_LINK_SR', null, error as Error, ssc(block, ['data', 'aesKey'])), null]
         }
     }
 
@@ -438,19 +448,19 @@ export default class Serialize {
      * @param aesKey Decryption key needed for decryption.
      * @returns Head sector data
      */
-    public readLinkBlock(linkBlock: Buffer, blockAddress: number, aesKey?: Buffer): UnknownReadResult<LinkBlock, 'L0_BS_CANT_DESERIALIZE_LINK'>{
+    public readLinkBlock(linkBlock: Buffer, blockAddress: number, aesKey?: Buffer): UnknownDSResult<LinkBlock, 'L0_BS_LINK_DS'>{
         try {
             
             // @ts-expect-error - Populated later
             const props: LinkBlock & CommonReadMeta = {}
             const src = Memory.intake(linkBlock)
 
-            props.blockType     = src.readInt8()
-            props.crc32Sum      = src.readInt32()
-            props.next          = src.readInt64()
-            props.nextSize      = src.readInt8()
-            props.blockSize     = src.readInt8()
-            const endPadding    = src.readInt16()
+            props.blockType     = src.readInt8()    // Block type
+            props.crc32Sum      = src.readInt32()   // CRC
+            props.next          = src.readInt64()   // Next block address
+            props.nextSize      = src.readInt8()    // Next block size
+            props.blockSize     = src.readInt8()    // Block size
+            const endPadding    = src.readInt16()   // End sector padding (unencrypted)
             src.bytesRead       = Serialize.LINK_META
 
             const dist = Memory.alloc(this.LINK_CONTENT + this.SECTOR_SIZE * props.blockSize)
@@ -468,11 +478,11 @@ export default class Serialize {
             dist.bytesRead = 0
             props.data = dist.read(dist.length - endPadding)
 
-            return ReadResult.success(props, crc)
+            return DSResult.complete(props, crc)
 
         } 
         catch (error) {
-            return ReadResult.failure('L0_BS_CANT_DESERIALIZE_LINK', null, error as Error, { blockAddress })
+            return DSResult.failure('L0_BS_LINK_DS', null, error as Error, { blockAddress })
         }
     }
 
@@ -482,7 +492,7 @@ export default class Serialize {
      * @param blockData Block data and metadata
      * @returns Buffer
      */
-    public createStorageBlock(block: StorageBlock & CommonWriteMeta): Eav<Buffer, IBFSError<'L0_BS_CANT_SERIALIZE_STORE'>> {
+    public createStorageBlock(block: StorageBlock & CommonWriteMeta): T.XEav<Buffer, 'L0_BS_STORE_SR'> {
         try {
             
             const dist = Memory.alloc(this.SECTOR_SIZE * (block.blockSize+1))
@@ -515,7 +525,7 @@ export default class Serialize {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_BS_CANT_SERIALIZE_STORE', null, error as Error, ssc(block, ['data', 'aesKey'])), null]
+            return [new IBFSError('L0_BS_STORE_SR', null, error as Error, ssc(block, ['data', 'aesKey'])), null]
         }
     }
 
@@ -526,7 +536,7 @@ export default class Serialize {
      * @param aesKey Decryption key needed for decryption.
      * @returns Head sector data
      */
-    public readStorageBlock(storeBlock: Buffer, blockAddress: number, aesKey?: Buffer): UnknownReadResult<StorageBlock, 'L0_BS_CANT_DESERIALIZE_STORE'> {
+    public readStorageBlock(storeBlock: Buffer, blockAddress: number, aesKey?: Buffer): UnknownDSResult<StorageBlock, 'L0_BS_STORE_DS'> {
         try {
             
             // @ts-expect-error - Populated later
@@ -554,12 +564,20 @@ export default class Serialize {
             dist.bytesRead = 0
             props.data = dist.read(dist.length - endPadding)
             
-            return ReadResult.success(props, crc)
+            return DSResult.complete(props, crc)
 
         } 
         catch (error) {
-            return ReadResult.failure('L0_BS_CANT_DESERIALIZE_STORE', null, error as Error, { blockAddress })
+            return DSResult.failure('L0_BS_STORE_DS', null, error as Error, { blockAddress })
         }
     }
+
+    /**
+     * Resolves resource location by its address.  
+     * Given sector size of `1024 Bytes`, an example address `100` 
+     * would resolve to the physical location of `102400` on the disk.
+     * @param address Sector address
+     */
+    public resolveAddr = (address: number) => this.SECTOR_SIZE * address
 
 }   

@@ -1,35 +1,41 @@
+import type IBFSError, { BFSErrorCode, IBFSErrorCode } from "@errors"
+
 /** 
- * GO-like error-as-value return type. Used specifically to avoid
+ * GO-like error-as-value return  type. Used specifically to avoid
  * throwing errors, which generally produces messy control flow.
  */
-type Eav<V, E extends Error = Error> = [E, null] | [null, V]
+export type Eav<V, E extends Error = Error> = [E, null] | [null, V]
+export type XEav<V, EC extends IBFSErrorCode> = [IBFSError<EC>, null] | [null, V]
 
 /**
- * Async implementation of `Proc<value, error>`
+ * Async implementation of `Eav<value, error>`
  */
-type EavAsync<V, E extends Error = Error> = Promise<[E, null] | [null, V]>
+export type EavA<V, E extends Error = Error> = Promise<Eav<V, E>>
+export type XEavA<V, EC extends IBFSErrorCode> = Promise<XEav<V, EC>>
 
 /**
  * Single-value procedural function return type.
  */
-type EavSingle<E extends Error = Error> = E | void
+export type EavS<E extends Error = Error> = E | void
+export type XEavS<EC extends IBFSErrorCode> = IBFSError<EC> | void
 
 /** 
- * Async implementation of `SProc<error>`.
+ * Async implementation of `EavS<error>`.
 */
-type EavSingleAsync<E extends Error = Error> = Promise<E | void>
+export type EavSA<E extends Error = Error> = Promise<EavS<E>>
+export type XEavSA<EC extends IBFSErrorCode> = Promise<XEavS<EC>>
 
-/**
- * A two-number array for storing ranges.
- */
-type DInt = [number, number]
-
-/**
+/**s
  * Extracts enum values.
  */
-type Values<T> = T[keyof T]
+export type Values<T> = T[keyof T]
 
 /** 
  * Makes selected keys optional.
 */
-type Optional<O, K extends keyof O> = Omit<O, K> & Partial<Pick<O, K>>
+export type Optional<O, K extends keyof O> = Omit<O, K> & Partial<Pick<O, K>>
+
+/**
+ * Excludes the constructor first parameter.
+ */
+export type OmitFirst<T extends any[]> = T extends [any, ...infer Rest] ? Rest : never

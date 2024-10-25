@@ -1,30 +1,47 @@
+import type * as T from '@types'
+
 enum ErrorCodes {
     
     // Level 0 errors
-    L0_VCREATE_CANT_CREATE       = 101, // Can't create an IBFS volume
-    L0_VCREATE_WS_ERROR          = 102, // Write stream error ocurred while the volume was being created.
-    L0_VCREATE_DRIVER_MISCONFIG  = 103, // Driver misconfiguration.
-    L0_CRYPTO_KEY_REQUIRED       = 104, // A key is required but was not provided.
-    L0_CRYPTO_KEY_CANT_DIGEST    = 105, // An error was thrown while digesting an AES key.
-    L0_CRCSUM_MISMATCH           = 106, // CRC error detection triggered wen deserializing a data block.
-    L0_VOPEN_CANT_OPEN           = 107, // Can't open the volume image and initialize the Volume class.
-    L0_VOPEN_ROOT_DESERIALIZE    = 108, // Failed to deserialize the root sector needed for further initialization.
-    L0_VOPEN_MODE_INCOMPATIBLE   = 109, // The volume is incompatible with the NodeJS crypto APIs.
-    L0_VOPEN_SIZE_MISMATCH       = 110, // Image file size differs from expected.
+    L0_VCREATE_CANT_CREATE       = 'Could not create the IBFS volume.',
+    L0_VCREATE_WS_ERROR          = 'A WriteStream occurred while creating the IBFS volume.', 
+    L0_VCREATE_DRIVER_MISCONFIG  = 'Missing, conflicting or wrong configuration.',
+    
+    L0_CRYPTO_KEY_REQUIRED       = 'An AES key is required for the operation but was not provided.',
+    L0_CRYPTO_KEY_CANT_DIGEST    = 'An error ocurred while digesting an AES key',
+    L0_CRCSUM_MISMATCH           = "Block CRC checksum does not match the contents - Possible corruption",
+    
+    L0_VOPEN_UNKNOWN             = 'Could not open the IBFS volume.',
+    L0_VOPEN_ROOT_DESERIALIZE    = 'Failed to deserialize the root sector data required for further driver initialization.',
+    L0_VOPEN_MODE_INCOMPATIBLE   = 'The IBFS volume was not in NodeJS crypto API compatibility mode and is impossible to be decrypted by this driver',
+    L0_VOPEN_SIZE_MISMATCH       = 'Volume metadata describes different IBFS volume size than what was found on the host FS - This *MEANS* data corruption or loss.', 
  
-    L0_BS_CANT_SERIALIZE_ROOT    = 111, // Problem serializing a root sector.
-    L0_BS_CANT_DESERIALIZE_ROOT  = 112, // Problem deserializing a root sector.
-    L0_BS_CANT_SERIALIZE_HEAD    = 113, // Problem serializing a head block.
-    L0_BS_CANT_DESERIALIZE_HEAD  = 114, // Problem deserializing a head block.
+    L0_BS_ROOT_SR                = 'Could not serialize root sector data.',
+    L0_BS_ROOT_DS                = 'Could not deserialize root sector data.',
+    L0_BS_HEAD_SR                = 'Could not serialize head sector data.',
+    L0_BS_HEAD_DS                = 'Could not deserialize head sector data.',
+    L0_BS_LINK_SR                = 'Could not serialize link sector data.',
+    L0_BS_LINK_DS                = 'Could not deserialize link sector data.',
+    L0_BS_STORE_SR               = 'Could not serialize storage sector data.',
+    L0_BS_STORE_DS               = 'Could not deserialize storage sector data.',
+    L0_BS_META_SR                = 'Could not serialize volume metadata block.',
+    L0_BS_META_DS                = 'Could not deserialize volume metadata block.', 
 
-    L0_BS_CANT_SERIALIZE_LINK    = 115, // Problem serializing a link block.
-    L0_BS_CANT_DESERIALIZE_LINK  = 116, // Problem deserializing a link block.
-
-    L0_BS_CANT_SERIALIZE_STORE   = 117, // Problem serializing a store block.
-    L0_BS_CANT_DESERIALIZE_STORE = 118, // Problem deserializing a store block.
- 
-    L0_BS_CANT_SERIALIZE_META    = 119, // Problem serializing metadata block.
-    L0_BS_CANT_DESERIALIZE_META  = 120, // Problem deserializing metadata block.
+    L0_IO_UNKNOWN                = 'Unknown I/O error.', 
+    L0_IO_RESOURCE_BUSY          = 'The resource is occupied by another I/O operation.',
+    L0_IO_READ                   = 'Failed to read data from the disk.',
+    L0_IO_READ_DS                = 'Failed to deserialize data from the disk - Data was read but failed deserialization',
+    L0_IO_READ_META              = 'Failed to read volume metadata.',
+    L0_IO_READ_HEAD              = 'Could not read metadata sector of a head block.',
+    L0_IO_READ_HEAD_TRAIL        = 'Could not read trailing sectors of a head block.',
+    L0_IO_READ_LINK              = 'Could not read a link block from the disk.',
+    L0_IO_READ_STORAGE           = 'Could not read a storage block from the disk.',
+    L0_IO_WRITE                  = 'Failed to write data to the disk',
+    L0_IO_WRITE_SR               = 'Failed to serialize data before write.',
+    L0_IO_WRITE_META             = 'Could not write volume metadata.',
+    L0_IO_WRITE_HEAD             = 'Failed to write a head block.',
+    L0_IO_WRITE_LINK             = 'Failed to write a link block',
+    L0_IO_WRITE_STORAGE          = 'Failed to write a storage block.'
 
 }
 
@@ -33,18 +50,16 @@ export type IBFSErrorMetadata = { [key: string]: any }
 
 export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> extends Error {
 
-    public readonly errno: number
     public readonly code: Code
     public readonly rootCause?: IBFSError
     public readonly causes: Error[] = []
     public readonly meta: IBFSErrorMetadata = {}
 
-    constructor(code: Code, message?: string|null, cause?: Error | null, meta?: IBFSErrorMetadata) {
+    constructor(code: Code, message?: string | null, cause?: Error | null, meta?: IBFSErrorMetadata) {
         
-        super(message || (cause instanceof Error ? IBFSError.messageCause(cause) : undefined))
+        super(message || ErrorCodes[code])
         this.name = this.constructor.name
         this.code = code
-        this.errno = ErrorCodes[code]
         meta && (this.meta = meta)
         cause instanceof IBFSError && (this.rootCause = (cause.causes[cause.causes.length-1] || cause) as IBFSError)
         
@@ -59,7 +74,7 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
             else {
                 this.causes.unshift(cause)
             }
-        }
+        } 
 
     }
 
@@ -74,8 +89,8 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
      * Constructs a new IBFSError instance in an Eav (error-as-value) format. 
      * @returns [IBFSError, null]
      */
-    public static eav(...params: ConstructorParameters<typeof IBFSError>): [IBFSError<IBFSErrorCode>, null] {
-        return [new this(...params), null]
+    public static eav<Code extends IBFSErrorCode>(code: Code, ...params: T.OmitFirst<ConstructorParameters<typeof IBFSError>>): [IBFSError<Code>, null] {
+        return [new this(code, ...params), null]
     }
 
 }

@@ -5,30 +5,41 @@
     ],
     "compilerOptions": {
 
-        /* Base Options: */
+        // Plugins
+        "plugins": [
+            // Transform paths in output .js files
+            { "transform": "typescript-transform-paths" },
+            // Transform paths in output .d.ts files (Include this line if you output declarations files)
+            { "transform": "typescript-transform-paths", "afterDeclarations": true },
+        ],
+
+        // Base options
         "esModuleInterop": true,
         "skipLibCheck": true,
         "target": "es2022",
         "moduleDetection": "force",
         "isolatedModules": true,
         
-        /* Strictness */
+        // Strictness
         "strict": true,
         "noUncheckedIndexedAccess": true,
-
         "moduleResolution": "NodeNext",
         "module": "NodeNext",
-        
         "lib": ["es2022"],
 
+        // EMit
         "outDir": "./dist",
         "sourceMap": true,
+        "declaration": true,
 
+        // Path resolution
+        "baseUrl": "./",
         "paths": {
             "@L0/*": ["./src/L0/*"],
             "@errors": ["./src/errors/IBFSError.ts"],
-            "@helpers": ["./src/Helpers.ts"],
-            "@constants": ["./src/Constants.ts"]
+            "@misc": ["./src/Misc.ts"],
+            "@constants": ["./src/Constants.ts"],
+            "@types": ["./src/types.d.ts"]
         }
 
     }
