@@ -19,7 +19,8 @@ import Serialize, {
     HeadBlock, 
     LinkBlock, 
     RootSector, 
-    SectorSize 
+    SectorSize, 
+    StorageBlock
 } from "@L0/Serialize.js"
 
 // Types ==========================================================================================
@@ -376,6 +377,11 @@ export default class Volume {
      * Overwrites the data in the metadata block.
      * If the metadata block os occupied (read from/written to) by 
      * a different part of the program an error will be returned.
+     * 
+     * **Important** - The size of usable `data` must be determined in advance and match the `blockSize`.  
+     * A mismatch will result in either an error or truncated data being written to the disk which may cause data loss.
+     * There must be enough user data to occupy all of the sectors in the block, but not overflow it. The last sector in 
+     * the does not have to be filled entirely and will be padded if needed.
      * @returns Error?
      */
     public async writeMetaBlock(meta: Object): 
@@ -388,8 +394,8 @@ export default class Volume {
             const [sError, data] = this.bs.createMetaBlock(meta)
             if (sError) return new IBFSError('L0_IO_WRITE_SR', null, sError)
 
-            const address = this.bs.resolveAddr(1)
-            const writeError = await this.write(address, data)
+            const position = this.bs.resolveAddr(1)
+            const writeError = await this.write(position, data)
             if (writeError) return new IBFSError('L0_IO_WRITE_META', null, writeError)
         }
         catch (error) {
@@ -448,8 +454,10 @@ export default class Volume {
     /**
      * Serializes a head block and writes it to the disk.  
      * 
-     * **Note** - The size of usable `data` must be determined in advance and match the `blockSize`.  
+     * **Important** - The size of usable `data` must be determined in advance and match the `blockSize`.  
      * A mismatch will result in either an error or truncated data being written to the disk which may cause data loss.
+     * There must be enough user data to occupy all of the sectors in the block, but not overflow it. The last sector in 
+     * the does not have to be filled entirely and will be padded if needed.
      * @param meta Block metadata **and** user data.
      * @returns Error?
      */
@@ -460,8 +468,8 @@ export default class Volume {
             const [sError, data] = this.bs.createHeadBlock(meta)
             if (sError) return new IBFSError('L0_IO_WRITE_SR', null, sError, m.ssc(meta, ['data', 'aesKey']))
 
-            const address = this.bs.resolveAddr(meta.address)
-            const writeError = await this.write(address, data)
+            const position = this.bs.resolveAddr(meta.address)
+            const writeError = await this.write(position, data)
             if (writeError) return new IBFSError('L0_IO_WRITE_HEAD', null, writeError, m.ssc(meta, ['data', 'aesKey']))
 
         }
@@ -493,13 +501,59 @@ export default class Volume {
 
         } 
         catch (error) {
-            return IBFSError.eav('L0_IO_UNKNOWN')
+            return IBFSError.eav('L0_IO_UNKNOWN', null, error as Error, { address, blockSize })
         }
     }
 
-    public async writeLinkBlock() {}
+    /**
+     * Serializes a lin block and writes it to the disk.
+     * 
+     * **Important** - The size of usable `data` must be determined in advance and match the `blockSize`.  
+     * A mismatch will result in either an error or truncated data being written to the disk which may cause data loss.
+     * There must be enough user data to occupy all of the sectors in the block, but not overflow it. The last sector in 
+     * the does not have to be filled entirely and will be padded if needed.
+     * ```
+     * @param meta Block metadata **and** user data.
+     * @returns Error?
+     */
+    public async writeLinkBlock(meta: LinkBlock & CommonWriteMeta): 
+        T.XEavSA<'L0_IO_UNKNOWN'|'L0_IO_WRITE_SR'|'L0_IO_WRITE_LINK'> {
+        try {
 
-    public async readStoreBlock() {}
+            const [sError, data] = this.bs.createLinkBlock(meta)
+            if (sError) return new IBFSError('L0_IO_WRITE_SR', null, sError, m.ssc(meta, ['data', 'aesKey']))
+
+            const position = this.bs.resolveAddr(meta.address)
+            const writeError = await this.write(position, data)
+            if (writeError) return new IBFSError('L0_IO_WRITE_LINK', null, writeError, m.ssc(meta, ['data', 'aesKey']))
+            
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_UNKNOWN', null, error as Error, m.ssc(meta, ['data', 'aesKey']))
+        }
+    }
+
+    public async readStoreBlock(address: number, blockSize: number, aesKey?: Buffer):
+        T.XEavA<StorageBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_STORAGE'|'L0_IO_READ_DS'|'L0_CRCSUM_MISMATCH'> {
+        try {
+
+            const position = this.bs.resolveAddr(address)
+            const [storeError, storeBlock] = await this.read(position, this.bs.SECTOR_SIZE * blockSize)
+            if (storeError) return IBFSError.eav('L0_IO_READ_STORAGE', null, storeError, { address, blockSize })
+
+            const readResult = this.bs.readStorageBlock(storeBlock, address, aesKey)
+            if (readResult.error) return IBFSError.eav('L0_IO_READ_DS', null, readResult.error, { address, blockSize })
+            if (readResult.crcMismatch) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address, blockSize })
+                
+            return [null, readResult.meta]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_UNKNOWN', null, error as Error, { address, blockSize })
+        }
+    }
+
+
     public async writeStoreBlock() {}
 
 }

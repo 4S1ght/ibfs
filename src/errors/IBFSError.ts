@@ -35,10 +35,12 @@ enum ErrorCodes {
     L0_IO_READ_HEAD              = 'Could not read metadata sector of a head block.',
     L0_IO_READ_HEAD_TRAIL        = 'Could not read trailing sectors of a head block.',
     L0_IO_READ_LINK              = 'Could not read a link block from the disk.',
+    L0_IO_READ_STORAGE           = 'Could not read a storage block from the disk.',
     L0_IO_WRITE                  = 'Failed to write data to the disk',
     L0_IO_WRITE_SR               = 'Failed to serialize data before write.',
     L0_IO_WRITE_META             = 'Could not write volume metadata.',
-    L0_IO_WRITE_HEAD             = 'Failed to write the head block.',
+    L0_IO_WRITE_HEAD             = 'Failed to write a head block.',
+    L0_IO_WRITE_LINK             = 'Failed to write a link lock',
 
 }
 
