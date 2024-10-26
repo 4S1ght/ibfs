@@ -493,7 +493,7 @@ export default class Volume {
         try {
 
             const position = this.bs.resolveAddr(address)
-            const [linkError, linkBlock] = await this.read(position, this.bs.SECTOR_SIZE * blockSize)
+            const [linkError, linkBlock] = await this.read(position, this.bs.SECTOR_SIZE * (blockSize+1))
             if (linkError) return IBFSError.eav('L0_IO_READ_LINK', null, linkError, { address, blockSize })
             
             const readResult = this.bs.readLinkBlock(linkBlock, address, aesKey)
@@ -548,7 +548,7 @@ export default class Volume {
         try {
 
             const position = this.bs.resolveAddr(address)
-            const [storeError, storeBlock] = await this.read(position, this.bs.SECTOR_SIZE * blockSize)
+            const [storeError, storeBlock] = await this.read(position, this.bs.SECTOR_SIZE * (blockSize+1))
             if (storeError) return IBFSError.eav('L0_IO_READ_STORAGE', null, storeError, { address, blockSize })
 
             const readResult = this.bs.readStorageBlock(storeBlock, address, aesKey)
