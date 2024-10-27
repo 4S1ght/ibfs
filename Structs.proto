@@ -1,0 +1,15 @@
+package Structs;
+syntax = "proto3";
+
+enum PermissionLevel {
+    READ = 1;    // 1 = read
+    WRITE = 2;   // 2 = read/write
+    EXECUTE = 3; // 3 = read/write/exec
+}
+
+message Directory {
+    // Directory-scoped user permissions { [userID]: 1|2|3 }
+    map<string, PermissionLevel> permissions = 1;
+    // Directory children
+    map<string, int32> children = 2;
+}
