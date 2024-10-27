@@ -28,20 +28,38 @@ export default class Structs {
     public static pb = pb.loadSync(path.join(dirname, '../../Structs.proto'))
     public static Directory = this.pb.lookupType('Structs.Directory')
 
-    public static serializeDirectoryObject(dir: Directory) {
+    /**
+     * Encodes a directory object and returns a `UInt8Array` ready to be serialized and written to the disk.
+     * @param dir Directory object
+     * @returns [Error?, UInt8Array?]
+     */
+    public static encodeDirectoryObject(dir: Directory): T.XEav<Uint8Array, "L1_ST_DIRECTORY_ENCODE"> {
         try {
             const encoded = this.Directory.encode(dir)
-            return [null, encoded]
-        } 
+            const intArray = encoded.finish()
+            return [null, intArray]
+        }
         catch (error) {
-            
+            return IBFSError.eav('L1_ST_DIRECTORY_ENCODE', null, error as Error)
         }
     }
 
-    public static decodeDirectoryObject(obj: Buffer): T.XEav<Directory, "L1_ST_DIRECTORY_DECODE"> {
+    /**
+     * Decodes a directory data buffer and returns an object ready for further processing.
+     * @param obj Directory data buffer
+     * @returns [Error?, Directory?]
+     */
+    public static decodeDirectoryObject(buf: Buffer): T.XEav<Directory, "L1_ST_DIRECTORY_DECODE"> {
         try {
-            const decoded = this.Directory.decode(obj)
+
+            const decoded = this.Directory.decode(buf)
             const json = decoded.toJSON() as Directory
+
+            json.children = Object.fromEntries(
+                Object.entries(json.children)
+                    .map(([key, value]) => [key, parseInt(value as any)])
+            )
+
             return [null, json]
         } 
         catch (error) {
@@ -50,3 +68,18 @@ export default class Structs {
     }
 
 }
+
+const x = Structs.encodeDirectoryObject({
+    permissions: {
+        'some-user-id': 1
+    },
+    children: {
+        'recept.txt': 123,
+        'test': 338109
+    }
+})
+
+const y = Structs.decodeDirectoryObject(x[1])
+
+console.log(x)
+console.log(y)

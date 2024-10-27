@@ -26,6 +26,8 @@ import Serialize, {
     StorageBlock
 } from "@L0/Serialize.js"
 
+import Structs from '../L1/Structs.js'
+
 // Types ==========================================================================================
 
 export interface VolumeCreateInit extends VolumeMetadata {
