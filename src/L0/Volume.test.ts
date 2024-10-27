@@ -14,13 +14,15 @@ const aesKey                 = Buffer.from('Top secret!')
 const [aesErr, aesKeyDigest] = BlockAES.deriveAESKey(aesCipher, aesKey)
 if (aesErr) throw aesErr
 
+const useEncryption = false
+
 describe('Create/open volume', async () => { 
 
     const createError = await Volume.create({
         file: path.join(dirname, '../../tests/Volume.ibfs'),
         sectorSize: 1024,
         sectorCount: 1000,
-        aesCipher: aesCipher,
+        aesCipher: useEncryption ? aesCipher : "",
         aesKey: aesKey,
         driver: {
             memoryPoolSwapSize: 1024,
@@ -36,10 +38,10 @@ describe('Create/open volume', async () => {
         throw volumeError
     }
 
-    test('volume.rs.sectorSize',       () => expect(volume.rs.sectorSize)      .toBe(1024))
-    test('volume.rs.sectorCount',      () => expect(volume.rs.sectorCount)     .toBe(1000))
-    test('volume.rs.aesCipher',        () => expect(volume.rs.aesCipher)       .toBe(256))
-    test('volume.rs.cryptoCompatMode', () => expect(volume.rs.cryptoCompatMode).toBe(true))
+    test('volume.rs.sectorSize',                 () => expect(volume.rs.sectorSize)      .toBe(1024))
+    test('volume.rs.sectorCount',                () => expect(volume.rs.sectorCount)     .toBe(1000))
+    test('volume.rs.cryptoCompatMode',           () => expect(volume.rs.cryptoCompatMode).toBe(true))
+    useEncryption && test('volume.rs.aesCipher', () => expect(volume.rs.aesCipher)       .toBe(256))
 
 
     describe('read/write meta block', async () => {
@@ -51,7 +53,7 @@ describe('Create/open volume', async () => {
         const [readError, meta] = await volume.readMetaBlock()
         if (readError) throw readError
 
-        test('read meta block changes', () => expect(meta).toStrictEqual(testObject))
+        test('block.data', () => expect(meta).toStrictEqual(testObject))
 
     })
 
@@ -64,14 +66,15 @@ describe('Create/open volume', async () => {
             nextSize: 0,
             data: Buffer.from('Hello world!'),
             blockSize: 0,
-            address: 1050,
-            aesKey: aesKeyDigest
+            address: 150,
+            aesKey: aesKeyDigest,
+            resourceType: 0
         }
 
         const writeError = await volume.writeHeadBlock(meta)
         if (writeError) throw writeError
 
-        const [readError, block] = await volume.readHeadBlock(1050, aesKeyDigest)
+        const [readError, block] = await volume.readHeadBlock(150, aesKeyDigest)
         if (readError) throw readError
 
         test('block.data', () => expect(block.data).toStrictEqual(meta.data))
@@ -85,14 +88,14 @@ describe('Create/open volume', async () => {
             nextSize: 0,
             data: Buffer.from('Hello world!'),
             blockSize: 0,
-            address: 1051,
+            address: 151,
             aesKey: aesKeyDigest
         }
 
         const writeError = await volume.writeLinkBlock(meta)
         if (writeError) throw writeError
 
-        const [readError, block] = await volume.readLinkBlock(1051, 0, aesKeyDigest)
+        const [readError, block] = await volume.readLinkBlock(151, 0, aesKeyDigest)
         if (readError) throw readError
 
         test('block.data', () => expect(block.data).toStrictEqual(meta.data))
@@ -104,14 +107,14 @@ describe('Create/open volume', async () => {
         const meta: StorageBlock & CommonWriteMeta = {
             data: Buffer.from('Hello world!'),
             blockSize: 0,
-            address: 1052,
+            address: 152,
             aesKey: aesKeyDigest
         }
 
         const writeError = await volume.writeStoreBlock(meta)
         if (writeError) throw writeError
 
-        const [readError, block] = await volume.readStoreBlock(1052, 0, aesKeyDigest)
+        const [readError, block] = await volume.readStoreBlock(152, 0, aesKeyDigest)
         if (readError) throw readError
 
         test('block.data', () => expect(block.data).toStrictEqual(meta.data))

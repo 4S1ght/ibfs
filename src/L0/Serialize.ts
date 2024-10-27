@@ -64,6 +64,8 @@ export interface HeadBlock {
     data: Buffer
     /** Size of the block (in sectors) */
     blockSize: number
+    /** Resource type - Either a directory (0) or file (1). */
+    resourceType: number
 }
 
 export interface LinkBlock {
@@ -114,7 +116,7 @@ type Finalizer<ErrorCode extends IBFSError['code']> = {
     meta: T.Optional<HeadBlock & CommonReadMeta & HeadReadMeta, 'data' | 'crcMismatch'>
     /** 
      * Finalizer function that finishes deserializing the block.
-     * It needs to be supplied the trailing data sectors after the
+     * It needs to be supplied the tailing data sectors after the
      * head/link/storage descriptor sector to decrypt and process the data.
      */
     final: (rawSectors?: Buffer) => IBFSError<ErrorCode> | undefined
@@ -157,7 +159,7 @@ export default class Serialize {
         this.HEAD_CONTENT  = config.diskSectorSize - Serialize.HEAD_META
         this.LINK_CONTENT  = config.diskSectorSize - Serialize.LINK_META
         this.STORE_CONTENT = config.diskSectorSize - Serialize.STORE_META
-        this.META_SIZE     = config.diskSectorSize * Math.ceil(1024*1024 / config.diskSectorSize)
+        this.META_SIZE     = config.diskSectorSize * Math.ceil(1024*128 / config.diskSectorSize)
 
         this.AES = new BlockAES({
             iv: config.iv,
@@ -297,6 +299,7 @@ export default class Serialize {
             dist.writeInt64(block.created | 0)                              // Creation date
             dist.writeInt64(block.modified | 0)                             // Modification date
             dist.writeInt16(dist.length - Serialize.HEAD_META - src.length) // End sector padding (unencrypted)
+            dist.writeInt8(block.resourceType)                              // Resource type
 
             dist.bytesWritten = Serialize.HEAD_META
             dist.bytesRead = Serialize.HEAD_META
@@ -346,15 +349,16 @@ export default class Serialize {
             const props: HeadBlock & CommonReadMeta & HeadReadMeta = {}
             const headSrc = Memory.intake(headSector)
             
-            props.blockType   = headSrc.readInt8()  // Block type
-            props.crc32Sum    = headSrc.readInt32() // CRC
-            props.next        = headSrc.readInt64() // Next address
-            props.nextSize    = headSrc.readInt8()  // Next block size
-            props.blockSize   = headSrc.readInt8()  // Head block size
-            props.created     = headSrc.readInt64() // Creation date
-            props.modified    = headSrc.readInt64() // Modification date
-            const endPadding  = headSrc.readInt16() // End sector padding (unencrypted)
-            headSrc.bytesRead = Serialize.HEAD_META
+            props.blockType     = headSrc.readInt8()  // Block type
+            props.crc32Sum      = headSrc.readInt32() // CRC
+            props.next          = headSrc.readInt64() // Next address
+            props.nextSize      = headSrc.readInt8()  // Next block size
+            props.blockSize     = headSrc.readInt8()  // Head block size
+            props.created       = headSrc.readInt64() // Creation date
+            props.modified      = headSrc.readInt64() // Modification date
+            const endPadding    = headSrc.readInt16() // End sector padding (unencrypted)
+            props.resourceType  = headSrc.readInt8()  // Resource type
+            headSrc.bytesRead   = Serialize.HEAD_META
 
             const dist = Memory.alloc(this.HEAD_CONTENT + this.SECTOR_SIZE * props.blockSize)
 
@@ -368,11 +372,11 @@ export default class Serialize {
                     try {
 
                         if (sectors) {
-                            const trailSrc = Memory.intake(sectors)
+                            const tailSrc = Memory.intake(sectors)
 
                             // Raw sectors
                             for (let i = 1; i <= props.blockSize; i++) {
-                                trailSrc.copyTo(dist, this.SECTOR_SIZE)
+                                tailSrc.copyTo(dist, this.SECTOR_SIZE)
                                 crc = this.AES.decryptCRC(dist.read(this.SECTOR_SIZE), aesKey!, blockAddress+i, crc)
                             }
                         }
