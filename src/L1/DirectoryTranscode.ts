@@ -2,7 +2,6 @@
 
 import path from 'node:path'
 import url  from 'node:url'
-import fs   from 'node:fs/promises'
 import pb   from 'protobufjs'
 
 import type * as T from '@types'
@@ -23,24 +22,38 @@ export interface Directory {
 
 const dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
-export default class Structs {
+export default class DirectoryTranscode {
 
-    public static pb = pb.loadSync(path.join(dirname, '../../Structs.proto'))
-    public static proto = this.pb.lookupType('Structs.Directory')
+    public declare pb: pb.Root 
+    public declare proto: pb.Type
+
+    private constructor() {}
+
+    public static async instance(): T.XEavA<DirectoryTranscode, 'L1_DIR_INIT'> {
+        try {
+            const self = new this()
+            self.pb = await pb.load(path.join(dirname, '../../Structs.proto'))
+            self.proto = self.pb.lookupType('Structs.Directory')
+            return [null, self]
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_DIR_INIT', null, error as Error)
+        }
+    }
 
     /**
      * Encodes a directory object and returns a `UInt8Array` ready to be serialized and written to the disk.
      * @param dir Directory object
      * @returns [Error?, UInt8Array?]
      */
-    public static encodeDirectoryObject(dir: Directory): T.XEav<Uint8Array, "L1_ST_DIRECTORY_ENCODE"> {
+    public encodeDirectoryObject(dir: Directory): T.XEav<Uint8Array, "L1_DIR_ENCODE"> {
         try {
             const encoded = this.proto.encode(dir)
             const intArray = encoded.finish()
             return [null, intArray]
         }
         catch (error) {
-            return IBFSError.eav('L1_ST_DIRECTORY_ENCODE', null, error as Error)
+            return IBFSError.eav('L1_DIR_ENCODE', null, error as Error)
         }
     }
 
@@ -49,7 +62,7 @@ export default class Structs {
      * @param obj Directory data buffer
      * @returns [Error?, Directory?]
      */
-    public static decodeDirectoryObject(buf: Buffer): T.XEav<Directory, "L1_ST_DIRECTORY_DECODE"> {
+    public decodeDirectoryObject(buf: Buffer): T.XEav<Directory, "L1_DIR_DECODE"> {
         try {
 
             const decoded = this.proto.decode(buf)
@@ -63,7 +76,7 @@ export default class Structs {
             return [null, json]
         } 
         catch (error) {
-            return IBFSError.eav('L1_ST_DIRECTORY_DECODE', null, error as Error)
+            return IBFSError.eav('L1_DIR_DECODE', null, error as Error)
         }
     }
 
