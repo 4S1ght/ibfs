@@ -26,8 +26,6 @@ import Serialize, {
     StorageBlock
 } from "@L0/Serialize.js"
 
-import Structs from '../L1/Structs.js'
-
 // Types ==========================================================================================
 
 export interface VolumeCreateInit extends VolumeMetadata {
@@ -42,7 +40,7 @@ export interface VolumeCreateInit extends VolumeMetadata {
     /** AES encryption key used. */
     aesKey?: Buffer | string
     /** Progress update configuration. */
-    update?: {
+    update: {
         /** 
          * Specifies every how many bytes written to the disk to call an update callback. 
          * @default 5_000_000
@@ -50,15 +48,38 @@ export interface VolumeCreateInit extends VolumeMetadata {
         frequency?: number
         /** A callback called on each update as the volume is being created. */
         callback: (status: VolumeCreateStatus, written: number) => any
-    },
+    }
+}
+
+export interface EmptyVolumeInit extends VolumeMetadata {
+    /** The location of the virtual disk file. */
+    file: string
+    /** Size of individual sectors inside the virtual disk file. */
+    sectorSize: SectorSize
+    /** Number of usable data sectors inside the virtual disk file - includes volume metadata (128kiB) and root sector. */
+    sectorCount: number
+    /** AES cipher used. Leave empty for no encryption. */
+    aesCipher: keyof typeof AESCipher
+    /** AES encryption key used. */
+    aesKey?: Buffer | string
+    /** Progress update configuration. */
+    update: {
+        /** 
+         * Specifies every how many bytes written to the disk to call an update callback. 
+         * @default 5_000_000
+         */
+        frequency?: number
+        /** A callback called on each update as the volume is being created. */
+        onUpdate: (written: number) => any
+    }
 }
 
 interface VolumeMetadata {
     /** IBFS driver configuration. */
     driver?: {
         /** 
-         * Specifies the size of individual chunks the free sector address pool is split into. 
-         * These pools are loaded into memory individually, while the rest is stored on the disk 
+         * Specifies the size of individual chunks the free sector address pool is split into.
+         * These chunks are loaded into memory individually, while the rest is stored on the disk
          * next to the IBFS volume, similarly to SWAP memory. This helps preserve system memory
          * when large volumes are open.
          * @default 32768 // (8 bytes per address X 32768 = 256kiB memory used)
@@ -79,6 +100,7 @@ interface VolumeMetadata {
         memoryPoolUnloadThreshold?: number
     }
 }
+
 type VolumeCreateStatus = 
     | 'setup'
     | 'bootstrap'
@@ -101,9 +123,93 @@ export default class Volume {
      */
     private mLock = new m.Lock(10_000)
 
-    private constructor() {}
+    // Static =================================================================
+
+    /** 
+     * Returns the number of sectors required to accommodate the minimum of 
+     * 128kB of space for volume metadata.
+     */
+    public static getMetaSectorCount(blockSize: number) {
+        return Math.ceil(1024*128 / blockSize)
+    }
+
 
     // Factory ================================================================
+
+    private constructor() {}
+
+    /**
+     * Creates an empty volume in a specified location.
+     * @param init Initial volume information.
+     * @returns Error (if ocurred)
+     */
+    public static async createEmptyVolume(init: EmptyVolumeInit): T.EavSA<IBFSError> {
+
+        let file: fs.FileHandle
+        let ws: WriteStream
+
+        try {
+
+            // Setup ================================================
+
+            const updateFrequency = init.update.frequency || 5_000_000 // Bytes
+
+            // Ensure file EXT
+            if (path.extname(init.file) !== C.VD_FILE_EXT) init.file != C.VD_FILE_EXT
+
+            // Root sector ==========================================
+
+            // Meta block ===========================================
+
+            // Fill =================================================
+
+            file = await fs.open(init.file, 'w+', 0o600)
+            ws = file.createWriteStream({ highWaterMark: init.sectorSize * 192 })
+
+            const empty = Buffer.alloc(init.sectorSize)
+            let canWrite = true
+            let broken = false
+            let wsError: { i: number, error: Error }
+            let bw = 0
+
+            for (let i = 0; i < init.sectorCount; i++) {
+
+                if (broken) break
+
+                canWrite = ws.write(empty, error => {
+                    if (error && !broken) {
+                        broken = true
+                        wsError = { i, error }
+                        ws.close()
+                        file.close()
+                    }
+                })
+
+                if (!canWrite) await new Promise<void>(resume => ws.on('drain', () => {
+                    ws.removeAllListeners('drain')
+                    resume()
+                }))
+
+                if (ws.bytesWritten - bw >= updateFrequency) {
+                    init.update.onUpdate(ws.bytesWritten)
+                    bw = ws.bytesWritten
+                }
+
+            }
+
+            if (wsError!) {
+                return new IBFSError('L0_VCREATE_WS_ERROR', null, wsError.error, m.ssc({ ...init, failedAtSector: wsError.i }, ['aesKey', 'update']))
+            }
+
+        } 
+        catch (error) {
+            return new IBFSError('L0_VCREATE_CANT_CREATE', null, error as Error, m.ssc(init, ['aesKey', 'update']))
+        }
+        finally {
+            if (ws!) ws.close()
+            if (file!) await file.close()
+        }
+    }
 
     /**
      * Creates an empty volume in a specified location.
@@ -383,11 +489,6 @@ export default class Volume {
      * Overwrites the data in the metadata block.
      * If the metadata block os occupied (read from/written to) by 
      * a different part of the program an error will be returned.
-     * 
-     * **Important** - The size of usable `data` must be determined in advance and match the `blockSize`.  
-     * A mismatch will result in either an error or truncated data being written to the disk which may cause data loss.
-     * There must be enough user data to occupy all of the sectors in the block, but not overflow it. The last sector in 
-     * the does not have to be filled entirely and will be padded if needed.
      * @returns Error?
      */
     public async writeMetaBlock(meta: Object): 
@@ -463,7 +564,7 @@ export default class Volume {
      * **Important** - The size of usable `data` must be determined in advance and match the `blockSize`.  
      * A mismatch will result in either an error or truncated data being written to the disk which may cause data loss.
      * There must be enough user data to occupy all of the sectors in the block, but not overflow it. The last sector in 
-     * the does not have to be filled entirely and will be padded if needed.
+     * the block the does not have to be filled entirely and will be padded if needed.
      * @param meta Block metadata **and** user data.
      * @returns Error?
      */
@@ -517,8 +618,7 @@ export default class Volume {
      * **Important** - The size of usable `data` must be determined in advance and match the `blockSize`.  
      * A mismatch will result in either an error or truncated data being written to the disk which may cause data loss.
      * There must be enough user data to occupy all of the sectors in the block, but not overflow it. The last sector in 
-     * the does not have to be filled entirely and will be padded if needed.
-     * ```
+     * the block the does not have to be filled entirely and will be padded if needed.
      * @param meta Block metadata **and** user data.
      * @returns Error?
      */
@@ -573,8 +673,7 @@ export default class Volume {
      * **Important** - The size of usable `data` must be determined in advance and match the `blockSize`.  
      * A mismatch will result in either an error or truncated data being written to the disk which may cause data loss.
      * There must be enough user data to occupy all of the sectors in the block, but not overflow it. The last sector in 
-     * the does not have to be filled entirely and will be padded if needed.
-     * ```
+     * the block the does not have to be filled entirely and will be padded if needed.
      * @param meta Block metadata **and** user data.
      * @returns Error?
      */
