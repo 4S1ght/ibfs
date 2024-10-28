@@ -1,0 +1,9 @@
+package Structs;
+syntax = "proto3";
+
+message Directory {
+    // Directory-scoped user permissions { [userID]: 1|2|3 }
+    map<string, uint32> permissions = 1;
+    // Directory children
+    map<string, fixed64> children = 2;
+}

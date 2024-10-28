@@ -2,7 +2,8 @@ import type * as T from '@types'
 
 enum ErrorCodes {
     
-    // Level 0 errors
+    // Level 0 errors ==================================================================================================
+
     L0_VCREATE_CANT_CREATE       = 'Could not create the IBFS volume.',
     L0_VCREATE_WS_ERROR          = 'A WriteStream occurred while creating the IBFS volume.', 
     L0_VCREATE_DRIVER_MISCONFIG  = 'Missing, conflicting or wrong configuration.',
@@ -33,7 +34,7 @@ enum ErrorCodes {
     L0_IO_READ_DS                = 'Failed to deserialize data from the disk - Data was read but failed deserialization',
     L0_IO_READ_META              = 'Failed to read volume metadata.',
     L0_IO_READ_HEAD              = 'Could not read metadata sector of a head block.',
-    L0_IO_READ_HEAD_TRAIL        = 'Could not read trailing sectors of a head block.',
+    L0_IO_READ_HEAD_TAIL         = 'Could not read trailing sectors of a head block.',
     L0_IO_READ_LINK              = 'Could not read a link block from the disk.',
     L0_IO_READ_STORAGE           = 'Could not read a storage block from the disk.',
     L0_IO_WRITE                  = 'Failed to write data to the disk',
@@ -41,7 +42,12 @@ enum ErrorCodes {
     L0_IO_WRITE_META             = 'Could not write volume metadata.',
     L0_IO_WRITE_HEAD             = 'Failed to write a head block.',
     L0_IO_WRITE_LINK             = 'Failed to write a link block',
-    L0_IO_WRITE_STORAGE          = 'Failed to write a storage block.'
+    L0_IO_WRITE_STORAGE          = 'Failed to write a storage block.',
+
+    // Level 1 errors ==================================================================================================
+
+    L1_ST_DIRECTORY_DECODE       = 'Failed to decode a directory buffer.',
+    L1_ST_DIRECTORY_ENCODE       = 'Failed to encode a directory buffer.',
 
 }
 

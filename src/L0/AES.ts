@@ -166,7 +166,7 @@ export default class BlockAES {
      * @returns [Error | Key]
      */
     public static deriveAESKey(cipher: keyof typeof AESCipher, key: string | Buffer | undefined): 
-        T.Eav<Buffer, IBFSError<'L0_CRYPTO_KEY_REQUIRED'|'L0_CRYPTO_KEY_CANT_DIGEST'>> {
+        T.XEav<Buffer, 'L0_CRYPTO_KEY_REQUIRED'|'L0_CRYPTO_KEY_CANT_DIGEST'> {
         try {
             if (cipher && !key) throw new IBFSError(
                 'L0_CRYPTO_KEY_REQUIRED', 

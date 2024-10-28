@@ -15,7 +15,7 @@ describe('Root sector', () => {
         aesCipher: 128,
         aesKeyCheck: crypto.randomBytes(16),
         aesIV: crypto.randomBytes(16),
-        metadataSectors: 1024,
+        metadataSectors: 128,
         cryptoCompatMode: true
     }
 
@@ -48,7 +48,7 @@ describe('Meta block', () => {
     })
 
     // Arbitrary config
-    const original = { ibfs: { forceFlush: true } }
+    const original = { ibfs: { test: "hello world!" } }
 
     const [cError, buffer] = s.createMetaBlock(original)
     if (cError) throw cError
@@ -78,6 +78,7 @@ describe('Head block', () => {
         blockSize: 3,
         address: 10_000,
         aesKey: aesKey,
+        resourceType: 0
     }
 
     const [cError, headBlockRaw] = s.createHeadBlock(original)

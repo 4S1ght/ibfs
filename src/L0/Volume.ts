@@ -26,6 +26,8 @@ import Serialize, {
     StorageBlock
 } from "@L0/Serialize.js"
 
+import Structs from '../L1/Structs.js'
+
 // Types ==========================================================================================
 
 export interface VolumeCreateInit extends VolumeMetadata {
@@ -115,8 +117,8 @@ export default class Volume {
 
         try {
             
-            const update     = init.update ? init.update.callback : (() => {})
-            const updateFreq = init.update ? init.update.frequency || 5_000_000 : 5_000_000
+            const update          = init.update ? init.update.callback : (() => {})
+            const updateFrequency = init.update ? init.update.frequency || 5_000_000 : 5_000_000
 
             // Setup ================================================
             
@@ -141,7 +143,7 @@ export default class Volume {
             update('bootstrap', 0)
 
             // Deps
-            const metadataSectors = Math.ceil(1024*1024 / init.sectorSize)
+            const metadataSectors = Math.ceil(1024*128 / init.sectorSize)
             const rootDirHeadAddress = metadataSectors + 1
             const rootDirStoreAddress = metadataSectors + 2
 
@@ -200,7 +202,8 @@ export default class Volume {
                 nextSize: 0,
                 blockSize: 0,
                 address: rootDirHeadAddress,
-                aesKey
+                aesKey,
+                resourceType: 0
             })
             if (dirHeadError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, dirHeadError, m.ssc(init, ['aesKey']))
 
@@ -255,7 +258,7 @@ export default class Volume {
                 }))
 
                 // Report amount of bytes written.
-                if (ws.bytesWritten - bw >= updateFreq) {
+                if (ws.bytesWritten - bw >= updateFrequency) {
                     update('write', ws.bytesWritten)
                     bw = ws.bytesWritten
                 }
@@ -301,7 +304,7 @@ export default class Volume {
             if (rs.cryptoCompatMode === false) return IBFSError.eav('L0_VOPEN_MODE_INCOMPATIBLE', null, null, { image })
 
             // Expected size     Root sector     Metadata block                                     User data
-            const expectedSize = rs.sectorSize + rs.sectorSize*Math.ceil(1024*1024/rs.sectorSize) + rs.sectorSize*rs.sectorCount
+            const expectedSize = rs.sectorSize + rs.sectorSize*Math.ceil(1024*128/rs.sectorSize) + rs.sectorSize*rs.sectorCount
             const { size } = await self.handle.stat()
 
             if (size !== expectedSize) return IBFSError.eav('L0_VOPEN_SIZE_MISMATCH', null, null, { size, expectedSize, diff: Math.abs(size - expectedSize) })
@@ -418,7 +421,7 @@ export default class Volume {
      * @returns [Error?, Data?]
      */
     public async readHeadBlock(address: number, aesKey?: Buffer):
-        T.XEavA<HeadBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_HEAD'|'L0_IO_READ_DS'|'L0_IO_READ_HEAD_TRAIL'|'L0_CRCSUM_MISMATCH'> {
+        T.XEavA<HeadBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_HEAD'|'L0_IO_READ_DS'|'L0_IO_READ_HEAD_TAIL'|'L0_CRCSUM_MISMATCH'> {
         try {
             
             const headPosition = this.bs.resolveAddr(address)
@@ -436,12 +439,12 @@ export default class Volume {
                 return [null, head.meta as Meta]
             }
 
-            // Continue if found to have trailing sectors.
-            const trailPosition = this.bs.resolveAddr(address+1)
-            const [trailError, trailSectors] = await this.read(trailPosition, this.bs.SECTOR_SIZE * head.meta.blockSize)
-            if (trailError) return IBFSError.eav('L0_IO_READ_HEAD_TRAIL', null, trailError, { address })
+            // Continue if found to have tailing sectors.
+            const tailPosition = this.bs.resolveAddr(address+1)
+            const [tailError, tailSectors] = await this.read(tailPosition, this.bs.SECTOR_SIZE * head.meta.blockSize)
+            if (tailError) return IBFSError.eav('L0_IO_READ_HEAD_TAIL', null, tailError, { address })
             
-            const finalError = head.final(trailSectors)
+            const finalError = head.final(tailSectors)
             if (finalError) return IBFSError.eav('L0_IO_READ_DS', 'Could not finalize deserialization of the head block.', finalError, { address })
 
             if ((head.meta as Meta).crcMismatch) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address })
