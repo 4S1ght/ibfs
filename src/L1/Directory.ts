@@ -26,7 +26,7 @@ const dirname = url.fileURLToPath(new URL('.', import.meta.url))
 export default class Structs {
 
     public static pb = pb.loadSync(path.join(dirname, '../../Structs.proto'))
-    public static Directory = this.pb.lookupType('Structs.Directory')
+    public static proto = this.pb.lookupType('Structs.Directory')
 
     /**
      * Encodes a directory object and returns a `UInt8Array` ready to be serialized and written to the disk.
@@ -35,7 +35,7 @@ export default class Structs {
      */
     public static encodeDirectoryObject(dir: Directory): T.XEav<Uint8Array, "L1_ST_DIRECTORY_ENCODE"> {
         try {
-            const encoded = this.Directory.encode(dir)
+            const encoded = this.proto.encode(dir)
             const intArray = encoded.finish()
             return [null, intArray]
         }
@@ -52,7 +52,7 @@ export default class Structs {
     public static decodeDirectoryObject(buf: Buffer): T.XEav<Directory, "L1_ST_DIRECTORY_DECODE"> {
         try {
 
-            const decoded = this.Directory.decode(buf)
+            const decoded = this.proto.decode(buf)
             const json = decoded.toJSON() as Directory
 
             json.children = Object.fromEntries(
@@ -68,18 +68,3 @@ export default class Structs {
     }
 
 }
-
-const x = Structs.encodeDirectoryObject({
-    permissions: {
-        'some-user-id': 1
-    },
-    children: {
-        'recept.txt': 123,
-        'test': 338109
-    }
-})
-
-const y = Structs.decodeDirectoryObject(x[1])
-
-console.log(x)
-console.log(y)
