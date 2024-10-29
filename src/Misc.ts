@@ -10,6 +10,16 @@ export function ssc<Obj extends Record<any, any>, Except extends keyof Obj>
         return copy
 }
 
+export function deep<Value, Default>(evaluator: () => Value, def: Default) {
+    try {
+        const value = evaluator()
+        return value || def
+    } 
+    catch {
+        return def
+    }
+}
+
 /**
  * Creates a simple lock with automatic unlock timeout.
  */

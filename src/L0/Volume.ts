@@ -84,20 +84,20 @@ interface VolumeMetadata {
          * when large volumes are open.
          * @default 32768 // (8 bytes per address X 32768 = 256kiB memory used)
          */
-        memoryPoolSwapSize?: number
+        addressStackPageSize?: number
         /** 
          * Specifies the number of addresses left from draining or filling a pool chunk that must 
          * be reached before another pool chunk is preloaded into memory.
          * @default 1024
          */
-        memoryPoolPreloadThreshold?: number
+        addressStackPagePreloadThreshold?: number
         /** 
          * Specifies the number of addresses left from draining or filling a pool chunk that must 
          * be reached before a standby preloaded chunk is unloaded.
          * This value **must** be higher than that of `memoryPoolPreloadThreshold`.
          * @default 2048
          */
-        memoryPoolUnloadThreshold?: number
+        addressStackPageUnloadThreshold?: number
     }
 }
 
@@ -159,7 +159,60 @@ export default class Volume {
 
             // Root sector ==========================================
 
+            const aesIV = crypto.randomBytes(16)
+            const [aesKeyError, aesKey] = AES.deriveAESKey(init.aesCipher, init.aesKey)
+            if (aesKeyError) return aesKeyError
+
+            // deps setup
+            const serialize = new Serialize({ 
+                diskSectorSize: init.sectorSize,
+                cipher: init.aesCipher,
+                iv: aesIV
+            })
+
+            // Deps
+            const metaSectors = this.getMetaSectorCount(init.sectorSize)
+
+            // Creates the key check buffer used later to verify the correctness of
+            // user supplied decryption key.
+            const aesKeyCheck = (() => {
+                if (!init.aesCipher) return Buffer.alloc(16)
+                return serialize.AES.encrypt(Buffer.alloc(16), aesKey, 0)
+            })()
+
+            // Root sector
+            const [rootError, rootSector] = Serialize.createRootSector({
+                specMajor:              C.FS_SPEC[0],
+                specMinor:              C.FS_SPEC[1],
+                sectorSize:             init.sectorSize,
+                sectorCount:            init.sectorCount,
+                metadataSectors:        metaSectors,
+                aesCipher:              AESCipher[init.aesCipher || ''],
+                aesIV:                  aesIV,
+                cryptoCompatMode:       true,
+                aesKeyCheck:            aesKeyCheck,
+                rootDirectory:          metaSectors + 1
+            })           
+            if (rootError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, rootError, m.ssc(init, ['aesKey']))
+
+
             // Meta block ===========================================
+
+            const metadata = {
+                memoryPoolSwapSize:               m.deep(() => init.driver?.addressStackPageSize, 32768),
+                addressStackPagePreloadThreshold: m.deep(() => init.driver?.addressStackPagePreloadThreshold, 1024),
+                addressStackPageUnloadThreshold:  m.deep(() => init.driver?.addressStackPageUnloadThreshold, 2048)
+            }
+
+            if (metadata.addressStackPagePreloadThreshold >= metadata.addressStackPageUnloadThreshold)
+                return new IBFSError(
+                    'L0_VCREATE_DRIVER_MISCONFIG', 
+                    `Memory pool preload threshold must greater than the unload threshold.`, 
+                    null, m.ssc(init, ['aesKey'])
+                )
+
+            const [metaError, metaBlock] = serialize.createMetaBlock({ ibfs: metadata })
+            if (metaError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, metaError, m.ssc(init, ['aesKey']))
 
             // Fill =================================================
 
@@ -170,9 +223,13 @@ export default class Volume {
             let canWrite = true
             let broken = false
             let wsError: { i: number, error: Error }
-            let bw = 0
 
-            for (let i = 0; i < init.sectorCount; i++) {
+            let { bytesWritten: bw } = await file.write(Buffer.concat([
+                rootSector,
+                metaBlock
+            ]))
+
+            for (let i = metaSectors+1; i < init.sectorCount; i++) {
 
                 if (broken) break
 
@@ -215,6 +272,7 @@ export default class Volume {
      * Creates an empty volume in a specified location.
      * @param init Initial volume information.
      * @returns Error (if ocurred)
+     * @deprecated use `createEmptyVolume`
      */
     public static async create(init: VolumeCreateInit): T.EavSA<IBFSError> {
 
@@ -278,9 +336,9 @@ export default class Volume {
             // Metadata block =======================================
 
             const metadata = {
-                memoryPoolSwapSize:         init.driver ? (init.driver.memoryPoolSwapSize         || 32768) : 32768,
-                memoryPoolPreloadThreshold: init.driver ? (init.driver.memoryPoolPreloadThreshold || 1024)  : 1024,
-                memoryPoolUnloadThreshold:  init.driver ? (init.driver.memoryPoolUnloadThreshold  || 2048)  : 2048
+                memoryPoolSwapSize:         init.driver ? (init.driver.addressStackPageSize              || 32768) : 32768,
+                memoryPoolPreloadThreshold: init.driver ? (init.driver.addressStackPagePreloadThreshold  || 1024)  : 1024,
+                memoryPoolUnloadThreshold:  init.driver ? (init.driver.addressStackPagePreloadThreshold  || 2048)  : 2048
             }
 
             if (metadata.memoryPoolPreloadThreshold >= metadata.memoryPoolUnloadThreshold)
