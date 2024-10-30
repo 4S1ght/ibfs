@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import DirectoryTranscode, { Directory } from '@L1/DirectoryTranscode.js'
+import DirectoryTranscode, { Directory } from '@L1/DirectorySerialize.js'
 
 describe('Directory encode/decode', async () => {
 
@@ -18,17 +18,17 @@ describe('Directory encode/decode', async () => {
         }
     }
 
-    let encoded: any
+    let serialized: any
 
-    test('encode', () => {
-        const [err, buf] = transcoder.encodeDirectoryObject(testObject)
+    test('serialize', () => {
+        const [err, buf] = transcoder.serializeDirectoryObject(testObject)
         expect(err).toBe(null)
         expect(buf).toBeInstanceOf(Uint8Array)
-        encoded = buf
+        serialized = buf
     })
 
-    test('decode', () => {
-        const [err, obj] = transcoder.decodeDirectoryObject(encoded)
+    test('deserialize', () => {
+        const [err, obj] = transcoder.deserializeDirectoryObject(serialized)
         expect(err).toBe(null)
         expect(obj).toStrictEqual(testObject)
     })

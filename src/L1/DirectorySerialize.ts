@@ -46,7 +46,7 @@ export default class DirectoryTranscode {
      * @param dir Directory object
      * @returns [Error?, UInt8Array?]
      */
-    public encodeDirectoryObject(dir: Directory): T.XEav<Uint8Array, "L1_DIR_ENCODE"> {
+    public serializeDirectoryObject(dir: Directory): T.XEav<Uint8Array, "L1_DIR_ENCODE"> {
         try {
             const encoded = this.proto.encode(dir)
             const intArray = encoded.finish()
@@ -62,7 +62,7 @@ export default class DirectoryTranscode {
      * @param obj Directory data buffer
      * @returns [Error?, Directory?]
      */
-    public decodeDirectoryObject(buf: Buffer): T.XEav<Directory, "L1_DIR_DECODE"> {
+    public deserializeDirectoryObject(buf: Buffer): T.XEav<Directory, "L1_DIR_DECODE"> {
         try {
 
             const decoded = this.proto.decode(buf)
