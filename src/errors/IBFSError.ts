@@ -46,10 +46,12 @@ enum ErrorCodes {
 
     // Level 1 errors ==================================================================================================
 
-    L1_DIR_INIT         = 'Could not initialize directory transcoder.',
+    L1_FSCREATE_CANT_CREATE      = 'Failed to create a filesystem',
 
-    L1_DIR_DECODE       = 'Failed to decode a directory buffer.',
-    L1_DIR_ENCODE       = 'Failed to encode a directory buffer.',
+    L1_DIR_INIT                  = 'Could not initialize directory transcoder.',
+
+    L1_DIR_DECODE                = 'Failed to decode a directory buffer.',
+    L1_DIR_ENCODE                = 'Failed to encode a directory buffer.',
 
 }
 

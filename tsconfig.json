@@ -1,7 +1,8 @@
 {
     "include": [
         "./src/*",
-        "./src/L0/*"
+        "./src/L0/*",
+        "./src/L1/*",
     ],
     "compilerOptions": {
 
@@ -36,6 +37,7 @@
         "baseUrl": "./",
         "paths": {
             "@L0/*": ["./src/L0/*"],
+            "@L1/*": ["./src/L1/*"],
             "@errors": ["./src/errors/IBFSError.ts"],
             "@misc": ["./src/Misc.ts"],
             "@constants": ["./src/Constants.ts"],
