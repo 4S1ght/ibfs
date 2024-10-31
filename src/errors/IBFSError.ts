@@ -55,6 +55,8 @@ enum ErrorCodes {
     L1_DIR_DECODE                = 'Failed to decode a directory buffer.',
     L1_DIR_ENCODE                = 'Failed to encode a directory buffer.',
 
+    L1_AS_CANT_INITIALIZE        = 'Failed to initialize the address stack required for managing sector allocation.',
+
 }
 
 export type IBFSErrorCode = keyof typeof ErrorCodes

@@ -31,20 +31,19 @@ export default class Filesystem {
             const volumeCreateError = await Volume.createEmptyVolume(init)
             const [openError, volume] = await Volume.open(init.file)
 
-            if (volumeCreateError || openError) 
-                return new IBFSError('L1_FSCREATE_CANT_CREATE', null, openError || openError)
+            if (volumeCreateError) return new IBFSError('L1_FSCREATE_CANT_CREATE', null, volumeCreateError)
+            if (openError)         return new IBFSError('L1_FSCREATE_CANT_CREATE', null, openError)
         
             // Override root sector ---------------------------------------------------------------
 
             // - Read & update root sector data
             const rs                = volume.rs
-            const metaSize          = rs.metadataSectors * rs.sectorSize
             const rootDirHeadAddr   = 1 + rs.metadataSectors     // root + meta
             const rootDirStoreAddr  = 1 + rs.metadataSectors + 1 // root + meta + root directory head
             
             rs.rootDirectory = rootDirHeadAddr 
 
-            const rsError = await volume.overrideRootSector(rs)
+            const rsError = await volume.overwriteRootSector(rs)
             if (rsError) return new IBFSError('L1_FSCREATE_CANT_CREATE', null, rsError)
 
             // Create root directory --------------------------------------------------------------
@@ -57,8 +56,8 @@ export default class Filesystem {
                 children: {}
             })
 
-            if (dsrError || dirError) 
-                return new IBFSError('L1_FSCREATE_CANT_CREATE', null, dsrError || dirError)
+            if (dsrError) return new IBFSError('L1_FSCREATE_CANT_CREATE', null, dsrError)
+            if (dirError) return new IBFSError('L1_FSCREATE_CANT_CREATE', null, dirError)
 
 
             const storeError = await volume.writeStoreBlock({
@@ -67,23 +66,24 @@ export default class Filesystem {
                 address: rootDirStoreAddr
             })
 
-            const headTable = Memory.alloc(9)
-            headTable.writeInt64(rootDirStoreAddr)
-            headTable.writeInt8(0)
             const headError = await volume.writeHeadBlock({
                 created: Math.floor(Date.now()/1000),
                 modified: Math.floor(Date.now()/1000),
                 next: 0,
                 nextSize: 0,
-                data: headTable.buffer,
                 blockSize: 0,
                 resourceType: 0,
-                address: rootDirHeadAddr
+                address: rootDirHeadAddr,
+                data: (() => {
+                    const headTable = Memory.alloc(9)
+                    headTable.writeInt64(rootDirStoreAddr)
+                    headTable.writeInt8(0)
+                    return headTable.buffer
+                })()
             })
 
             if (storeError) return new IBFSError('L1_FSCREATE_CANT_CREATE', null, storeError)
             if (headError)  return new IBFSError('L1_FSCREATE_CANT_CREATE', null, headError)
-
 
         } 
         catch (error) {

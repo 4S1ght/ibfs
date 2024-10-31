@@ -3,6 +3,7 @@
         "./src/*",
         "./src/L0/*",
         "./src/L1/*",
+        "./src/L1/AddressStack/*",
     ],
     "compilerOptions": {
 

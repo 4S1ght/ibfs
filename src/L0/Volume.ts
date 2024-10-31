@@ -310,7 +310,17 @@ export default class Volume {
 
     // I/O ====================================================================
     
-    public async overrideRootSector(root: RootSector): T.XEavSA<'L0_ROOT_CANT_OVERWRITE'|'L0_BS_ROOT_SR'> {
+    /**
+     * Overwrites the root sector of the filesystem.
+     * 
+     * **DO NOT USE THIS**  
+     * This method if only for use internally within the driver.  
+     * Any errors or misconfiguration will likely cause data corruption that is
+     * especially hard to recover from when using full volume encryption.
+     * @param root Root sector data
+     * @returns Error?
+     */
+    public async overwriteRootSector(root: RootSector): T.XEavSA<'L0_ROOT_CANT_OVERWRITE'|'L0_BS_ROOT_SR'> {
         try {
 
             const [rsError, rs] = Serialize.createRootSector(root)
