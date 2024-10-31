@@ -4,6 +4,8 @@ enum ErrorCodes {
     
     // Level 0 errors ==================================================================================================
 
+    L0_ROOT_CANT_OVERWRITE       = 'Could not overwrite the root sector.',
+
     L0_VCREATE_CANT_CREATE       = 'Could not create the IBFS volume.',
     L0_VCREATE_WS_ERROR          = 'A WriteStream occurred while creating the IBFS volume.', 
     L0_VCREATE_DRIVER_MISCONFIG  = 'Missing, conflicting or wrong configuration.',

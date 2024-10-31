@@ -22,14 +22,14 @@ export interface Directory {
 
 const dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
-export default class DirectoryTranscode {
+export default class DirectorySR {
 
     public declare pb: pb.Root 
     public declare proto: pb.Type
 
     private constructor() {}
 
-    public static async instance(): T.XEavA<DirectoryTranscode, 'L1_DIR_INIT'> {
+    public static async instance(): T.XEavA<DirectorySR, 'L1_DIR_INIT'> {
         try {
             const self = new this()
             self.pb = await pb.load(path.join(dirname, '../../Structs.proto'))
@@ -46,11 +46,11 @@ export default class DirectoryTranscode {
      * @param dir Directory object
      * @returns [Error?, UInt8Array?]
      */
-    public serializeDirectoryObject(dir: Directory): T.XEav<Uint8Array, "L1_DIR_ENCODE"> {
+    public serializeDirectoryObject(dir: Directory): T.XEav<Buffer, "L1_DIR_ENCODE"> {
         try {
             const encoded = this.proto.encode(dir)
             const intArray = encoded.finish()
-            return [null, intArray]
+            return [null, Buffer.from(intArray)]
         }
         catch (error) {
             return IBFSError.eav('L1_DIR_ENCODE', null, error as Error)

@@ -168,7 +168,7 @@ export default class Volume {
                 aesIV:                  aesIV,
                 cryptoCompatMode:       true,
                 aesKeyCheck:            aesKeyCheck,
-                rootDirectory:          metaSectors + 1
+                rootDirectory:          0
             })           
             if (rootError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, rootError, m.ssc(init, ['aesKey']))
 
@@ -310,6 +310,23 @@ export default class Volume {
 
     // I/O ====================================================================
     
+    public async overrideRootSector(root: RootSector): T.XEavSA<'L0_ROOT_CANT_OVERWRITE'|'L0_BS_ROOT_SR'> {
+        try {
+
+            const [rsError, rs] = Serialize.createRootSector(root)
+            if (rsError) return new IBFSError('L0_BS_ROOT_SR', null, rsError)
+
+            const writeError = await this.write(0, rs)
+            if (writeError) return new IBFSError('L0_ROOT_CANT_OVERWRITE', null, writeError)
+
+            this.rs = root
+
+        }
+        catch (error) {
+            return new IBFSError('L0_ROOT_CANT_OVERWRITE', null, error as Error)
+        }
+    }
+
     /**
      * Reads the metadata block and returns its data.  
      * If the metadata block os occupied (read from/written to) by 
