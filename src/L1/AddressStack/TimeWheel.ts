@@ -1,3 +1,5 @@
+import { EventEmitter } from "node:events"
+
 interface TWEvent {
     expiration: number,
     callback: () => any
@@ -8,10 +10,13 @@ interface TWEvent {
  * 
  * **Note**  
  * This class is here specifically to avoid creating thousands of timeouts
- * as batches of sector addresses are lended to the driver, as it would
+ * as batches of sector addresses are lent out to the driver, as it would
  * quickly clog up the event loop.
  */
-export default class TimeWheel {
+export default interface TimeWheel {
+    on(eventName: 'idle', listener: () => any): this
+}
+export default class TimeWheel extends EventEmitter {
 
     private bucketCount: number
     private currentBucket: number
@@ -19,10 +24,15 @@ export default class TimeWheel {
     private buckets: Array<TWEvent[]>
     private declare timer: NodeJS.Timeout
 
-    constructor(bucketCount = 10, interval = 500) {
+    private idleThreshold: number
+    private currentIdleTick = 0
+
+    constructor(bucketCount = 10, interval = 500, idleAfter = 5) {
+        super()
         this.bucketCount = bucketCount
         this.currentBucket = 0
         this.interval = interval
+        this.idleThreshold = bucketCount * idleAfter
         this.buckets = Array.from({ length: bucketCount }, () => [])
         this.start()
     }
@@ -57,10 +67,14 @@ export default class TimeWheel {
         const stash: TWEvent[] = []
         const bucket = this.buckets[this.currentBucket]!
 
+        bucket.length === 0 ? this.currentIdleTick++ : this.currentIdleTick = 0
+        if (this.currentIdleTick === this.idleThreshold) this.emit('idle')
+
         while (bucket.length > 0) {
             const item = bucket.pop()!
             if (item.expiration < Date.now()) {
-                item.callback()
+                try { item.callback() } 
+                catch (error) { console.error(error) }
             }
             else {
                 stash.push(item)
@@ -68,7 +82,7 @@ export default class TimeWheel {
         }
 
         this.buckets[this.currentBucket] = stash
-        this.currentBucket = (this.currentBucket + 1) % this.bucketCount;
+        this.currentBucket = (this.currentBucket + 1) % this.bucketCount
 
     }
 
