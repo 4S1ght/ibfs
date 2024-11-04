@@ -36,6 +36,6 @@ export type Values<T> = T[keyof T]
 export type Optional<O, K extends keyof O> = Omit<O, K> & Partial<Pick<O, K>>
 
 /**
- * Excludes the constructor first parameter.
+ * Excludes the first constructor parameter.
  */
 export type OmitFirst<T extends any[]> = T extends [any, ...infer Rest] ? Rest : never

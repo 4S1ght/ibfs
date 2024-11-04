@@ -2,7 +2,7 @@ import type * as T from '@types'
 
 enum ErrorCodes {
     
-    // Level 0 errors ==================================================================================================
+    // Level 0 (physical) errors =======================================================================================
 
     L0_ROOT_CANT_OVERWRITE       = 'Could not overwrite the root sector.',
 
@@ -46,7 +46,7 @@ enum ErrorCodes {
     L0_IO_WRITE_LINK             = 'Failed to write a link block',
     L0_IO_WRITE_STORAGE          = 'Failed to write a storage block.',
 
-    // Level 1 errors ==================================================================================================
+    // Level 1 (filesystem) errors =====================================================================================
 
     L1_FSCREATE_CANT_CREATE      = 'Failed to create a filesystem',
 
@@ -56,6 +56,8 @@ enum ErrorCodes {
     L1_DIR_ENCODE                = 'Failed to encode a directory buffer.',
 
     L1_AS_CANT_INITIALIZE        = 'Failed to initialize the address stack required for managing sector allocation.',
+    L1_AS_CANT_LOAD_CHUNK        = 'Failed to load an address stack chunk from the disk.',
+    L1_AS_CANT_UNLOAD_CHUNK      = 'Failed to unload an address stack chunk to the disk.',
 
 }
 
