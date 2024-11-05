@@ -2,21 +2,36 @@
 
 import type * as T from '@types'
 
-import fs   from 'node:fs/promises'
-import path from 'node:path'
+import fs                      from 'node:fs/promises'
+import path                    from 'node:path'
 
-import AddressStackChunk from "@L1/AddressStack/AddressStackChunk.js"
-import IBFSError from '@errors'
+import AddressStackChunk       from "@L1/AddressStack/AddressStackChunk.js"
+import TimeWheel               from '@L1/AddressStack/TimeWheel.js'
+import IBFSError               from '@errors'
 import { ADDR_STACK_FILE_EXT } from '@constants'
 
-// Types =====================s=====================================================================
+// Types ==========================================================================================
 
 export interface ASInit {
+    /** The total number of user-space sector addresses. */
     poolSize: number
+    /** Number of addresses held in each stack chunk. */
     chunkSize: number
+    /** The number of addresses left in the current chunk which when reached trigger preloading of the next chunk. */
     chunkPreloadThreshold: number
+    /** The number of addresses left from filling the current chunk that when reached triggers the unload of the previous chunk. */
     chunkUnloadThreshold: number
+    /** Directory where stack chunks are offloaded to. */
     location: string
+    /** Internal time wheel configuration. */
+    timeWheel: {
+        /** Number of buckets where events are sorted to. */
+        bucketCount: number
+        /** The duration of each tick inside the time wheel. */
+        tickDuration: number
+        /** The number of idle ticks before the time wheel enters idle state. */
+        idleAfterTicks: number
+    }
 }
 
 // Module =========================================================================================
@@ -34,7 +49,9 @@ export default class AddressStack {
     private declare chunkUnloadThreshold: number
     private declare location: string
 
+    private declare tw: TimeWheel
     private chunks: AddressStackChunk[] = []
+    private currentChunk = 0
 
     private constructor() {}
 
@@ -63,8 +80,16 @@ export default class AddressStack {
             for (let i = 0; i < chunkCount; i++) {
                 const name = path.join(self.location, i.toString(16).padStart(6, '0') + ADDR_STACK_FILE_EXT)
                 const chunk = new AddressStackChunk(name, self.chunkSize)
-                self.chunks.push(chunk)   
+                self.chunks.push(chunk)
             }
+
+            // Time wheel -------------------------------------------
+
+            self.tw = new TimeWheel(
+                init.timeWheel.bucketCount,
+                init.timeWheel.tickDuration,
+                init.timeWheel.idleAfterTicks
+            )
 
             return [null, self]
         
@@ -78,7 +103,21 @@ export default class AddressStack {
      * Lends the driver
      * @param batchSize Max size of a continuous batch/block of addresses.
      */
-    public alloc(addresses: number) {
+    public async alloc(addresses: number) {
+        try {
+
+            
+            
+        } 
+        catch (error) {
+            
+        }
+    }
+
+    /**
+     * Frees an address and returns it back to the stack.
+     */
+    public free(addresses: number[]) {
 
     }
 
@@ -90,21 +129,4 @@ export default class AddressStack {
 
     }
 
-    /**
-     * Frees an address and returns it back to the stack.
-     */
-    public free(addresses: number[]) {
-
-    }
-
 }
-
-const x = await AddressStack.instance({
-    poolSize: 1_000_000,
-    chunkSize: 32_000,
-    chunkPreloadThreshold: 1000,
-    chunkUnloadThreshold: 1000,
-    location: '/Users/shape/Desktop/Projects/ibfs/tests'
-})
-
-console.log(x[1])

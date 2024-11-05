@@ -28,7 +28,7 @@ export default class TimeWheel extends EventEmitter {
     private idleThreshold: number
     private currentIdleTick = 0
 
-    constructor(bucketCount = 10, interval = 500, idleAfter = 5) {
+    constructor(bucketCount = 10, interval = 100, idleAfter = 30) {
         super()
         this.bucketCount = bucketCount
         this.currentBucket = 0
@@ -75,7 +75,7 @@ export default class TimeWheel extends EventEmitter {
             const item = bucket.pop()!
             if (item.expiration < Date.now()) {
                 try { item.callback() } 
-                catch (error) { console.error(error) }
+                catch (error) { console.error('Internal IBFS TimeWheel error:', error) }
             }
             else {
                 stash.push(item)
