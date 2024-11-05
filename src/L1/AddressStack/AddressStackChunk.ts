@@ -2,11 +2,10 @@
 
 import fs   from 'node:fs/promises'
 import path from 'node:path'
-import url  from 'node:url'
 
-import { ADDR_STACK_FILE_EXT } from '@constants'
 import type * as T from '@types'
-import IBFSError from '@errors'
+import IBFSError   from '@errors'
+import Memory      from '@L0/Memory.js'
 
 // Module =========================================================================================
 
@@ -14,12 +13,15 @@ export default class AddressStackChunk {
 
     public loaded: boolean = true
     public addresses: number[] = []
-    public location: string
     public size: number
+
+    public location: string
+    public name: string
     
     constructor(location: string, size: number) {
-        this.location = location
         this.size = size
+        this.location = location
+        this.name = path.basename(location)
     }
 
     public sort() {
@@ -28,9 +30,8 @@ export default class AddressStackChunk {
 
     public async load(): T.XEavSA<'L1_AS_CANT_LOAD_CHUNK'> {
         try {
-            const fileData = await fs.readFile(this.location)
-            this.addresses = new Array(this.size)
-                .map((_, i) => Number(fileData.readBigInt64LE(i*8)))
+            const fileData = Memory.intake(await fs.readFile(this.location))
+            this.addresses = new Array(this.size).map(() => fileData.readInt64())
         } 
         catch (error) {
             return new IBFSError('L1_AS_CANT_LOAD_CHUNK', null, error as Error, this)
@@ -46,6 +47,5 @@ export default class AddressStackChunk {
             return new IBFSError('L1_AS_CANT_UNLOAD_CHUNK', null, error as Error, this)
         }
     }
-
 
 }

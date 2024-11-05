@@ -55,8 +55,6 @@ export default class Filesystem {
                 permissions: {},
                 children: {}
             })
-
-            if (dsrError) return new IBFSError('L1_FSCREATE_CANT_CREATE', null, dsrError)
             if (dirError) return new IBFSError('L1_FSCREATE_CANT_CREATE', null, dirError)
 
 

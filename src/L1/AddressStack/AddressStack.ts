@@ -2,7 +2,22 @@
 
 import type * as T from '@types'
 
+import fs   from 'node:fs/promises'
+import path from 'node:path'
+
 import AddressStackChunk from "@L1/AddressStack/AddressStackChunk.js"
+import IBFSError from '@errors'
+import { ADDR_STACK_FILE_EXT } from '@constants'
+
+// Types =====================s=====================================================================
+
+export interface ASInit {
+    poolSize: number
+    chunkSize: number
+    chunkPreloadThreshold: number
+    chunkUnloadThreshold: number
+    location: string
+}
 
 // Module =========================================================================================
 
@@ -13,22 +28,57 @@ import AddressStackChunk from "@L1/AddressStack/AddressStackChunk.js"
  */
 export default class AddressStack {
 
+    private declare poolSize: number
+    private declare chunkSize: number
+    private declare chunkPreloadThreshold: number
+    private declare chunkUnloadThreshold: number
+    private declare location: string
+
+    private chunks: AddressStackChunk[] = []
+
     private constructor() {}
 
-    public static instance(): T.XEavA<AddressStack, 'L1_AS_CANT_INITIALIZE'> {
+    public static async instance(init: ASInit): T.XEavA<AddressStack, 'L1_AS_CANT_INITIALIZE'> {
         try {
+
+            const self = new this()
+            self.poolSize = init.poolSize
+            self.chunkSize = init.chunkSize
+            self.chunkPreloadThreshold = init.chunkPreloadThreshold
+            self.chunkUnloadThreshold = init.chunkUnloadThreshold
+            self.location = init.location
+
+            // Prepare directory ------------------------------------
+
+            // Make
+            await fs.mkdir(self.location, { recursive: true })
+
+            // Clear
+            const chunksDir = (await fs.readdir(self.location)).filter(file => path.extname(file) === ADDR_STACK_FILE_EXT)
+            for (let i = 0; i < chunksDir.length; i++) await fs.rm(path.join(self.location, chunksDir[i]!))
             
+            // Prepare chunks ---------------------------------------
+
+            const chunkCount = Math.ceil(self.poolSize / self.chunkSize)
+            for (let i = 0; i < chunkCount; i++) {
+                const name = path.join(self.location, i.toString(16).padStart(6, '0') + ADDR_STACK_FILE_EXT)
+                const chunk = new AddressStackChunk(name, self.chunkSize)
+                self.chunks.push(chunk)   
+            }
+
+            return [null, self]
+        
         } 
         catch (error) {
-            
+            return IBFSError.eav('L1_AS_CANT_INITIALIZE', null, error as Error)
         }
     }
 
     /**
      * Lends the driver
-     * @param maxBatchSize Max size of a continuous batch/block of addresses.
+     * @param batchSize Max size of a continuous batch/block of addresses.
      */
-    public lend(maxBatchSize: number) {
+    public alloc(addresses: number) {
 
     }
 
@@ -40,8 +90,21 @@ export default class AddressStack {
 
     }
 
+    /**
+     * Frees an address and returns it back to the stack.
+     */
     public free(addresses: number[]) {
 
     }
 
 }
+
+const x = await AddressStack.instance({
+    poolSize: 1_000_000,
+    chunkSize: 32_000,
+    chunkPreloadThreshold: 1000,
+    chunkUnloadThreshold: 1000,
+    location: '/Users/shape/Desktop/Projects/ibfs/tests'
+})
+
+console.log(x[1])

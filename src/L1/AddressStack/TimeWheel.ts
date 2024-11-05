@@ -14,6 +14,7 @@ interface TWEvent {
  * quickly clog up the event loop.
  */
 export default interface TimeWheel {
+    /** Notifies subscribers when the time wheel enters idle state. */
     on(eventName: 'idle', listener: () => any): this
 }
 export default class TimeWheel extends EventEmitter {
