@@ -25,9 +25,9 @@ describe('Create/open volume', async () => {
         aesCipher: useEncryption ? aesCipher : "",
         aesKey: aesKey,
         driver: {
-            addressStackPageSize: 1024,
-            addressStackPagePreloadThreshold: 1024,
-            addressStackPageUnloadThreshold: 1025,
+            addressStackChunkSize: 1024,
+            chunkPreloadMark: 1024,
+            chunkUnloadMark: 2048,
         },
         update: {
             onUpdate() {}

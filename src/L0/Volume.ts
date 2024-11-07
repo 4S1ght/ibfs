@@ -55,26 +55,26 @@ interface VolumeMetadata {
     /** IBFS driver configuration. */
     driver?: {
         /** 
-         * Specifies the size of individual chunks the free sector address pool is split into.
-         * These chunks are loaded into memory individually, while the rest is stored on the disk
-         * next to the IBFS volume, similarly to SWAP memory. This helps preserve system memory
+         * Specifies the size of individual chunks the pool of free sector addresses is split into.
+         * These chunks are loaded into memory individually while the rest is stored on the disk
+         * next to the IBFS volume similarly to SWAP memory. This helps preserve system memory
          * when large volumes are open.
          * @default 32768 // (8 bytes per address X 32768 = 256kiB memory used)
          */
-        addressStackPageSize?: number
+        addressStackChunkSize?: number
         /** 
-         * Specifies the number of addresses left from draining or filling a pool chunk that must 
-         * be reached before another pool chunk is preloaded into memory.
+         * Specifies the number of addresses left from draining or filling a stack chunk that must 
+         * be reached before another chunk is preloaded into memory.
          * @default 1024
          */
-        addressStackPagePreloadThreshold?: number
+        chunkPreloadMark?: number
         /** 
-         * Specifies the number of addresses left from draining or filling a pool chunk that must 
-         * be reached before a standby preloaded chunk is unloaded.
-         * This value **must** be higher than that of `memoryPoolPreloadThreshold`.
+         * Specifies the number of addresses left from draining or filling a stack chunk that must 
+         * be reached before another chunk is unloaded onto the disk.
+         * This value **must** be higher than that of `chunkPreloadMark`.
          * @default 2048
          */
-        addressStackPageUnloadThreshold?: number
+        chunkUnloadMark?: number
     }
 }
 
@@ -176,15 +176,15 @@ export default class Volume {
             // Meta block ===========================================
 
             const metadata = {
-                memoryPoolSwapSize:               m.deep(() => init.driver?.addressStackPageSize, 32768),
-                addressStackPagePreloadThreshold: m.deep(() => init.driver?.addressStackPagePreloadThreshold, 1024),
-                addressStackPageUnloadThreshold:  m.deep(() => init.driver?.addressStackPageUnloadThreshold, 2048)
+                memoryPoolSwapSize: m.deep(() => init.driver?.addressStackChunkSize, 32768),
+                chunkUnloadMark:    m.deep(() => init.driver?.chunkUnloadMark, 1024),
+                chunkPreloadMark:   m.deep(() => init.driver?.chunkPreloadMark, 2048)
             }
 
-            if (metadata.addressStackPagePreloadThreshold >= metadata.addressStackPageUnloadThreshold)
+            if (metadata.chunkPreloadMark >= metadata.chunkUnloadMark)
                 return new IBFSError(
                     'L0_VCREATE_DRIVER_MISCONFIG', 
-                    `Memory pool preload threshold must greater than the unload threshold.`, 
+                    `Chunk preload mark must greater than the unload mark.`, 
                     null, m.ssc(init, ['aesKey'])
                 )
 

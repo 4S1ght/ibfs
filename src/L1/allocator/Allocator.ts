@@ -137,13 +137,13 @@ export default class Allocator {
     // Loading & unloading chunks -----------------------------------
 
     /**
-     * Checks the current address chunk and its neighbors for whether one should loaded
+     * Checks the current address chunk and its neighbors for whether any should loaded
      * or unloaded. Loading & unloading is staggered to prevent situations where frequent
      * file writes & deletions oscillate on the border of two chunks causing great I/O drops
      * and latency due to frequent pulling of data between the disk and system memory.
      * @returns 
      */
-    private async triggerReload(): T.XEavSA<'L1_ALLOC_CANT_RELOAD'|'L1_ALLOC_CANT_UNLOAD_CHUNK'|'L1_ALLOC_CANT_LOAD_CHUNK'> {
+    private async triggerChunkSwapCheck(): T.XEavSA<'L1_ALLOC_CANT_RELOAD'|'L1_ALLOC_CANT_UNLOAD_CHUNK'|'L1_ALLOC_CANT_LOAD_CHUNK'> {
         try {
 
             const prev    = this.chunks[this.currentChunk - 1]
