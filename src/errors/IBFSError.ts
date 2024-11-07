@@ -55,9 +55,10 @@ enum ErrorCodes {
     L1_DIR_DECODE                = 'Failed to decode a directory buffer.',
     L1_DIR_ENCODE                = 'Failed to encode a directory buffer.',
 
-    L1_AS_CANT_INITIALIZE        = 'Failed to initialize the address stack required for managing sector allocation.',
-    L1_AS_CANT_LOAD_CHUNK        = 'Failed to load an address stack chunk from the disk.',
-    L1_AS_CANT_UNLOAD_CHUNK      = 'Failed to unload an address stack chunk to the disk.',
+    L1_ALLOC_CANT_INITIALIZE     = 'Failed to initialize the allocator required for managing sector allocation.',
+    L1_ALLOC_CANT_RELOAD         = 'An unknown error ocurred while checking address stack load marks.',
+    L1_ALLOC_CANT_LOAD_CHUNK     = 'Failed to load an address chunk from the disk.',
+    L1_ALLOC_CANT_UNLOAD_CHUNK   = 'Failed to unload an address chunk to the disk.',
 
 }
 

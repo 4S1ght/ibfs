@@ -9,7 +9,7 @@ import Memory      from '@L0/Memory.js'
 
 // Module =========================================================================================
 
-export default class AddressStackChunk {
+export default class AddressChunk {
 
     public loaded: boolean = true
     public addresses: number[] = []
@@ -28,23 +28,28 @@ export default class AddressStackChunk {
         this.loaded && this.addresses.sort()
     }
 
-    public async load(): T.XEavSA<'L1_AS_CANT_LOAD_CHUNK'> {
+    public get count() {
+        return this.addresses.length
+    }
+
+    public async load(): T.XEavSA<'L1_ALLOC_CANT_LOAD_CHUNK'> {
         try {
             const fileData = Memory.intake(await fs.readFile(this.location))
             this.addresses = new Array(this.size).map(() => fileData.readInt64())
         } 
         catch (error) {
-            return new IBFSError('L1_AS_CANT_LOAD_CHUNK', null, error as Error, this)
+            return new IBFSError('L1_ALLOC_CANT_LOAD_CHUNK', null, error as Error, this)
         }
     }
 
-    public async unload(): T.XEavSA<'L1_AS_CANT_UNLOAD_CHUNK'> {
+    public async unload(): T.XEavSA<'L1_ALLOC_CANT_UNLOAD_CHUNK'> {
         try {
             const fileData = BigInt64Array.from(this.addresses.map(n => BigInt(n))) 
             await fs.writeFile(this.location, fileData)   
+            this.addresses = []
         }
         catch (error) {
-            return new IBFSError('L1_AS_CANT_UNLOAD_CHUNK', null, error as Error, this)
+            return new IBFSError('L1_ALLOC_CANT_UNLOAD_CHUNK', null, error as Error, this)
         }
     }
 

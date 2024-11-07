@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto"
 import { EventEmitter } from "node:events"
 
 interface TWEvent {
-    expiration: number,
+    id: string
+    expiration: number
     callback: () => any
 }
 
@@ -22,8 +24,10 @@ export default class TimeWheel extends EventEmitter {
     private bucketCount: number
     private currentBucket: number
     private interval: number
-    private buckets: Array<TWEvent[]>
     private declare timer: NodeJS.Timeout
+
+    private buckets: Array<TWEvent[]>
+    private cancelledBuckets = new Map<string, boolean>()
 
     private idleThreshold: number
     private currentIdleTick = 0
@@ -53,10 +57,24 @@ export default class TimeWheel extends EventEmitter {
      * @param timeout eviction timeout (in `ms`)
      * @param callback callback called on eviction.
      */
-    public add(timeout: number, callback: () => any) {
+    public add(timeout: number, callback: () => any): string {
         const expirationTime = Date.now() + timeout
         const bucket = (this.currentBucket + Math.floor(timeout / this.interval)) % this.bucketCount
-        this.buckets[bucket]!.push({ expiration: expirationTime, callback });
+        const id = `$${Math.floor(Date.now())}-${randomUUID()}`
+        this.buckets[bucket]!.push({ 
+            expiration: expirationTime,
+            callback,
+            id
+        })
+        return id
+    }
+
+    /**
+     * Cancels the callback of a specified event.
+     * @param id Event ID
+     */    
+    public cancel(id: string) {
+        this.cancelledBuckets.set(id, true)
     }
 
     /**
@@ -74,8 +92,13 @@ export default class TimeWheel extends EventEmitter {
         while (bucket.length > 0) {
             const item = bucket.pop()!
             if (item.expiration < Date.now()) {
-                try { item.callback() } 
-                catch (error) { console.error('Internal IBFS TimeWheel error:', error) }
+                if (this.cancelledBuckets.has(item.id) === false) {
+                    try { item.callback() } 
+                    catch (error) { console.error('IBFS Internal Error - TimeWheel event callback has thrown:', error) }
+                }
+                else {
+                    this.cancelledBuckets.delete(item.id)
+                }
             }
             else {
                 stash.push(item)
