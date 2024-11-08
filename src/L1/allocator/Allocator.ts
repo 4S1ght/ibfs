@@ -34,6 +34,25 @@ export interface ASInit {
     }
 }
 
+interface AllocAction {
+    /** 
+     * Sector addresses temporarily available to this part of the program
+     * until they're timed out and returned to the stack.
+     */
+    addresses: number[]
+    /**
+     * Commit ID which needs to be provided to `Allocator.commit()` in order to
+     * mark the requested addresses as allocated permanently.
+     */
+    commitID: string
+    /**
+     * Tells if the allocation has been timed out. `true` means the requested
+     * addresses have been returned to the stack and are available for writes.
+     * This means they will most likely soon be overwritten!
+     */
+    expired: boolean
+}
+
 // Module =========================================================================================
 
 /**
@@ -55,18 +74,17 @@ export default class Allocator {
     private chunks: AddressStackChunk[] = []
     private currentChunk = 0
 
-    private constructor(init: ASInit) {}
+    private constructor() {}
 
     public static async instance(init: ASInit): T.XEavA<Allocator, 'L1_ALLOC_CANT_INITIALIZE'> {
         try {
 
-            const self = new this(init)
-            self.poolSize = init.poolSize
-            self.chunkSize = init.chunkSize
-            self.location = init.location
-
+            const self = new this()
+            self.poolSize    = init.poolSize
+            self.chunkSize   = init.chunkSize
+            self.location    = init.location
             self.preloadMark = init.chunkPreloadThreshold
-            self.unloadMark = init.chunkUnloadThreshold
+            self.unloadMark  = init.chunkUnloadThreshold
 
             // Prepare directory ------------------------------------
 
@@ -106,13 +124,44 @@ export default class Allocator {
      * Lends the driver
      * @param batchSize Max size of a continuous batch/block of addresses.
      */
-    public async alloc(blockSize: number, duration = 5000) {
+    public async alloc(blockSize: number, duration = 5000): T.XEavA<AllocAction, 'L1_ALLOC_CANT_ALLOC'|'L1_ALLOC_NONE_AVAILABLE'> {
         try {
+
+            const swapError = await this.triggerChunkSwapCheck()
+            if (swapError) return IBFSError.eav('L1_ALLOC_CANT_ALLOC', null, swapError)
 
             const chunk = this.chunks[this.currentChunk]!
             const addressBlock = Allocator.qcbs(chunk.addresses, blockSize)
-            // Unfinished ...
+            if (addressBlock.items.length === 0) return IBFSError.eav('L1_ALLOC_NONE_AVAILABLE')
+        
+            const addresses = chunk.addresses.splice(addressBlock.index, addressBlock.items.length)
+
+            // TODO - Extend EventEmitter and emit an error event in case of an error.
+            const commitID = this.tw.add(duration, async () => {
+                try { action.expired = true; await this.free(addressBlock.items) } 
+                catch (error) { console.error(`Internal IBFS address stack deallocation error: (${commitID})`, error) }
+            })
+
+            const action: AllocAction = {
+                addresses,
+                commitID,
+                expired: false
+            }
+    
+            return [null, action]
             
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_ALLOC_CANT_ALLOC', null, error as Error)
+        }
+    }
+
+    /**
+     * Frees an address and returns it back to the stack.
+     */
+    public async free(addresses: number[]) {
+        try {
+
         } 
         catch (error) {
             
@@ -120,17 +169,10 @@ export default class Allocator {
     }
 
     /**
-     * Frees an address and returns it back to the stack.
-     */
-    public free(addresses: number[]) {
-
-    }
-
-    /**
      * Marks lent addresses as allocated, after which they will be removed from the stack
      * and no longer available for reallocation until they are freed.
      */
-    public commit(addresses: number[]) {
+    public commit(actionID: string) {
 
     }
 
@@ -172,6 +214,10 @@ export default class Allocator {
                 const error = await prev.unload()
                 if (error) return error
             }
+
+            const chunk = this.chunks[this.currentChunk]!
+            if (chunk.count === 0 && this.currentChunk < this.chunks.length-1) this.currentChunk++
+            else if (chunk.count === this.chunkSize && this.currentChunk > 0) this.currentChunk--
 
         } 
         catch (error) {

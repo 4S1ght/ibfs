@@ -542,7 +542,7 @@ export default class Volume {
 
             const readResult = this.bs.readStorageBlock(storeBlock, address, aesKey)
             if (readResult.error) return IBFSError.eav('L0_IO_READ_DS', null, readResult.error, { address, blockSize })
-            if (readResult.crcMismatch && !integrity) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address, blockSize })
+            if (readResult.crcMismatch && integrity) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address, blockSize })
                 
             return [null, readResult.meta]
 

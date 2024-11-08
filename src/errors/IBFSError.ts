@@ -60,6 +60,10 @@ enum ErrorCodes {
     L1_ALLOC_CANT_LOAD_CHUNK     = 'Failed to load an address chunk from the disk.',
     L1_ALLOC_CANT_UNLOAD_CHUNK   = 'Failed to unload an address chunk to the disk.',
 
+    L1_ALLOC_CANT_ALLOC          = 'Could not allocate an address block.',
+    L1_ALLOC_CANT_FREE           = 'Could not free an address block.',
+    L1_ALLOC_NONE_AVAILABLE      = 'There are no addresses available for allocation.'
+
 }
 
 export type IBFSErrorCode = keyof typeof ErrorCodes
