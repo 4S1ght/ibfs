@@ -402,9 +402,10 @@ export default class Volume {
      * Returns a head block after reading it from the disk, deserializing and decrypting it.
      * @param address Block address
      * @param aesKey Decrypt key
+     * @param integrity Whether to check for CRC integrity - Only use for recovery.
      * @returns [Error?, Data?]
      */
-    public async readHeadBlock(address: number, aesKey?: Buffer):
+    public async readHeadBlock(address: number, aesKey?: Buffer, integrity = true):
         T.XEavA<HeadBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_HEAD'|'L0_IO_READ_DS'|'L0_IO_READ_HEAD_TAIL'|'L0_CRCSUM_MISMATCH'> {
         try {
             
@@ -431,7 +432,7 @@ export default class Volume {
             const finalError = head.final(tailSectors)
             if (finalError) return IBFSError.eav('L0_IO_READ_DS', 'Could not finalize deserialization of the head block.', finalError, { address })
 
-            if ((head.meta as Meta).crcMismatch) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address })
+            if (integrity && (head.meta as Meta).crcMismatch) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address })
         
             return [null, head.meta as Meta]
 
@@ -473,9 +474,10 @@ export default class Volume {
      * @param address Block address
      * @param blockSize blocks size (in sectors)
      * @param aesKey decrypt key
+     * @param integrity Whether to check for CRC integrity - Only use for recovery.
      * @returns [Error?, Data?]
      */
-    public async readLinkBlock(address: number, blockSize: number, aesKey?: Buffer):
+    public async readLinkBlock(address: number, blockSize: number, aesKey?: Buffer, integrity = true):
         T.XEavA<LinkBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_LINK'|'L0_IO_READ_DS'|'L0_CRCSUM_MISMATCH'> {
         try {
 
@@ -485,7 +487,7 @@ export default class Volume {
             
             const readResult = this.bs.readLinkBlock(linkBlock, address, aesKey)
             if (readResult.error) return IBFSError.eav('L0_IO_READ_DS', null, readResult.error, { address, blockSize })
-            if (readResult.crcMismatch) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address, blockSize })
+            if (readResult.crcMismatch && integrity) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address, blockSize })
 
             return [null, readResult.meta]
 
@@ -527,9 +529,10 @@ export default class Volume {
      * @param address Block address
      * @param blockSize blocks size (in sectors)
      * @param aesKey decrypt key
+     * @param integrity Whether to skip CRC integrity checks - Only use for recovery.
      * @returns [Error?, Data?]
      */
-    public async readStoreBlock(address: number, blockSize: number, aesKey?: Buffer):
+    public async readStoreBlock(address: number, blockSize: number, aesKey?: Buffer, integrity = true):
         T.XEavA<StorageBlock & CommonReadMeta, 'L0_IO_UNKNOWN'|'L0_IO_READ_STORAGE'|'L0_IO_READ_DS'|'L0_CRCSUM_MISMATCH'> {
         try {
 
@@ -539,7 +542,7 @@ export default class Volume {
 
             const readResult = this.bs.readStorageBlock(storeBlock, address, aesKey)
             if (readResult.error) return IBFSError.eav('L0_IO_READ_DS', null, readResult.error, { address, blockSize })
-            if (readResult.crcMismatch) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address, blockSize })
+            if (readResult.crcMismatch && !integrity) return IBFSError.eav('L0_CRCSUM_MISMATCH', null, null, { address, blockSize })
                 
             return [null, readResult.meta]
 
