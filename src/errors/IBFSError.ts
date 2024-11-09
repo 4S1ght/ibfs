@@ -48,21 +48,23 @@ enum ErrorCodes {
 
     // Level 1 (filesystem) errors =====================================================================================
 
-    L1_FSCREATE_CANT_CREATE      = 'Failed to create a filesystem',
+    L1_FSCREATE_CANT_CREATE         = 'Failed to create a filesystem',
 
-    L1_DIR_INIT                  = 'Could not initialize directory transcoder.',
+    L1_DIR_INIT                     = 'Could not initialize directory transcoder.',
 
-    L1_DIR_DECODE                = 'Failed to decode a directory buffer.',
-    L1_DIR_ENCODE                = 'Failed to encode a directory buffer.',
+    L1_DIR_DECODE                   = 'Failed to decode a directory buffer.',
+    L1_DIR_ENCODE                   = 'Failed to encode a directory buffer.',
 
-    L1_ALLOC_CANT_INITIALIZE     = 'Failed to initialize the allocator required for managing sector allocation.',
-    L1_ALLOC_CANT_RELOAD         = 'An unknown error ocurred while checking address stack load marks.',
-    L1_ALLOC_CANT_LOAD_CHUNK     = 'Failed to load an address chunk from the disk.',
-    L1_ALLOC_CANT_UNLOAD_CHUNK   = 'Failed to unload an address chunk to the disk.',
+    L1_ALLOC_CANT_INITIALIZE        = 'Failed to initialize the allocator required for managing sector allocation.',
+    L1_ALLOC_CANT_INITIALIZE_CHUNK  = 'Failed to create a block address chunk during allocator initialization.',
+    L1_ALLOC_CANT_RELOAD            = 'An unknown error ocurred while checking address stack load marks.',
+    L1_ALLOC_CANT_LOAD_CHUNK        = 'Failed to load an address chunk from the disk.',
+    L1_ALLOC_CANT_UNLOAD_CHUNK      = 'Failed to unload an address chunk to the disk.',
 
-    L1_ALLOC_CANT_ALLOC          = 'Could not allocate an address block.',
-    L1_ALLOC_CANT_FREE           = 'Could not free an address block.',
-    L1_ALLOC_NONE_AVAILABLE      = 'There are no addresses available for allocation.'
+    L1_ALLOC_CANT_ALLOC             = 'Could not allocate an address block.',
+    L1_ALLOC_CANT_FREE              = 'Could not free an address block.',
+    L1_ALLOC_CANT_PREP              = 'Could not prepare a chunk during allocator initialization.',
+    L1_ALLOC_NONE_AVAILABLE         = 'There are no addresses available for allocation.'
 
 }
 

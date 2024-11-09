@@ -13,15 +13,26 @@ export default class AddressChunk {
 
     public loaded: boolean = true
     public addresses: number[] = []
-    public size: number
 
-    public location: string
-    public name: string
+    public declare size: number
+    public declare location: string
+    public declare name: string
     
-    constructor(location: string, size: number) {
-        this.size = size
-        this.location = location
-        this.name = path.basename(location)
+    constructor() {
+    }
+
+    public static async instance(location: string, size: number): T.XEavA<AddressChunk, 'L1_ALLOC_CANT_INITIALIZE_CHUNK'> {
+        try {
+            const self = new this()
+            self.size = size
+            self.location = location
+            self.name = path.basename(location)
+            await self.unload()
+            return [null, self]
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_ALLOC_CANT_INITIALIZE_CHUNK')
+        }
     }
 
     public sort() {
@@ -34,8 +45,11 @@ export default class AddressChunk {
 
     public async load(): T.XEavSA<'L1_ALLOC_CANT_LOAD_CHUNK'> {
         try {
+            if (this.loaded) return
             const fileData = Memory.intake(await fs.readFile(this.location))
-            this.addresses = new Array(this.size).map(() => fileData.readInt64())
+            const length = Math.floor(fileData.length / 8)
+            for (let i = 0; i < length; i++) this.addresses.push(fileData.readInt64())
+            this.loaded = true
         } 
         catch (error) {
             return new IBFSError('L1_ALLOC_CANT_LOAD_CHUNK', null, error as Error, this)
@@ -44,9 +58,11 @@ export default class AddressChunk {
 
     public async unload(): T.XEavSA<'L1_ALLOC_CANT_UNLOAD_CHUNK'> {
         try {
+            if (!this.loaded) return
             const fileData = BigInt64Array.from(this.addresses.map(n => BigInt(n))) 
             await fs.writeFile(this.location, fileData)   
             this.addresses = []
+            this.loaded = false
         }
         catch (error) {
             return new IBFSError('L1_ALLOC_CANT_UNLOAD_CHUNK', null, error as Error, this)

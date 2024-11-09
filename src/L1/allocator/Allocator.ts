@@ -24,14 +24,14 @@ export interface ASInit {
     /** Directory where stack chunks are offloaded to. */
     location: string
     /** Internal time wheel configuration. */
-    timeWheel: {
-        /** Number of buckets where events are sorted to. */
-        bucketCount: number
-        /** The duration of each tick inside the time wheel. */
-        tickDuration: number
-        /** The number of idle ticks before the time wheel enters idle state. */
-        idleAfterTicks: number
-    }
+    // timeWheel: {
+    //     /** Number of buckets where events are sorted to. */
+    //     bucketCount: number
+    //     /** The duration of each tick inside the time wheel. */
+    //     tickDuration: number
+    //     /** The number of idle ticks before the time wheel enters idle state. */
+    //     idleAfterTicks: number
+    // }
 }
 
 interface AllocAction {
@@ -97,10 +97,14 @@ export default class Allocator {
 
             const chunkCount = Math.ceil(self.poolSize / self.chunkSize)
             for (let i = 0; i < chunkCount; i++) {
-                const name = path.join(self.location, i.toString(16).padStart(6, '0') + ADDR_STACK_FILE_EXT)
-                const chunk = new AddressStackChunk(name, self.chunkSize)
+                const name = path.join(self.location, i.toString().padStart(8, '0') + ADDR_STACK_FILE_EXT)
+                const [chunkError, chunk] = await AddressStackChunk.instance(name, self.chunkSize)
+                if (chunkError) return IBFSError.eav('L1_ALLOC_CANT_INITIALIZE', null, chunkError)
                 self.chunks.push(chunk)
             }
+
+            const loadError = await self.chunks[0]!.load()
+            if (loadError) return IBFSError.eav('L1_ALLOC_CANT_INITIALIZE', null, loadError)
 
             // Time wheel -------------------------------------------
 
@@ -158,7 +162,6 @@ export default class Allocator {
      */
     public async free(addresses: number[]): T.XEavSA<'L1_ALLOC_CANT_FREE'>{
         try {
-
             const swapError = await this.triggerChunkSwapCheck()
             if (swapError) return new IBFSError('L1_ALLOC_CANT_FREE', null, swapError)
 
@@ -169,10 +172,8 @@ export default class Allocator {
                 chunk.addresses.push(...addresses)
             }
             else {
-                chunk.addresses.push(...addresses.splice(-addresses.length, addresses.length))
-
-                const swapError = await this.triggerChunkSwapCheck()
-                if (swapError) return new IBFSError('L1_ALLOC_CANT_FREE', null, swapError)
+                const addressesToFree = addresses.splice(-freeSpace, freeSpace)
+                chunk.addresses.push(...addressesToFree)
                 const freeError = await this.free(addresses)
                 if (freeError) return new IBFSError('L1_ALLOC_CANT_FREE', null, freeError, { overflow: true })
             }
@@ -180,6 +181,40 @@ export default class Allocator {
         } 
         catch (error) {
             return new IBFSError('L1_ALLOC_CANT_FREE', null, error as Error, { addresses })
+        }
+    }
+
+    /**
+     * Similar in purpose to `Allocator.free` but used only during initialization
+     * in order to fill out individual address chunks.
+     */
+    public async load(addresses: number[]): T.XEavSA<'L1_ALLOC_CANT_PREP'> {
+        try {
+            
+            const chunk = this.chunks[this.currentChunk]!
+            const freeSpace = chunk.size - chunk.count
+
+            if (freeSpace >= addresses.length) {
+                chunk.addresses.push(...addresses)
+            }
+            else {
+                const addressesToLoad = addresses.splice(-freeSpace, freeSpace)
+                chunk.addresses.push(...addressesToLoad)
+
+                const unloadError = await chunk.unload()
+                if (unloadError) return new IBFSError('L1_ALLOC_CANT_PREP', null, unloadError as Error)
+
+                this.currentChunk++
+                const chunkError = await this.chunks[this.currentChunk]!.load()
+                if (chunkError) return new IBFSError('L1_ALLOC_CANT_PREP', null, chunkError as Error)
+
+                const loadError = await this.load(addresses)
+                if (loadError) return new IBFSError('L1_ALLOC_CANT_PREP', null, loadError as Error)
+            }
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_ALLOC_CANT_PREP', null, error as Error)
         }
     }
 
@@ -234,10 +269,11 @@ export default class Allocator {
             const chunk = this.chunks[this.currentChunk]!
             if (chunk.count === 0 && this.currentChunk < this.chunks.length-1) this.currentChunk++
             else if (chunk.count === this.chunkSize && this.currentChunk > 0) this.currentChunk--
+            console.log('current chunk', this.currentChunk)
 
         } 
         catch (error) {
-            return new IBFSError('L1_ALLOC_CANT_RELOAD')
+            return new IBFSError('L1_ALLOC_CANT_RELOAD', null, error as Error)
         }
     }
 

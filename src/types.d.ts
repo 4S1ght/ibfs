@@ -1,4 +1,4 @@
-import type IBFSError, { BFSErrorCode, IBFSErrorCode } from "@errors"
+import type IBFSError, { IBFSErrorCode } from "@errors"
 
 /** 
  * GO-like error-as-value return  type. Used specifically to avoid

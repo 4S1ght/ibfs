@@ -3,8 +3,7 @@
         "./src/*",
         "./src/L0/*",
         "./src/L1/*",
-        "./src/L1/allocator/*",
-        "./src/L1/AddressStack/*", "src/L1/allocator/schemes/InMemoryAllocator.ts",
+        "./src/L1/allocator/*" 
     ],
     "compilerOptions": {
 
