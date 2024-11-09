@@ -56,9 +56,7 @@ interface AllocAction {
 // Module =========================================================================================
 
 /**
- * The address stack holds a stack of unallocated sector addresses and manages their allocation.  
- * An address is "lent" by a the program for set amount of time and committed on successful write, 
- * otherwise it's revoked and returned to the stack.
+ * Manages allocation and freeing of disk space.
  */
 export default class Allocator {
 
@@ -70,7 +68,7 @@ export default class Allocator {
 
     private declare location: string
 
-    private declare tw: TimeWheel
+    // private declare tw: TimeWheel
     private chunks: AddressStackChunk[] = []
     private currentChunk = 0
 
@@ -106,11 +104,11 @@ export default class Allocator {
 
             // Time wheel -------------------------------------------
 
-            self.tw = new TimeWheel(
-                init.timeWheel.bucketCount,
-                init.timeWheel.tickDuration,
-                init.timeWheel.idleAfterTicks
-            )
+            // self.tw = new TimeWheel(
+            //     init.timeWheel.bucketCount,
+            //     init.timeWheel.tickDuration,
+            //     init.timeWheel.idleAfterTicks
+            // )
 
             return [null, self]
         
@@ -124,7 +122,7 @@ export default class Allocator {
      * Lends the driver
      * @param batchSize Max size of a continuous batch/block of addresses.
      */
-    public async alloc(blockSize: number, duration = 5000): T.XEavA<AllocAction, 'L1_ALLOC_CANT_ALLOC'|'L1_ALLOC_NONE_AVAILABLE'> {
+    public async alloc(blockSize: number, /*duration = 5000*/): T.XEavA<number[] /*AllocAction*/, 'L1_ALLOC_CANT_ALLOC'|'L1_ALLOC_NONE_AVAILABLE'> {
         try {
 
             const swapError = await this.triggerChunkSwapCheck()
@@ -136,19 +134,18 @@ export default class Allocator {
         
             const addresses = chunk.addresses.splice(addressBlock.index, addressBlock.items.length)
 
-            // TODO - Extend EventEmitter and emit an error event in case of an error.
-            const commitID = this.tw.add(duration, async () => {
-                try { action.expired = true; await this.free(addressBlock.items) } 
-                catch (error) { console.error(`Internal IBFS address stack deallocation error: (${commitID})`, error) }
-            })
+            // const commitID = this.tw.add(duration, async () => {
+            //     try { action.expired = true; await this.free(addressBlock.items) } 
+            //     catch (error) { console.error(`Internal IBFS address stack deallocation error: (${commitID})`, error) }
+            // })
 
-            const action: AllocAction = {
-                addresses,
-                commitID,
-                expired: false
-            }
+            // const action: AllocAction = {
+            //     addresses,
+            //     commitID,
+            //     expired: false
+            // }
     
-            return [null, action]
+            return [null, addresses]
             
         } 
         catch (error) {
@@ -159,22 +156,41 @@ export default class Allocator {
     /**
      * Frees an address and returns it back to the stack.
      */
-    public async free(addresses: number[]) {
+    public async free(addresses: number[]): T.XEavSA<'L1_ALLOC_CANT_FREE'>{
         try {
 
+            const swapError = await this.triggerChunkSwapCheck()
+            if (swapError) return new IBFSError('L1_ALLOC_CANT_FREE', null, swapError)
+
+            const chunk = this.chunks[this.currentChunk]!
+            const freeSpace = this.chunkSize - chunk.count
+            
+            if (freeSpace >= addresses.length) {
+                chunk.addresses.push(...addresses)
+            }
+            else {
+                chunk.addresses.push(...addresses.splice(-addresses.length, addresses.length))
+
+                const swapError = await this.triggerChunkSwapCheck()
+                if (swapError) return new IBFSError('L1_ALLOC_CANT_FREE', null, swapError)
+                const freeError = await this.free(addresses)
+                if (freeError) return new IBFSError('L1_ALLOC_CANT_FREE', null, freeError, { overflow: true })
+            }
+            
         } 
         catch (error) {
-            
+            return new IBFSError('L1_ALLOC_CANT_FREE', null, error as Error, { addresses })
         }
     }
 
     /**
+     * !!! Put on hold.
      * Marks lent addresses as allocated, after which they will be removed from the stack
      * and no longer available for reallocation until they are freed.
      */
-    public commit(actionID: string) {
+    // public async commit(actionID: string) {
 
-    }
+    // }
 
     // Loading & unloading chunks -----------------------------------
 
