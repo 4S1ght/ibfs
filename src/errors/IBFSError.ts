@@ -60,6 +60,7 @@ enum ErrorCodes {
     L1_ALLOC_CANT_RELOAD            = 'An unknown error ocurred while checking address stack load marks.',
     L1_ALLOC_CANT_LOAD_CHUNK        = 'Failed to load an address chunk from the disk.',
     L1_ALLOC_CANT_UNLOAD_CHUNK      = 'Failed to unload an address chunk to the disk.',
+    L1_ALLOC_THRESHOLD_MISCONFIG    = 'Allocator threshold misconfiguration.',
 
     L1_ALLOC_CANT_ALLOC             = 'Could not allocate an address block.',
     L1_ALLOC_CANT_FREE              = 'Could not free an address block.',

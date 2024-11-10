@@ -10,17 +10,17 @@ describe('Allocator', async () => {
     test('qcbs (quick consecutive block search)', () => {
 
         const source = [0,1,2,3, 1,0,122,123,124,125,126,127, 10,11,12,13,14, 43,44]
-        const get = (size: undefined | number) => Allocator.qcbs(source, size)
+        const get = (size: undefined | number) => Allocator.qcbs(source, size).items
 
-        expect(get(3).items)            .toStrictEqual([0,1,2])
-        expect(get(4).items)            .toStrictEqual([0,1,2,3])
-        expect(get(5).items)            .toStrictEqual([122,123,124,125,126])
-        expect(get(undefined).items)    .toStrictEqual([122,123,124,125,126,127])
-        expect(Allocator.qcbs([]).items).toStrictEqual([])
+        expect(get(3))            .toStrictEqual([0,1,2])
+        expect(get(4))            .toStrictEqual([0,1,2,3])
+        expect(get(5))            .toStrictEqual([122,123,124,125,126])
+        expect(get(undefined))    .toStrictEqual([122,123,124,125,126,127])
+        expect(Allocator.qcbs([])).toStrictEqual([])
 
     })
 
-    test('Allocator', async () => {
+    test('load', async () => {
 
         const [error, allocator] = await Allocator.instance({
             poolSize: 1000,
@@ -38,12 +38,10 @@ describe('Allocator', async () => {
             throw freeError
         }
         // console.log(allocator.chunks)
-
         // console.log(allocator.chunks[allocator.chunks.length-1].addresses.join(' '))
 
 
     })
-
 
 })
 

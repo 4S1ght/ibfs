@@ -63,8 +63,10 @@ export default class Allocator {
     private declare poolSize: number
     private declare chunkSize: number
 
-    private declare preloadMark: number
-    private declare unloadMark: number
+    private declare preloadNextMark: number
+    private declare unloadNextMark: number
+    private declare preloadPrivMark: number
+    private declare unloadPrivMark: number
 
     private declare location: string
 
@@ -74,15 +76,30 @@ export default class Allocator {
 
     private constructor() {}
 
-    public static async instance(init: ASInit): T.XEavA<Allocator, 'L1_ALLOC_CANT_INITIALIZE'> {
+    public static async instance(init: ASInit): T.XEavA<Allocator, 'L1_ALLOC_CANT_INITIALIZE'|'L1_ALLOC_THRESHOLD_MISCONFIG'> {
         try {
 
             const self = new this()
             self.poolSize    = init.poolSize
             self.chunkSize   = init.chunkSize
             self.location    = init.location
-            self.preloadMark = init.chunkPreloadThreshold
-            self.unloadMark  = init.chunkUnloadThreshold
+
+            self.preloadNextMark = init.chunkPreloadThreshold
+            self.unloadNextMark  = init.chunkUnloadThreshold
+            self.preloadPrivMark = init.chunkSize - init.chunkPreloadThreshold
+            self.unloadPrivMark  = init.chunkSize - init.chunkUnloadThreshold
+
+            if (init.chunkUnloadThreshold > init.chunkPreloadThreshold) 
+                return IBFSError.eav(
+                    'L1_ALLOC_THRESHOLD_MISCONFIG', 
+                    'Chunk unload threshold must be lower than preload threshold to prevent unnecessary I/O.'
+                )
+        
+            if (init.chunkSize < 3 * init.chunkUnloadThreshold) 
+                return IBFSError.eav(
+                    'L1_ALLOC_THRESHOLD_MISCONFIG', 
+                    'Chunk size must be at least 3 times the unload threshold to prevent cases of constant I/O drops.'
+                )
 
             // Prepare directory ------------------------------------
 
@@ -123,7 +140,8 @@ export default class Allocator {
     }
 
     /**
-     * Lends the driver
+     * Allocates a block of addresses of size `blockSize`. if the current chunk does not hold
+     * a consecutive block of addresses of requested size, the closest one in size is returned.
      * @param batchSize Max size of a continuous batch/block of addresses.
      */
     public async alloc(blockSize: number, /*duration = 5000*/): T.XEavA<number[] /*AllocAction*/, 'L1_ALLOC_CANT_ALLOC'|'L1_ALLOC_NONE_AVAILABLE'> {
@@ -158,7 +176,7 @@ export default class Allocator {
     }
 
     /**
-     * Frees an address and returns it back to the stack.
+     * Frees all provided addresses and returns them back to the stack.
      */
     public async free(addresses: number[]): T.XEavSA<'L1_ALLOC_CANT_FREE'>{
         try {
@@ -230,10 +248,10 @@ export default class Allocator {
     // Loading & unloading chunks -----------------------------------
 
     /**
-     * Checks the current address chunk and its neighbors for whether any should loaded
+     * Checks the current address chunk and its neighbors for whether any should be loaded
      * or unloaded. Loading & unloading is staggered to prevent situations where frequent
-     * file writes & deletions oscillate on the border of two chunks causing great I/O drops
-     * and latency due to frequent pulling of data between the disk and system memory.
+     * file writes & deletions oscillate on the border of two chunks causing great I/O drops and 
+     * latency due to frequent pulling of data between the disk and system memory.
      * @returns 
      */
     private async triggerChunkSwapCheck(): T.XEavSA<'L1_ALLOC_CANT_RELOAD'|'L1_ALLOC_CANT_UNLOAD_CHUNK'|'L1_ALLOC_CANT_LOAD_CHUNK'> {
@@ -244,24 +262,24 @@ export default class Allocator {
             const next    = this.chunks[this.currentChunk + 1]
 
             // Load next chunk ------------------
-            if (current.count < this.preloadMark && next && !next.loaded) {
+            if (current.count < this.preloadNextMark && next && !next.loaded) {
                 const error = await next.load()
                 if (error) return error
             }
             // Unload next chunk ----------------
-            if (current.count > this.unloadMark && next && next.loaded) {
+            if (current.count > this.unloadNextMark && next && next.loaded) {
                 const error = await next.unload()
                 if (error) return error
             }
 
             // Load previous chunk --------------
-            if (current.count > this.chunkSize - this.preloadMark && prev && !prev.loaded) {
+            if (current.count > this.preloadPrivMark && prev && !prev.loaded) {
                 const error = await prev.load()
                 if (error) return error
                 
             }
             // Unload previous chunk ------------
-            if (current.count < this.chunkSize - this.unloadMark && prev && prev.loaded) {
+            if (current.count < this.unloadPrivMark && prev && prev.loaded) {
                 const error = await prev.unload()
                 if (error) return error
             }
@@ -269,7 +287,6 @@ export default class Allocator {
             const chunk = this.chunks[this.currentChunk]!
             if (chunk.count === 0 && this.currentChunk < this.chunks.length-1) this.currentChunk++
             else if (chunk.count === this.chunkSize && this.currentChunk > 0) this.currentChunk--
-            console.log('current chunk', this.currentChunk)
 
         } 
         catch (error) {
@@ -281,7 +298,8 @@ export default class Allocator {
 
     /**
      * Quick Consecutive Block Search - Returns the first address batch of requested size
-     * or the largest overall if a sufficiently large one was not found.
+     * or the largest overall if a sufficiently large one was not found. This method is better
+     * suite for streams where quick allocation is desired.
      */
     public static qcbs(source: number[], maxSize = 256) {
         
@@ -312,8 +330,9 @@ export default class Allocator {
 
     /**
      * Slow Consecutive Block Search - Returns an address batch closest to matching the requested size.
-     * This operation scans the entire source array and may yield slowly, use `qcbs`
-     * if write speeds are of the upmost importance (although at the cost of higher fragmentation)
+     * This operation scans the entire source array and may yield slowly, use `qcbs` if write speeds are 
+     * of the upmost importance (although at the cost of higher fragmentation).
+     * This method is best suited for writing fixed-sized files where prologued I/O drops are not a concern.
      * @throws (not implemented)
      */
     public static scbs(source: number[], maxSize = 256) {
