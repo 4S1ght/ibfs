@@ -65,7 +65,9 @@ enum ErrorCodes {
     L1_ALLOC_CANT_ALLOC             = 'Could not allocate an address block.',
     L1_ALLOC_CANT_FREE              = 'Could not free an address block.',
     L1_ALLOC_CANT_PREP              = 'Could not prepare a chunk during allocator initialization.',
-    L1_ALLOC_NONE_AVAILABLE         = 'There are no addresses available for allocation.'
+    L1_ALLOC_NONE_AVAILABLE         = 'There are no addresses available for allocation.',
+    L1_ALLOC_OUT_OF_RANGE           = 'Attempted to load/free more addresses than the allocator address stack can hold.',
+    L1_ALLOC_CANT_FINISH            = 'An error ocurred while finishing address stack initialization.',
 
 }
 
@@ -75,9 +77,9 @@ export type IBFSErrorMetadata = { [key: string]: any }
 export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> extends Error {
 
     public readonly code: Code
-    public readonly rootCause?: IBFSError
     public readonly causes: Error[] = []
     public readonly meta: IBFSErrorMetadata = {}
+    public readonly rootCause?: IBFSError
 
     constructor(code: Code, message?: string | null, cause?: Error | null, meta?: IBFSErrorMetadata) {
         
@@ -94,6 +96,8 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
                 this.causes = [cause, ...cause.causes]
                 // @ts-ignore - Readonly only outside the error class.
                 cause.causes = []
+                // @ts-ignore
+                delete cause.rootCause
             }
             else {
                 this.causes.unshift(cause)

@@ -89,10 +89,10 @@ export default class Allocator {
             self.preloadPrivMark = init.chunkSize - init.chunkPreloadThreshold
             self.unloadPrivMark  = init.chunkSize - init.chunkUnloadThreshold
 
-            if (init.chunkUnloadThreshold > init.chunkPreloadThreshold) 
+            if (init.chunkUnloadThreshold < init.chunkPreloadThreshold) 
                 return IBFSError.eav(
                     'L1_ALLOC_THRESHOLD_MISCONFIG', 
-                    'Chunk unload threshold must be lower than preload threshold to prevent unnecessary I/O.'
+                    'Chunk unload threshold must be higher than preload threshold to prevent unnecessary I/O slowdowns.'
                 )
         
             if (init.chunkSize < 3 * init.chunkUnloadThreshold) 
@@ -206,16 +206,17 @@ export default class Allocator {
      * Similar in purpose to `Allocator.free` but used only during initialization
      * in order to fill out individual address chunks.
      */
-    public async load(addresses: number[]): T.XEavSA<'L1_ALLOC_CANT_PREP'> {
+    public async load(addresses: number[]): T.XEavSA<'L1_ALLOC_CANT_PREP'|'L1_ALLOC_OUT_OF_RANGE'> {
         try {
             
             const chunk = this.chunks[this.currentChunk]!
+            const nextChunk = this.chunks[this.currentChunk+1]
             const freeSpace = chunk.size - chunk.count
 
             if (freeSpace >= addresses.length) {
                 chunk.addresses.push(...addresses)
             }
-            else {
+            else if (nextChunk) {
                 const addressesToLoad = addresses.splice(-freeSpace, freeSpace)
                 chunk.addresses.push(...addressesToLoad)
 
@@ -223,11 +224,19 @@ export default class Allocator {
                 if (unloadError) return new IBFSError('L1_ALLOC_CANT_PREP', null, unloadError as Error)
 
                 this.currentChunk++
-                const chunkError = await this.chunks[this.currentChunk]!.load()
+                const chunkError = await chunk.load()
                 if (chunkError) return new IBFSError('L1_ALLOC_CANT_PREP', null, chunkError as Error)
 
                 const loadError = await this.load(addresses)
                 if (loadError) return new IBFSError('L1_ALLOC_CANT_PREP', null, loadError as Error)
+            }
+            else {
+                return new IBFSError('L1_ALLOC_OUT_OF_RANGE', null, null, { addresses })
+            }
+
+            if (chunk.count === chunk.size) {
+                const unloadError = await chunk.unload()
+                if (unloadError) return new IBFSError('L1_ALLOC_CANT_PREP', null, unloadError as Error)
             }
             
         } 
@@ -236,12 +245,13 @@ export default class Allocator {
         }
     }
 
+
     /**
      * !!! Put on hold.
      * Marks lent addresses as allocated, after which they will be removed from the stack
      * and no longer available for reallocation until they are freed.
      */
-    // public async commit(actionID: string) {
+    // public async commit(actionID: string) {x
 
     // }
 

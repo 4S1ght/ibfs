@@ -22,6 +22,17 @@ export default class Filesystem {
     /** Underlying filesystem volume */
     public declare volume: Volume
 
+    /**
+     * Creates an empty filesystem and initializes it.
+     * 
+     * This function sets up a new volume and prepares the root directory
+     * within the filesystem. It handles the creation of the volume, opening
+     * it, and setting the root sector and directory. Any errors during these
+     * processes are captured and returned.
+     * 
+     * @param init - Initial filesystem configuration parameters.
+     * @returns Error if the filesystem creation fails.
+     */
     public static async createEmptyFilesystem(init: FSInit):
         T.XEavSA<'L1_FSCREATE_CANT_CREATE'> {
         try {
