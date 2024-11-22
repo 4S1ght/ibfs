@@ -35,8 +35,9 @@ describe('Allocator', async () => {
         const freeError = await allocator.load(addresses)
         if (freeError) throw freeError
 
+        // @ts-ignore
+        const chunks = allocator.chunks
 
     })
 
 })
-

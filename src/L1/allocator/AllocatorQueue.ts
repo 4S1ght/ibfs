@@ -7,7 +7,11 @@ import EventEmitter from "node:events"
 type NextTurn = () => void
 type TurnCallback = (next: NextTurn) => void
 
-interface Turn {
+/** 
+ * Allocator queue turn. Represents a kind of short-timed "lock" on the address stack 
+ * within which the stack can lend/retrieve an address to/from a part of the driver 
+ */
+export interface Turn {
     end: () => void
 }
 
@@ -24,14 +28,13 @@ export default class AllocatorQueue extends EventEmitter {
 
     constructor() {
         super()
-
-        this.on
     }
 
     public newTurn = (timeout: number|null = 5000) => new Promise<Turn>((resolve) => {
-        this.turn((next) => {
 
-            let resolved = false
+        let resolved = false
+
+        this.queue.push(next => {
 
             if (timeout) setTimeout(() => {
                 if (!resolved) {
@@ -50,16 +53,14 @@ export default class AllocatorQueue extends EventEmitter {
             })
 
         })
-    })
 
-    private turn(callback: TurnCallback) {
-        this.queue.push(callback)
         if (!this.pending) {
             this.pending = true
             this.loop()
         }
-    } 
 
+    })
+    
     private loop() {
         const callback = this.queue[this.currentTurn++]
         if (callback) {

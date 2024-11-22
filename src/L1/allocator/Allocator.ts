@@ -2,13 +2,13 @@
 
 import type * as T from '@types'
 
-import fs                      from 'node:fs/promises'
-import path                    from 'node:path'
+import fs                       from 'node:fs/promises'
+import path                     from 'node:path'
 
-import AddressStackChunk       from "@L1/allocator/AddressChunk.js"
-import TimeWheel               from '@L1/allocator/TimeWheel.js'
-import IBFSError               from '@errors'
-import { ADDR_STACK_FILE_EXT } from '@constants'
+import AddressStackChunk        from "@L1/allocator/AddressChunk.js"
+import AllocatorQueue, { Turn } from '@L1/allocator/AllocatorQueue.js'
+import IBFSError                from '@errors'
+import { ADDR_STACK_FILE_EXT }  from '@constants'
 
 // Types ==========================================================================================
 
@@ -60,8 +60,8 @@ interface AllocAction {
  */
 export default class Allocator {
 
-    private declare poolSize: number
-    private declare chunkSize: number
+    public declare poolSize: number
+    public declare chunkSize: number
 
     private declare preloadNextMark: number
     private declare unloadNextMark: number
@@ -70,9 +70,10 @@ export default class Allocator {
 
     private declare location: string
 
-    // private declare tw: TimeWheel
     private chunks: AddressStackChunk[] = []
     private currentChunk = 0
+
+    private queue = new AllocatorQueue()
 
     private constructor() {}
 
@@ -145,7 +146,12 @@ export default class Allocator {
      * @param batchSize Max size of a continuous batch/block of addresses.
      */
     public async alloc(blockSize: number, /*duration = 5000*/): T.XEavA<number[] /*AllocAction*/, 'L1_ALLOC_CANT_ALLOC'|'L1_ALLOC_NONE_AVAILABLE'> {
+
+        let turn: Turn
+
         try {
+
+            turn = await this.queue.newTurn()
 
             const swapError = await this.triggerChunkSwapCheck()
             if (swapError) return IBFSError.eav('L1_ALLOC_CANT_ALLOC', null, swapError)
@@ -173,13 +179,22 @@ export default class Allocator {
         catch (error) {
             return IBFSError.eav('L1_ALLOC_CANT_ALLOC', null, error as Error)
         }
+        finally {
+            turn!.end()
+        }
     }
 
     /**
      * Frees all provided addresses and returns them back to the stack.
      */
     public async free(addresses: number[]): T.XEavSA<'L1_ALLOC_CANT_FREE'>{
+
+        let turn: Turn
+
         try {
+
+            turn = await this.queue.newTurn()
+
             const swapError = await this.triggerChunkSwapCheck()
             if (swapError) return new IBFSError('L1_ALLOC_CANT_FREE', null, swapError)
 
@@ -199,6 +214,9 @@ export default class Allocator {
         } 
         catch (error) {
             return new IBFSError('L1_ALLOC_CANT_FREE', null, error as Error, { addresses })
+        }
+        finally {
+            turn!.end()
         }
     }
 
@@ -261,7 +279,7 @@ export default class Allocator {
      * Checks the current address chunk and its neighbors for whether any should be loaded
      * or unloaded. Loading & unloading is staggered to prevent situations where frequent
      * file writes & deletions oscillate on the border of two chunks causing great I/O drops and 
-     * latency due to frequent pulling of data between the disk and system memory.
+     * latency due to frequent pulling of data between disk and system memory.
      * @returns 
      */
     private async triggerChunkSwapCheck(): T.XEavSA<'L1_ALLOC_CANT_RELOAD'|'L1_ALLOC_CANT_UNLOAD_CHUNK'|'L1_ALLOC_CANT_LOAD_CHUNK'> {
@@ -309,7 +327,7 @@ export default class Allocator {
     /**
      * Quick Consecutive Block Search - Returns the first address batch of requested size
      * or the largest overall if a sufficiently large one was not found. This method is better
-     * suite for streams where quick allocation is desired.
+     * suited for streams where quick allocation is desired.
      */
     public static qcbs(source: number[], maxSize = 256) {
         
@@ -343,7 +361,7 @@ export default class Allocator {
      * This operation scans the entire source array and may yield slowly, use `qcbs` if write speeds are 
      * of the upmost importance (although at the cost of higher fragmentation).
      * This method is best suited for writing fixed-sized files where prologued I/O drops are not a concern.
-     * @throws (not implemented)
+     * @throws Method not implemented yet
      */
     public static scbs(source: number[], maxSize = 256) {
         throw new Error('Not implemented')
