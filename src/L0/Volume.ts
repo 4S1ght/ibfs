@@ -193,6 +193,7 @@ export default class Volume {
 
             // Fill =================================================
 
+            // todo: ensure file exists before opening - win32/Error: ENOENT: no such file or directory
             file = await fs.open(init.file, 'w+', 0o600)
             ws = file.createWriteStream({ highWaterMark: init.sectorSize * 192 })
 
@@ -237,6 +238,7 @@ export default class Volume {
 
         } 
         catch (error) {
+            console.log(error)
             return new IBFSError('L0_VCREATE_CANT_CREATE', null, error as Error, m.ssc(init, ['aesKey', 'update']))
         }
         finally {
