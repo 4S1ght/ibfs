@@ -6,6 +6,7 @@
 import * as T from "@types"
 
 import path                 from "node:path"
+import fss                  from "node:fs"
 import fs                   from "node:fs/promises"
 import crypto               from "node:crypto"
 import type { WriteStream } from "node:fs"
@@ -118,7 +119,7 @@ export default class Volume {
     /**
      * Creates an empty volume in a specified location.
      * @param init Initial volume information.
-     * @returns Error (if ocurred)
+     * @returns Error (if occurred)
      */
     public static async createEmptyVolume(init: EmptyVolumeInit): T.EavSA<IBFSError> {
 
@@ -193,7 +194,11 @@ export default class Volume {
 
             // Fill =================================================
 
-            // todo: ensure file exists before opening - win32/Error: ENOENT: no such file or directory
+            // Fix: Windows won't consistently create the IBFS file with W+ flag,
+            // so an empty one needs to be created in advance.
+            const fileError = await Volume.ensureEmptyFile(init.file)
+            if (fileError) return new IBFSError('L0_VCREATE_CANT_CREATE', null, fileError, m.ssc(init, ['aesKey']))
+
             file = await fs.open(init.file, 'w+', 0o600)
             ws = file.createWriteStream({ highWaterMark: init.sectorSize * 192 })
 
@@ -579,6 +584,24 @@ export default class Volume {
         } 
         catch (error) {
             return new IBFSError('L0_IO_UNKNOWN', null, error as Error, m.ssc(meta, ['data', 'aesKey']))
+        }
+    }
+
+    // Helpers ================================================================
+
+    /**
+     * Takes a filepath and ensures it contains an empty file that
+     * can later be opened for writes.
+     */
+    private static async ensureEmptyFile(file: string): T.EavSA {
+        try {
+            const filepath = path.dirname(file)
+            await fs.mkdir(filepath, { recursive: true })
+            const files = await fs.readdir(filepath)
+            if (!files.includes(path.basename(file))) await fs.writeFile(file, Buffer.alloc(0))
+        }
+        catch (error) {
+            return error as Error
         }
     }
 
