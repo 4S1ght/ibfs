@@ -1,15 +1,10 @@
 {
-  "name": "ibfs",
-  "version": "0.0.0",
-  "description": "Virtual indirect-block filesystem.",
-  "main": "dist/index.json",
-  "type": "module",
-  "engines": {
-    "node": ">=22.7.0"
-  },
+  "name": "ibfs2",
+  "version": "2.0.0-pre",
+  "description": "Indirect Block FileSystem (v2)",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "vitest",
-    "dev": "tspc -w"
+    "test": "vitest"
   },
   "repository": {
     "type": "git",
@@ -18,7 +13,10 @@
   "keywords": [
     "fs",
     "filesystem",
-    "storage"
+    "virtual",
+    "encrypted",
+    "storage",
+    "native"
   ],
   "author": "4S1ght",
   "license": "MIT",
@@ -27,14 +25,8 @@
   },
   "homepage": "https://github.com/4S1ght/ibfs#readme",
   "devDependencies": {
-    "@types/node": "^22.4.1",
-    "ts-patch": "^3.2.1",
-    "typescript": "^5.5.4",
-    "typescript-transform-paths": "^3.5.1",
-    "vite-tsconfig-paths": "^5.0.1",
-    "vitest": "^2.0.5"
-  },
-  "dependencies": {
-    "protobufjs": "^7.4.0"
+    "@types/node": "22.10.2",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
   }
 }

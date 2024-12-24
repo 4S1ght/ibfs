@@ -3,5 +3,8 @@ tests/
 dist/
 
 .DS_Store
+
+# Old files & refactors
+old/
 *-old
 *-old.*
