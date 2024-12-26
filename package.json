@@ -4,7 +4,8 @@
   "description": "Indirect Block FileSystem (v2)",
   "main": "dist/index.js",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "dev": "tsc -w"
   },
   "repository": {
     "type": "git",
