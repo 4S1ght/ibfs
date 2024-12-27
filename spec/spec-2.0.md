@@ -37,7 +37,7 @@ The scope covers:
         - [Link blocks](#link-block) - N'th link following a root block.
         - [Storage blocks](#storage-block) - Hold actual user file data.
     - Encryption
-        - Encryption key handling
+        - Encryption key constraints
         - Encryption strategies & compatibility
     - Data integrity
 
