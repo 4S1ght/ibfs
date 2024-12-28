@@ -55,5 +55,6 @@ enum ErrorCodes {
     L0_AES_DIGEST = "Failed to digest the provided AES key.",
 
     L0_SR_SRFAIL_ROOT = "Failed to serialize the root block.",
+    L0_SR_DSFAIL_ROOT = "Failed to deserialize the root block.",
 
 }

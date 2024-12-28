@@ -13,13 +13,13 @@ export enum AESCipher {
     'aes-128-xts' = 1,
     'aes-256-xts' = 2,
 }
-type Ciphers = keyof typeof AESCipher
+type TCiphers = keyof typeof AESCipher
 
 export interface TAESConfig {
     /**
      * AES/XTS cipher used. Enter empty string for no encryption. 
      */
-    cipher: Ciphers
+    cipher: TCiphers
     /** 
      * 8-byte initialization vector provided from the volume's metadata.  
      * This value is combined with an 8-byte sector address to simulate
@@ -34,7 +34,7 @@ export interface TAESConfig {
 export default class AES {
 
     public readonly iv: Buffer
-    public readonly cipher: Ciphers
+    public readonly cipher: TCiphers
 
     /** Combines 8-byte IV with 8-byte sector address to emulate tweak values. */
     public readonly workingIV = Buffer.alloc(16)
@@ -157,7 +157,7 @@ export default class AES {
      * @param key encryption key
      * @returns [Error | Key]
      */
-    public static deriveAESKey(cipher: Ciphers, key: string | Buffer | undefined): 
+    public static deriveAESKey(cipher: TCiphers, key: string | Buffer | undefined): 
         T.XEav<Buffer, 'L0_AES_NOKEY'|'L0_AES_DIGEST'> {
         try {
             if (cipher && !key) throw new IBFSError(
