@@ -1,10 +1,10 @@
 // Imports ========================================================================================
 
-import type * as T from '../../types.d'
+import type * as T from '../../types.js'
 
 import crypto      from 'node:crypto'
 import zlib        from 'node:zlib'
-import IBFSError   from '../errors/IBFSError'
+import IBFSError   from '../errors/IBFSError.js'
 
 // Types & Constants ==============================================================================
 

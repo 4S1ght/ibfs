@@ -1,12 +1,12 @@
 // Imports ========================================================================================
 
-import type * as T from '../../../types'
+import type * as T from '../../../types.js'
 
-import Memory from '../Memory'
-import AES, { TAESConfig } from '../AES'
-import IBFSError from '../../errors/IBFSError'
+import AES, { TAESConfig } from '../AES.js'
+import IBFSError from '../../errors/IBFSError.js'
 
-import RootBlock, { TRootBlock } from './RootBlock'
+import RootBlock, { TRootBlock } from './RootBlock.js'
+import MetaCluster from './MetaCluster.js'
 
 // Types ==========================================================================================
 
@@ -18,26 +18,24 @@ export interface TSerializeConfig {
 
 export default class Serialize {
 
-    public static readonly HEAD_META = 64
-    public static readonly LINK_META = 32
-    public static readonly STORAGE_META = 32
-    public static readonly VDATA_META = 16
+    public static readonly HEAD_HEADER = 64
+    public static readonly LINK_HEADER = 32
+    public static readonly STORE_HEADER = 32
+    public static readonly META_HEADER = 16
 
     public readonly BLOCK_SIZE: number
     public readonly HEAD_BODY: number
     public readonly LINK_BODY: number
     public readonly STORAGE_BODY: number
-    public readonly ARB_SIZE: number
 
     public readonly crypto: AES
 
     constructor(config: TSerializeConfig & TAESConfig) {
 
         this.BLOCK_SIZE     = RootBlock.BLOCK_SIZES[config.blockSize]
-        this.HEAD_BODY      = this.BLOCK_SIZE - Serialize.HEAD_META
-        this.LINK_BODY      = this.BLOCK_SIZE - Serialize.LINK_META
-        this.STORAGE_BODY   = this.BLOCK_SIZE - Serialize.STORAGE_META
-        this.ARB_SIZE       = Math.ceil(1024*64 / this.BLOCK_SIZE) * this.BLOCK_SIZE
+        this.HEAD_BODY      = this.BLOCK_SIZE - Serialize.HEAD_HEADER
+        this.LINK_BODY      = this.BLOCK_SIZE - Serialize.LINK_HEADER
+        this.STORAGE_BODY   = this.BLOCK_SIZE - Serialize.STORE_HEADER
 
         this.crypto = new AES({
             iv: config.iv,
@@ -53,7 +51,7 @@ export default class Serialize {
      */
     public static serializeRootBlock(data: TRootBlock): T.XEav<Buffer, "L0_SR_SRFAIL_ROOT"> {
         try {
-            const block = RootBlock.fromObject(data)
+            const block = RootBlock.create(data)
             return [null, block.buffer]
         } 
         catch (error) {
@@ -66,7 +64,7 @@ export default class Serialize {
      */
     public static deserializeRootBlock(buffer: Buffer): T.XEav<RootBlock, "L0_SR_DSFAIL_ROOT"> {
         try {
-            const block = RootBlock.fromBuffer(buffer)
+            const block = RootBlock.from(buffer)
             return [null, block]
         } 
         catch (error) {

@@ -3,6 +3,7 @@
   "version": "2.0.0-pre",
   "description": "Indirect Block FileSystem (v2)",
   "main": "dist/index.js",
+  "type": "module",
   "scripts": {
     "test": "vitest",
     "dev": "tsc -w"
@@ -26,8 +27,12 @@
   },
   "homepage": "https://github.com/4S1ght/ibfs#readme",
   "devDependencies": {
+    "@types/ini": "^4.1.1",
     "@types/node": "22.10.2",
     "typescript": "5.7.2",
     "vitest": "2.1.8"
+  },
+  "dependencies": {
+    "ini": "5.0.0"
   }
 }

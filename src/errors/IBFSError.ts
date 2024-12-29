@@ -1,4 +1,4 @@
-import type * as T from '../../types.d'
+import type * as T from '../../types.js'
 
 export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> extends Error {
 

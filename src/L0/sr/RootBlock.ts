@@ -74,18 +74,18 @@ export default class RootBlock implements TRootBlock {
         
         const self = new this()
         // @ts-ignore
-        self.buffer = Buffer.alloc(RootBlock.BLOCK_SIZES[data.blockSize])
+        self.buffer = Buffer.allocUnsafe(RootBlock.BLOCK_SIZES[data.blockSize]).fill(0)
 
-        self.blockSize       = data.blockSize
-        self.specMajor       = data.specMajor
-        self.specMinor       = data.specMinor
-        self.root            = data.root
-        self.aesCipher       = data.aesCipher
-        self.aesIV           = data.aesIV
-        self.compatibility   = data.compatibility
-        self.aesKeyCheck     = data.aesKeyCheck
-        self.blockCount      = data.blockCount
-        self.metadataBlocks  = data.metadataBlocks
+        self.specMajor      = data.specMajor
+        self.specMinor      = data.specMinor
+        self.root           = data.root
+        self.aesCipher      = data.aesCipher
+        self.aesIV          = data.aesIV
+        self.aesKeyCheck    = data.aesKeyCheck
+        self.compatibility  = data.compatibility
+        self.blockSize      = data.blockSize
+        self.blockCount     = data.blockCount
+        self.metadataBlocks = data.metadataBlocks
 
         return self
 
@@ -94,7 +94,7 @@ export default class RootBlock implements TRootBlock {
     /** 
      * Wraps/overlays an existing buffer and allows for reading it's properties through the RootBlock interface.
      */
-    public static overlay(buffer: Buffer): RootBlock {
+    public static from(buffer: Buffer): RootBlock {
         const self = new this()
         // @ts-ignore
         self.buffer = buffer
