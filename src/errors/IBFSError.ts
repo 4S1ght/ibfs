@@ -47,12 +47,15 @@ export type IBFSErrorMetadata = { [key: string]: any }
 
 enum ErrorCodes {
 
-    // Scheme: [ level - scope - error - optional detail ]
+    // Scheme: LEVEL_SCOPE_ERROR_CODE_...
 
     // Level 1 ----------------------------------------------------------------
 
     L0_AES_NOKEY  = "AES key was not provided byt required by the encryption settings.",
     L0_AES_DIGEST = "Failed to digest the provided AES key.",
+
+    L0_BIN_HEAD_SEGFAULT = "Tried to write contents outside of head buffer boundary.",
+    L0_BIN_HEAD_INTEGRITY = "Head block integrity check failed - PROBABLE DATA CORRUPTION!",
 
     L0_SR_SRFAIL_ROOT = "Failed to serialize the root block.",
     L0_SR_DSFAIL_ROOT = "Failed to deserialize the root block.",

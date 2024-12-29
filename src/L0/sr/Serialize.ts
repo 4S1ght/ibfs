@@ -18,13 +18,11 @@ export interface TSerializeConfig {
 
 export default class Serialize {
 
-    public static readonly HEAD_HEADER = 64
     public static readonly LINK_HEADER = 32
     public static readonly STORE_HEADER = 32
     public static readonly META_HEADER = 16
 
     public readonly BLOCK_SIZE: number
-    public readonly HEAD_BODY: number
     public readonly LINK_BODY: number
     public readonly STORAGE_BODY: number
 
@@ -33,7 +31,6 @@ export default class Serialize {
     constructor(config: TSerializeConfig & TAESConfig) {
 
         this.BLOCK_SIZE     = RootBlock.BLOCK_SIZES[config.blockSize]
-        this.HEAD_BODY      = this.BLOCK_SIZE - Serialize.HEAD_HEADER
         this.LINK_BODY      = this.BLOCK_SIZE - Serialize.LINK_HEADER
         this.STORAGE_BODY   = this.BLOCK_SIZE - Serialize.STORE_HEADER
 
