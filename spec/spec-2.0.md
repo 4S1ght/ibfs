@@ -42,6 +42,23 @@ The scope covers:
     - Data integrity
 
 
+# Conventions, Notations & Definitions
+
+### Unit Conventions
+All sizes in this specification, unless explicitly stated otherwise, are expressed in binary units 
+based on powers of 2:
+
+```
+kB (kilobyte): 1 kB = 1024 bytes  
+MB (megabyte): 1 MB = 1024 kB = 1,048,576 bytes  
+GB (gigabyte): 1 GB = 1024 MB = 1,073,741,824 bytes  
+TB (terabyte): 1 TB = 1024 GB = 1,099,511,627,776 bytes  
+```
+
+This convention follows the binary system standard widely used in computing and ensures consistency 
+when interpreting sizes in IBFS. If decimal-based units (e.g., 1 kB = 1000 bytes) are referenced, 
+they will be explicitly specified to prevent any misunderstanding.
+
 # IBFS disk file
 
 ## Physical data structure
