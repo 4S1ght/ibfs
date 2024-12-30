@@ -8,18 +8,13 @@ import IBFSError   from '../errors/IBFSError.js'
 
 // Types & Constants ==============================================================================
 
-export enum AESCipher {
-    'none'        = 0,
-    'aes-128-xts' = 1,
-    'aes-256-xts' = 2,
-}
-type TCiphers = keyof typeof AESCipher
+export type TAesCipher = 'none' | 'aes-128-xts' | 'aes-256-xts'
 
-export interface TAESConfig {
+export interface TAesConfig {
     /**
      * AES/XTS cipher used. Enter empty string for no encryption. 
      */
-    cipher: TCiphers
+    cipher: TAesCipher
     /** 
      * 8-byte initialization vector provided from the volume's metadata.  
      * This value is combined with an 8-byte sector address to simulate
@@ -31,15 +26,15 @@ export interface TAESConfig {
 
 // Exports ========================================================================================
 
-export default class AES {
+export default class AESContext {
 
     public readonly iv: Buffer
-    public readonly cipher: TCiphers
+    public readonly cipher: TAesCipher
 
     /** Combines 8-byte IV with 8-byte sector address to emulate tweak values. */
     public readonly workingIV = Buffer.alloc(16)
 
-    constructor(config: TAESConfig) {
+    constructor(config: TAesConfig) {
 
         this.iv = config.iv
         this.cipher = config.cipher
@@ -157,8 +152,8 @@ export default class AES {
      * @param key encryption key
      * @returns [Error | Key]
      */
-    public static deriveAESKey(cipher: TCiphers, key: string | Buffer | undefined): 
-        T.XEav<Buffer, 'L0_AES_NOKEY'|'L0_AES_DIGEST'> {
+    public static deriveAESKey(cipher: TAesCipher, key: string | Buffer | undefined): 
+        T.XEav<Buffer, 'L0_AES_NOKEY'|'L0_AES_KEYDIGEST'> {
         try {
             if (cipher && !key) throw new IBFSError(
                 'L0_AES_NOKEY', 
@@ -173,7 +168,7 @@ export default class AES {
             return [null, ciphers[cipher]()]
         } 
         catch (error) {
-            return [new IBFSError('L0_AES_DIGEST', null, error as Error), null]
+            return [new IBFSError('L0_AES_KEYDIGEST', null, error as Error), null]
         }
     }
 

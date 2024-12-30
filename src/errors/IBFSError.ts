@@ -51,8 +51,8 @@ enum ErrorCodes {
 
     // Level 1 ----------------------------------------------------------------
 
-    L0_AES_NOKEY  = "AES key was not provided byt required by the encryption settings.",
-    L0_AES_DIGEST = "Failed to digest the provided AES key.",
+    L0_AES_NOKEY     = "AES key was not provided byt required by the encryption settings.",
+    L0_AES_KEYDIGEST = "Failed to digest the provided AES key.",
 
     L0_BIN_HEAD_SEGFAULT = "Tried to write contents outside of head buffer boundary.",
     L0_BIN_HEAD_INTEGRITY = "Head block integrity check failed - PROBABLE DATA CORRUPTION!",

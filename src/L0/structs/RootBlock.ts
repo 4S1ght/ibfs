@@ -1,5 +1,11 @@
+// Imports ========================================================================================
+
+import * as C from '../../Constants.js'
+import type { TAesCipher } from '../AES.js'
+
+// Types ==========================================================================================
+
 type TBlockSize = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15
-type TAESCipher = 'none' | 'aes-128-xts' | 'aes-256-xts'
 
 export interface TRootBlock {
     /** Specification version (major). */
@@ -9,7 +15,7 @@ export interface TRootBlock {
     /** Address of the volume's root directory. */
     root: number
     /** The AES/XTS cipher used for volume encryption. */
-    aesCipher: TAESCipher
+    aesCipher: TAesCipher
     /** The Initialization Vector (IV) used for encryption */
     aesIV: Buffer
     /** 16 null bytes encrypted with the original key for key validity checks. */
@@ -41,22 +47,10 @@ export interface TRootBlock {
 
 export default class RootBlock implements TRootBlock {
 
-    public static readonly BLOCK_SIZES = {
-        1:  1024,     // 1kB
-        2:  2048,     // 2kBs
-        3:  4096,     // 4kB
-        4:  8192,     // 8kB
-        5:  16384,    // 16kB
-        6:  32768,    // 32kB
-        7:  65536,    // 64kB
-        8:  131072,   // 128kB
-        9:  262144,   // 256kB
-        10: 524288,   // 512kB
-        11: 1048576,  // 1MB
-        12: 2097152,  // 2MB
-        13: 4194304,  // 4MB
-        14: 8388608,  // 8MB
-        15: 16777216, // 16MB
+    public static readonly BLOCK_SIZES = { 
+        1:  C.KB_1,  2: C.KB_2,  3: C.KB_4,   4: C.KB_8,    5: C.KB_16, 
+        6:  C.KB_32, 7: C.KB_64, 8: C.KB_128, 9: C.KB_256, 10: C.KB_512, 
+        11: C.MB_1, 12: C.MB_2, 13: C.MB_4,  14: C.MB_8,   15: C.MB_16
     } as const
 
     // Internal =====================================================
@@ -92,7 +86,8 @@ export default class RootBlock implements TRootBlock {
     }
 
     /** 
-     * Wraps/overlays an existing buffer and allows for reading it's properties through the RootBlock interface.
+     * Creates a root block from an existing buffer and allows for reading its properties 
+     * through the RootBlock interface. This should be used primarily for reads from the disk.
      */
     public static from(buffer: Buffer): RootBlock {
         const self = new this()
@@ -112,8 +107,8 @@ export default class RootBlock implements TRootBlock {
     get root() { return Number(this.buffer.readBigInt64LE(4)) }
     set root(value: number) { this.buffer.writeBigInt64LE(BigInt(value), 4) }
 
-    get aesCipher() { return ['none', 'aes-128-xts', 'aes-256-xts'][this.buffer.readUInt8(12)] as TAESCipher }
-    set aesCipher(value: TAESCipher) { this.buffer.writeUInt8(['none', 'aes-128-xts', 'aes-256-xts'].indexOf(value), 12) }
+    get aesCipher() { return ['none', 'aes-128-xts', 'aes-256-xts'][this.buffer.readUInt8(12)] as TAesCipher }
+    set aesCipher(value: TAesCipher) { this.buffer.writeUInt8(['none', 'aes-128-xts', 'aes-256-xts'].indexOf(value), 12) }
 
     get aesIV() { 
         const iv = Buffer.alloc(16)

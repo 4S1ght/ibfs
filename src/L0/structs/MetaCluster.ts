@@ -1,11 +1,13 @@
 // Imports ========================================================================================
 
 import ini from 'ini'
+import * as C from '../../Constants.js'
+import RootBlock from './RootBlock'
 
 // Types ==========================================================================================
 
 export interface TMetaCluster {
-    clusterSize: number
+    blockSize: keyof typeof RootBlock.BLOCK_SIZES
     metadata: Record<string, any>
 }
 
@@ -15,7 +17,7 @@ export default class MetaCluster {
 
     // Internal =====================================================
 
-    public declare readonly buffer: Buffer
+    public declare buffer: Buffer
     public declare metadata: { [key: string]: Record<string, string | boolean> }
 
     // Methods ======================================================
@@ -24,8 +26,11 @@ export default class MetaCluster {
 
     public static create(cluster: TMetaCluster): MetaCluster {
 
-        const self = new this() // @ts-ignore
-        self.buffer = Buffer.allocUnsafe(cluster.clusterSize).fill(0)
+        const self = new this()
+
+        const blockSize = RootBlock.BLOCK_SIZES[cluster.blockSize]
+        const clusterSize = blockSize * Math.ceil(C.KB_64 / blockSize) 
+        self.buffer = Buffer.allocUnsafe(clusterSize).fill(0)
 
         const text = ini.stringify(cluster.metadata)
         self.buffer.write(text, 0, 'utf-8')
@@ -40,7 +45,8 @@ export default class MetaCluster {
         const self = new this() // @ts-ignore
         self.buffer = buffer
 
-        const textEnd = self.buffer.indexOf(0)
+        const firstNull = self.buffer.indexOf(0)
+        const textEnd = firstNull != -1 ? firstNull : self.buffer.length - 1
         const text = self.buffer.toString('utf-8', 0, textEnd)
         const object = ini.parse(text)
 
