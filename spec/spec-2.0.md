@@ -59,6 +59,9 @@ This convention follows the binary system standard widely used in computing and 
 when interpreting sizes in IBFS. If decimal-based units (e.g., 1 kB = 1000 bytes) are referenced, 
 they will be explicitly specified to prevent any misunderstanding.
 
+### Binary Data
+The filesystem uses exclusively little-endian values for for all integers and booleans.
+
 # IBFS disk file
 
 ## Physical data structure

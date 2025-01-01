@@ -54,10 +54,6 @@ enum ErrorCodes {
     L0_AES_NOKEY     = "AES key was not provided byt required by the encryption settings.",
     L0_AES_KEYDIGEST = "Failed to digest the provided AES key.",
 
-    L0_BIN_HEAD_SEGFAULT = "Tried to write contents outside of head buffer boundary.",
-    L0_BIN_HEAD_INTEGRITY = "Head block integrity check failed - PROBABLE DATA CORRUPTION!",
-
-    L0_SR_SRFAIL_ROOT = "Failed to serialize the root block.",
-    L0_SR_DSFAIL_ROOT = "Failed to deserialize the root block.",
+    L0_BSR_ROOTERR   = "An error occurred while serializing the root block.",
 
 }

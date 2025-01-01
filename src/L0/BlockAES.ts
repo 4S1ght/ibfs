@@ -26,7 +26,7 @@ export interface TAesConfig {
 
 // Exports ========================================================================================
 
-export default class AESContext {
+export default class BlockAESContext {
 
     public readonly iv: Buffer
     public readonly cipher: TAesCipher
