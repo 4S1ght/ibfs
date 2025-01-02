@@ -44,7 +44,7 @@ The scope covers:
 
 # Conventions, Notations & Definitions
 
-### Unit Conventions
+## Unit Conventions
 All sizes in this specification, unless explicitly stated otherwise, are expressed in binary units 
 based on powers of 2:
 
@@ -55,12 +55,20 @@ GB (gigabyte): 1 GB = 1024 MB = 1,073,741,824 bytes
 TB (terabyte): 1 TB = 1024 GB = 1,099,511,627,776 bytes  
 ```
 
-This convention follows the binary system standard widely used in computing and ensures consistency 
+This convention follows the standard binary system widely used in computing and ensures consistency 
 when interpreting sizes in IBFS. If decimal-based units (e.g., 1 kB = 1000 bytes) are referenced, 
-they will be explicitly specified to prevent any misunderstanding.
+their use will be explicitly stated.
 
-### Binary Data
+## Data formats
+
+### Binary integers and booleans
 The filesystem uses exclusively little-endian values for for all integers and booleans.
+This applies to all filesystem metadata. User data stored within storage block bodies does not have 
+to follow this pattern.
+
+### Text encoding
+All plain-text metadata must be encoded using the UTF-8 encoding unless stated otherwise.
+
 
 # IBFS disk file
 
