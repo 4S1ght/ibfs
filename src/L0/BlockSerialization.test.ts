@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import crypto from 'node:crypto'
-import BlockSerializationContext, { TRootBlock } from './BlockSerialization'
+import BlockSerializationContext, { TMetaCluster, TRootBlock } from './BlockSerialization'
+import * as C from '../Constants.js'
 
 describe('Root Block de/serialization', () => {
 
@@ -18,23 +19,41 @@ describe('Root Block de/serialization', () => {
 
     const [srError, serialized] = BlockSerializationContext.serializeRootBlock(data)
     if (srError) return expect(srError).toBeUndefined()
-    console.log(serialized)
 
     const [dsError, deserialized] = BlockSerializationContext.deserializeRootBlock(serialized)
     if (dsError) return expect(dsError).toBeUndefined()
 
-    console.log(deserialized)
+    test('buffer length',    () => expect(serialized.length)            .toEqual(C.KB_1))
 
-    test('sr/specMajor',        () => expect(deserialized.specMajor)       .toBe(data.specMajor))
-    test('sr/specMinor',        () => expect(deserialized.specMinor)       .toBe(data.specMinor))
-    test('sr/root',             () => expect(deserialized.root)            .toBe(data.root))
-    test('sr/aesCipher',        () => expect(deserialized.aesCipher)       .toBe(data.aesCipher))
-    test('sr/aesIV',            () => expect(deserialized.aesIV)           .toStrictEqual(data.aesIV))
-    test('sr/aesKeyCheck',      () => expect(deserialized.aesKeyCheck)     .toStrictEqual(data.aesKeyCheck))
-    test('sr/compatibility',    () => expect(deserialized.compatibility)   .toBe(data.compatibility))
-    test('sr/blockSize',        () => expect(deserialized.blockSize)       .toBe(data.blockSize))
-    test('sr/blockCount',       () => expect(deserialized.blockCount)      .toBe(data.blockCount))
+    test('specMajor',        () => expect(deserialized.specMajor)       .toBe(data.specMajor))
+    test('specMinor',        () => expect(deserialized.specMinor)       .toBe(data.specMinor))
+    test('root',             () => expect(deserialized.root)            .toBe(data.root))
+    test('aesCipher',        () => expect(deserialized.aesCipher)       .toBe(data.aesCipher))
+    test('aesIV',            () => expect(deserialized.aesIV)           .toStrictEqual(data.aesIV))
+    test('aesKeyCheck',      () => expect(deserialized.aesKeyCheck)     .toStrictEqual(data.aesKeyCheck))
+    test('compatibility',    () => expect(deserialized.compatibility)   .toBe(data.compatibility))
+    test('blockSize',        () => expect(deserialized.blockSize)       .toBe(data.blockSize))
+    test('blockCount',       () => expect(deserialized.blockCount)      .toBe(data.blockCount))
 
+})
+
+describe('Meta cluster de/code', () => {
+
+    const metadata: TMetaCluster['metadata'] = {
+        ibfs: {
+            string: 'string',
+            boolean: true
+        }
+    }
+
+    const [srError, serialized] = BlockSerializationContext.serializeMetaCluster({ metadata, blockSize: 1024 })
+    if (srError) return expect(srError).toBeUndefined()
+
+    const [dsError, deserialized] = BlockSerializationContext.deserializeMetaCluster(serialized)
+    if (dsError) return expect(dsError).toBeUndefined()
+
+    test('buffer length', () => expect(serialized.length).toBeGreaterThanOrEqual(C.KB_64))
+    test('metadata',      () => expect(deserialized.metadata).toEqual(metadata))
 
 
 })

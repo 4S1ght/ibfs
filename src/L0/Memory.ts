@@ -102,7 +102,7 @@ export default class Memory {
      * This can be done fully sequentially, as both the source and target
      * `bytesRead` and `bytesWritten` values are synced respectively.
      */
-    public copyTo(target: Memory, length: number) {
+    public copyTo(target: Memory, length: number): number {
         const copied = this.buffer.copy(
             target.buffer, 
             target.bytesWritten,
@@ -111,6 +111,11 @@ export default class Memory {
         )
         this.bytesRead += copied
         target.bytesWritten += copied
+        return copied
+    }
+    /** Used to initialize a part of memory to 0's. */
+    public initialize(start: number, end: number) {
+        this.buffer.fill(0, start, end)
     }
 
     // Sequential output ============================================

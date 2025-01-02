@@ -54,6 +54,12 @@ enum ErrorCodes {
     L0_AES_NOKEY     = "AES key was not provided byt required by the encryption settings.",
     L0_AES_KEYDIGEST = "Failed to digest the provided AES key.",
 
-    L0_BSR_ROOTERR   = "An error occurred while serializing the root block.",
+    L0_SR_ROOTERR   = "An error occurred while serializing the root block.",
+    L0_SR_METAERR   = "An error occurred while serializing the metadata cluster.",
+    L0_SR_HEADERR   = "An error occurred while serializing a head block.",
+
+    L0_DS_ROOTERR   = "An error occurred while deserializing the root block.",
+    L0_DS_METAERR   = "An error occurred while deserializing the metadata cluster.",
+    L0_DS_HEADERR   = "An error occurred while deserializing a head block.",
 
 }

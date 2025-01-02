@@ -77,18 +77,19 @@ export default class BlockAESContext {
 
     /**
      * Encrypts the `input` data and copies it back over to the same `input` buffer.
-     * Returns the CRC-32 checksum of the original buffer after decryption.
+     * Returns the CRC-32 checksum of the original unencrypted buffer.
      * @param input Unencrypted sector bytes
      * @param key Encryption/decryption key
      * @param address Sector address
      */
     public encryptCRC(input: Buffer, key: Buffer, address: number) {
+        const crc = zlib.crc32(input)
         const iv = this.getIV(address)
         const cipher = crypto.createCipheriv(this.cipher, key, iv)
         const pos = cipher.update(input).copy(input, 0)
                     cipher.final().copy(input, pos)
 
-        return zlib.crc32(input)
+        return crc
     }
 
     /**
@@ -106,19 +107,18 @@ export default class BlockAESContext {
 
     /**
      * Decrypts the `input` data and copies it back over to the same `input` buffer.
-     * Returns the CRC-32 checksum of the original buffer before decryption.
+     * Returns the CRC-32 checksum of the original buffer after decryption.
      * @param encrypted Encrypted sector bytes
      * @param key Encryption/decryption key
      * @param address Sector address
      */
     public decryptCRC(input: Buffer, key: Buffer, address: number) {
-        const crc = zlib.crc32(input)
         const iv = this.getIV(address)
         const decipher = crypto.createDecipheriv(this.cipher, key, iv)
         const pos = decipher.update(input).copy(input, 0)
                     decipher.final().copy(input, pos)
                 
-        return crc
+        return zlib.crc32(input)
     }
 
     // Static ===================================
