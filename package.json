@@ -8,6 +8,9 @@
     "test": "vitest",
     "dev": "tsc -w"
   },
+  "engines": {
+    "node": ">22.2.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/4S1ght/ibfs.git"
