@@ -1,7 +1,8 @@
 import { describe, test, expect } from 'vitest'
 import crypto from 'node:crypto'
-import BlockSerializationContext, { TMetaCluster, TRootBlock } from './BlockSerialization'
+import BlockSerializationContext, { TCommonWriteMeta, THeadBlock, TMetaCluster, TRootBlock } from './BlockSerialization'
 import * as C from '../Constants.js'
+import BlockAESContext from './BlockAES.js'
 
 describe('Root Block de/serialization', () => {
 
@@ -46,7 +47,7 @@ describe('Meta cluster de/code', () => {
         }
     }
 
-    const [srError, serialized] = BlockSerializationContext.serializeMetaCluster({ metadata, blockSize: 1024 })
+    const [srError, serialized] = BlockSerializationContext.serializeMetaCluster({ metadata, blockSize: 1 })
     if (srError) return expect(srError).toBeUndefined()
 
     const [dsError, deserialized] = BlockSerializationContext.deserializeMetaCluster(serialized)
@@ -55,5 +56,42 @@ describe('Meta cluster de/code', () => {
     test('buffer length', () => expect(serialized.length).toBeGreaterThanOrEqual(C.KB_64))
     test('metadata',      () => expect(deserialized.metadata).toEqual(metadata))
 
+
+})
+
+describe('Head block de/serialize', () => {
+
+    const [_, key] = BlockAESContext.deriveAESKey('aes-256-xts', 'some key') as [null, Buffer]
+
+    const bs = new BlockSerializationContext({
+        physicalBlockSize: 1024,
+        cipher: 'aes-256-xts',
+        iv: crypto.randomBytes(16)
+    })
+
+    const data: THeadBlock & TCommonWriteMeta = {
+        created: Math.floor(Date.now()/1000),
+        modified: Math.floor(Date.now()/1000),
+        resourceType: 'FILE',
+        next: 123,
+        data: crypto.randomBytes(1024 - BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE),
+        aesKey: key,
+        address: 69420
+    }
+
+    const [srError, serialized] = bs.serializeHeadBlock(data)
+    if (srError) return expect(srError).toBeUndefined()
+
+    const [dsError, deserialized] = bs.deserializeHeadBlock(serialized, 69420, key)
+    if (dsError) return expect(dsError).toBeUndefined()
+
+    test('buffer length', () => expect(serialized.length).toBe(C.KB_1))
+    test('created',       () => expect(deserialized.created).toBe(data.created))
+    test('modified',      () => expect(deserialized.modified).toBe(data.modified))
+    test('type',          () => expect(deserialized.resourceType).toBe(data.resourceType))
+    test('next',          () => expect(deserialized.next).toBe(data.next))
+    test('data',          () => expect(deserialized.data).toStrictEqual(data.data))
+    test('crcMismatch',   () => expect(deserialized.crc32Mismatch).toBe(false))
+    test('crcComputed',   () => expect(deserialized.crc32Computed).toBe(deserialized.crc32sum))
 
 })

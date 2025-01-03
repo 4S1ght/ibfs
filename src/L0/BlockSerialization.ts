@@ -9,6 +9,7 @@ import IBFSError from '../errors/IBFSError.js'
 import Enum from '../misc/enum.js'
 
 import ini from 'ini'
+import zlib from 'zlib'
 
 
 // Types ==========================================================================================
@@ -40,7 +41,7 @@ export interface TMetaCluster {
 export interface THeadBlock {
     /** Timestamp when the block was created             */ created:        number
     /** Timestamp when the block was last modified       */ modified:       number
-    /** Resource type (used for recovery)                */ type:           'FILE' | 'DIR'
+    /** Resource type (used for recovery)                */ resourceType:   'FILE' | 'DIR'
     /** Next block address (0: final block)              */ next:           number
     /** Block body data                                  */ data:           Buffer
 }
@@ -50,12 +51,12 @@ export interface THeadBlock {
 export interface TCommonWriteMeta {
     /** AES encryption key                               */ aesKey:         Buffer
     /** address of the block (used for XTS encryption)   */ address:        number
-    /** Block size (levels 1-15)                         */ blockSize:      keyof typeof BlockSerializationContext.BLOCK_SIZES
 }
 export interface TCommonReadMeta {
     /** Block type                                       */ blockType:      'HEAD' | 'LINK' | 'STORE'
-    /** CRC32 checksum                                   */ crc32sum:       number
-    /** CRC mismatch                                     */ crcMismatch:    boolean
+    /** CRC32 checksum read from block header            */ crc32sum:       number
+    /** CRC32 checksum computed during deserialization   */ crc32Computed:  number
+    /** CRC mismatch                                     */ crc32Mismatch:  boolean
 }
 
 export interface TMetadataBlockWriteMeta {
@@ -236,18 +237,18 @@ export default class BlockSerializationContext {
         try {
             
             const hSize = BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
-            const dist = Memory.allocUnsafe(blockData.blockSize)
-            const src = Memory.take(blockData.data)
+            const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)
+            const src   = Memory.take(blockData.data)
 
             dist.initialize(0, hSize)
 
             dist.writeInt8(BlockSerializationContext.BLOCK_TYPES.HEAD)
-            dist.writeInt32(0)
+            dist.writeInt32(0) // Placeholder
             dist.writeInt64(blockData.next)
             dist.writeInt64(blockData.created || 0)
             dist.writeInt64(blockData.modified || 0)
             dist.writeInt32(blockData.data.length)
-            dist.writeInt8(BlockSerializationContext.RESOURCE_TYPES[blockData.type])
+            dist.writeInt8(BlockSerializationContext.RESOURCE_TYPES[blockData.resourceType])
 
             dist.bytesWritten = hSize
             dist.bytesRead    = hSize
@@ -255,7 +256,10 @@ export default class BlockSerializationContext {
             const copied = src.copyTo(dist, this.HEAD_CONTENT_SIZE)
             dist.initialize(hSize + copied, dist.length) // 0-fill leftover uninitialized memory
 
-            const crc = this.aes.encryptCRC(dist.read(this.HEAD_CONTENT_SIZE), blockData.aesKey!, blockData.address)
+            const body = dist.read(this.HEAD_CONTENT_SIZE)
+            const crc = zlib.crc32(body)
+            this.aes.encrypt(body, blockData.aesKey!, blockData.address)
+
             dist.writeInt32(crc, 1) // Content checksum
 
             return [null, dist.buffer]
@@ -278,14 +282,13 @@ export default class BlockSerializationContext {
             props.created       = src.readInt64()
             props.modified      = src.readInt64()
             const bodySize      = src.readInt32()
-            props.type          = BlockSerializationContext.RESOURCE_TYPES[src.readInt8()]
+            props.resourceType  = BlockSerializationContext.RESOURCE_TYPES[src.readInt8()]
 
             src.bytesRead       = BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
-            const body          = src.readRemaining()
-
-            const crc           = this.aes.decryptCRC(body, aesKey, blockAddress)
+            const body          = this.aes.decrypt(src.readRemaining(), aesKey, blockAddress)
+            props.crc32Computed = zlib.crc32(body)
+            props.crc32Mismatch = props.crc32Computed !== props.crc32sum
             props.data          = body.subarray(0, bodySize)
-            props.crcMismatch   = crc !== props.crc32sum
 
             return [null, props as Required<typeof props>]
 
