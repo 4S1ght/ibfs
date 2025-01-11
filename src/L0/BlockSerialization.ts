@@ -274,6 +274,9 @@ export default class BlockSerializationContext {
         }
     }
 
+    /**
+     * Deserializes a head block and returns its information.
+     */
     public deserializeHeadBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): T.XEav<THeadBlock & TCommonReadMeta, 'L0_DS_HEADERR'> {
         try {
             
@@ -302,6 +305,16 @@ export default class BlockSerializationContext {
         }
     }
 
+    /**
+     * Serializes a link block and returns a buffer that can be written to the disk.
+     *
+        Index | Size | Type   | Description
+        ------|------|--------|------------------------------------------------
+        0     | 1B   | Int8   | Block type (LINK)
+        1     | 4B   | Int32  | CRC checksum
+        5     | 8B   | Int64  | Next block address
+        13    | 4B   | Int32  | Actual usable data inside the block body
+     */
     public serializeLinkBlock(blockData: TLinkBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_LINKERR'> {
         try {
 
@@ -336,6 +349,9 @@ export default class BlockSerializationContext {
         }
     }
 
+    /**
+     * Deserializes a link block and returns its information.
+     */
     public deserializeLinkBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): T.XEav<TLinkBlock & TCommonReadMeta, 'L0_DS_LINKERR'> {
         try {
             

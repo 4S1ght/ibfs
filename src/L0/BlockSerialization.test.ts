@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import crypto from 'node:crypto'
-import BlockSerializationContext, { TCommonWriteMeta, THeadBlock, TMetaCluster, TRootBlock } from './BlockSerialization'
+import BlockSerializationContext, { TCommonWriteMeta, THeadBlock, TLinkBlock, TMetaCluster, TRootBlock } from './BlockSerialization'
 import * as C from '../Constants.js'
 import BlockAESContext from './BlockAES.js'
 
@@ -86,9 +86,42 @@ describe('Head block de/serialize', () => {
     if (dsError) return expect(dsError).toBeUndefined()
 
     test('buffer length', () => expect(serialized.length).toBe(C.KB_1))
+    test('blockType',     () => expect(deserialized.blockType).toBe('HEAD'))
     test('created',       () => expect(deserialized.created).toBe(data.created))
     test('modified',      () => expect(deserialized.modified).toBe(data.modified))
     test('type',          () => expect(deserialized.resourceType).toBe(data.resourceType))
+    test('next',          () => expect(deserialized.next).toBe(data.next))
+    test('data',          () => expect(deserialized.data).toStrictEqual(data.data))
+    test('crcMismatch',   () => expect(deserialized.crc32Mismatch).toBe(false))
+    test('crcComputed',   () => expect(deserialized.crc32Computed).toBe(deserialized.crc32sum))
+
+})
+
+describe('Link block de/serialize', () => {
+    
+    const [_, key] = BlockAESContext.deriveAESKey('aes-256-xts', 'some key') as [null, Buffer]
+
+    const bs = new BlockSerializationContext({
+        physicalBlockSize: 1024,
+        cipher: 'aes-256-xts',
+        iv: crypto.randomBytes(16)
+    })
+
+    const data: TLinkBlock & TCommonWriteMeta = {
+        next: 123,
+        data: crypto.randomBytes(1024 - BlockSerializationContext.LINK_BLOCK_HEADER_SIZE),
+        aesKey: key,
+        address: 69420
+    }
+
+    const [srError, serialized] = bs.serializeLinkBlock(data)
+    if (srError) return expect(srError).toBeUndefined()
+
+    const [dsError, deserialized] = bs.deserializeLinkBlock(serialized, 69420, key)
+    if (dsError) return expect(dsError).toBeUndefined()
+
+    test('buffer length', () => expect(serialized.length).toBe(C.KB_1))
+    test('blockType',     () => expect(deserialized.blockType).toBe('LINK'))
     test('next',          () => expect(deserialized.next).toBe(data.next))
     test('data',          () => expect(deserialized.data).toStrictEqual(data.data))
     test('crcMismatch',   () => expect(deserialized.crc32Mismatch).toBe(false))
