@@ -62,4 +62,7 @@ enum ErrorCodes {
     L0_DS_METAERR   = "An error occurred while deserializing the metadata cluster.",
     L0_DS_HEADERR   = "An error occurred while deserializing a head block.",
 
+    L0_SR_LINKERR   = "An error occurred while serializing a link block.",
+    L0_DS_LINKERR   = "An error occurred while deserializing a link block",
+
 }

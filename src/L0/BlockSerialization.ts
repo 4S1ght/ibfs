@@ -11,7 +11,6 @@ import Enum from '../misc/enum.js'
 import ini from 'ini'
 import zlib from 'zlib'
 
-
 // Types ==========================================================================================
 
 export interface TBlockSerializeConfig {
@@ -44,6 +43,11 @@ export interface THeadBlock {
     /** Resource type (used for recovery)                */ resourceType:   'FILE' | 'DIR'
     /** Next block address (0: final block)              */ next:           number
     /** Block body data                                  */ data:           Buffer
+}
+
+export interface TLinkBlock {
+    /** Next block's address (0: final block)            */ next:           number
+    /** Blo k body data                                  */ data:           Buffer
 }
 
 // IO Metadata ====================================================================================
@@ -144,7 +148,7 @@ export default class BlockSerializationContext {
             
         } 
         catch (error) {
-            return [new IBFSError('L0_SR_ROOTERR', error, null, blockData), null]
+            return [new IBFSError('L0_SR_ROOTERR', null, error as Error, blockData), null]
         }
     }
 
@@ -155,7 +159,7 @@ export default class BlockSerializationContext {
         try {
             
             const data: Partial<TRootBlock> = {}
-            const block = Memory.take(blockBuffer)
+            const block = Memory.wrap(blockBuffer)
 
             data.specMajor      = block.readInt16()
             data.specMinor      = block.readInt16()
@@ -171,7 +175,7 @@ export default class BlockSerializationContext {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_DS_ROOTERR', error, null, blockBuffer), null]
+            return [new IBFSError('L0_DS_ROOTERR', null, error as Error, blockBuffer), null]
         }
     }
 
@@ -195,7 +199,7 @@ export default class BlockSerializationContext {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_SR_METAERR', error, null, blockData), null]
+            return [new IBFSError('L0_SR_METAERR', null, error as Error, blockData), null]
         }
     }
 
@@ -214,7 +218,7 @@ export default class BlockSerializationContext {
 
         }
          catch (error) {
-            return [new IBFSError('L0_DS_METAERR', error, null, blockBuffer), null]    
+            return [new IBFSError('L0_DS_METAERR', null, error as Error, blockBuffer), null]    
         }
     }
 
@@ -238,7 +242,7 @@ export default class BlockSerializationContext {
             
             const hSize = BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
             const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)
-            const src   = Memory.take(blockData.data)
+            const src   = Memory.wrap(blockData.data)
 
             dist.initialize(0, hSize)
 
@@ -266,7 +270,7 @@ export default class BlockSerializationContext {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_SR_HEADERR', error, null, blockData), null]    
+            return [new IBFSError('L0_SR_HEADERR', null, error as Error, blockData), null]    
         }
     }
 
@@ -274,15 +278,15 @@ export default class BlockSerializationContext {
         try {
             
             const props: Partial<THeadBlock & TCommonReadMeta> = {}
-            const src = Memory.take(blockBuffer)
+            const src = Memory.wrap(blockBuffer)
 
-            props.blockType     = BlockSerializationContext.BLOCK_TYPES[src.readInt8()]
+            props.blockType     = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
             props.crc32sum      = src.readInt32()
             props.next          = src.readInt64()
             props.created       = src.readInt64()
             props.modified      = src.readInt64()
             const bodySize      = src.readInt32()
-            props.resourceType  = BlockSerializationContext.RESOURCE_TYPES[src.readInt8()]
+            props.resourceType  = BlockSerializationContext.RESOURCE_TYPES[src.readInt8() as 1|2]
 
             src.bytesRead       = BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
             const body          = this.aes.decrypt(src.readRemaining(), aesKey, blockAddress)
@@ -294,7 +298,66 @@ export default class BlockSerializationContext {
 
         } 
         catch (error) {
-            return [new IBFSError('L0_DS_HEADERR', error, null, blockBuffer), null]    
+            return [new IBFSError('L0_DS_HEADERR', null, error as Error, blockBuffer), null]    
+        }
+    }
+
+    public serializeLinkBlock(blockData: TLinkBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_LINKERR'> {
+        try {
+
+            const hSize = BlockSerializationContext.LINK_BLOCK_HEADER_SIZE
+            const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)
+            const src   = Memory.wrap(blockData.data)
+
+            dist.initialize(0, hSize)
+
+            dist.writeInt8(BlockSerializationContext.BLOCK_TYPES.LINK)
+            dist.writeInt32(0) // Placeholder
+            dist.writeInt64(blockData.next)
+            dist.writeInt32(blockData.data.length)
+
+            dist.bytesWritten = hSize
+            dist.bytesRead    = hSize
+
+            const copied = src.copyTo(dist, this.LINK_CONTENT_SIZE)
+            dist.initialize(hSize + copied, dist.length) // 0-fill leftover uninitialized memory
+
+            const body = dist.read(this.LINK_CONTENT_SIZE)
+            const crc = zlib.crc32(body)
+            this.aes.encrypt(body, blockData.aesKey!, blockData.address)
+
+            dist.writeInt32(crc, 1) // Content checksum
+
+            return [null, dist.buffer]            
+            
+        } 
+        catch (error) {
+            return [new IBFSError("L0_SR_LINKERR", null, error as Error, blockData), null]
+        }
+    }
+
+    public deserializeLinkBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): T.XEav<TLinkBlock & TCommonReadMeta, 'L0_DS_LINKERR'> {
+        try {
+            
+            const props: Partial<TLinkBlock & TCommonReadMeta> = {}
+            const src = Memory.wrap(blockBuffer)
+
+            props.blockType     = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
+            props.crc32sum      = src.readInt32()
+            props.next          = src.readInt64()
+            const bodySize      = src.readInt32()
+
+            src.bytesRead       = BlockSerializationContext.LINK_BLOCK_HEADER_SIZE
+            const body          = this.aes.decrypt(src.readRemaining(), aesKey!, blockAddress)
+            props.crc32Computed = zlib.crc32(body)
+            props.crc32Mismatch = props.crc32Computed !== props.crc32sum
+            props.data          = body.subarray(0, bodySize)
+
+            return [null, props as Required<typeof props>]
+
+        } 
+        catch (error) {
+            return [new IBFSError("L0_DS_LINKERR", null, error as Error, blockBuffer), null]
         }
     }
 

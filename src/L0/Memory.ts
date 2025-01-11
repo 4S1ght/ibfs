@@ -25,7 +25,7 @@ export default class Memory {
     }
 
     /** Wraps an existing buffer and returns a new Memory instance */
-    public static take(buffer: Buffer) {
+    public static wrap(buffer: Buffer) {
         return new this(buffer)
     }
     /** Allocates a portion of memory equal to `size`. */
