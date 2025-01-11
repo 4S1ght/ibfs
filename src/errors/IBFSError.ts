@@ -65,4 +65,7 @@ enum ErrorCodes {
     L0_SR_LINKERR   = "An error occurred while serializing a link block.",
     L0_DS_LINKERR   = "An error occurred while deserializing a link block",
 
+    L0_SR_DATAERR   = "An error occurred while serializing a data block.",
+    L0_DS_DATAERR   = "An error occurred while deserializing a data block.",
+
 }

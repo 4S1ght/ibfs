@@ -1,3 +1,6 @@
+// TODOs ==========================================================================================
+// - Refactor serialization methods to compute CRC's *AFTER* encryption
+
 // Imports ========================================================================================
 
 import * as T from '../../types.js'
@@ -47,7 +50,11 @@ export interface THeadBlock {
 
 export interface TLinkBlock {
     /** Next block's address (0: final block)            */ next:           number
-    /** Blo k body data                                  */ data:           Buffer
+    /** block body data                                  */ data:           Buffer
+}
+
+export interface TDataBlock {
+    /** Block body data                                  */ data:           Buffer
 }
 
 // IO Metadata ====================================================================================
@@ -57,7 +64,7 @@ export interface TCommonWriteMeta {
     /** address of the block (used for XTS encryption)   */ address:        number
 }
 export interface TCommonReadMeta {
-    /** Block type                                       */ blockType:      'HEAD' | 'LINK' | 'STORE'
+    /** Block type                                       */ blockType:      'HEAD' | 'LINK' | 'DATA'
     /** CRC32 checksum read from block header            */ crc32sum:       number
     /** CRC32 checksum computed during deserialization   */ crc32Computed:  number
     /** CRC mismatch                                     */ crc32Mismatch:  boolean
@@ -72,9 +79,9 @@ export interface TMetadataBlockWriteMeta {
 export default class BlockSerializationContext {
 
     // Constants
-    public static readonly HEAD_BLOCK_HEADER_SIZE  = 64
-    public static readonly LINK_BLOCK_HEADER_SIZE  = 32
-    public static readonly STORE_BLOCK_HEADER_SIZE = 32
+    public static readonly HEAD_BLOCK_HEADER_SIZE = 64
+    public static readonly LINK_BLOCK_HEADER_SIZE = 32
+    public static readonly DATA_BLOCK_HEADER_SIZE = 32
 
     public static readonly BLOCK_SIZES = { 
         1:  C.KB_1,  2: C.KB_2,  3: C.KB_4,   4: C.KB_8,    5: C.KB_16, 
@@ -83,9 +90,9 @@ export default class BlockSerializationContext {
     } as const
 
     public static readonly BLOCK_TYPES = Enum({
-        HEAD:  1,
-        LINK:  2,
-        STORE: 3
+        HEAD: 1,
+        LINK: 2,
+        DATA: 3
     } as const)
 
     public static readonly RESOURCE_TYPES = Enum({
@@ -97,16 +104,16 @@ export default class BlockSerializationContext {
     public readonly BLOCK_SIZE: number
     public readonly HEAD_CONTENT_SIZE: number
     public readonly LINK_CONTENT_SIZE: number
-    public readonly STORE_CONTENT_SIZE: number
+    public readonly DATA_CONTENT_SIZE: number
 
     public readonly aes: BlockAESContext
 
     constructor(config: TBlockSerializeConfig & TAesConfig) {
 
         this.BLOCK_SIZE = config.physicalBlockSize
-        this.HEAD_CONTENT_SIZE  = this.BLOCK_SIZE - BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
-        this.LINK_CONTENT_SIZE  = this.BLOCK_SIZE - BlockSerializationContext.LINK_BLOCK_HEADER_SIZE
-        this.STORE_CONTENT_SIZE = this.BLOCK_SIZE - BlockSerializationContext.STORE_BLOCK_HEADER_SIZE
+        this.HEAD_CONTENT_SIZE = this.BLOCK_SIZE - BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
+        this.LINK_CONTENT_SIZE = this.BLOCK_SIZE - BlockSerializationContext.LINK_BLOCK_HEADER_SIZE
+        this.DATA_CONTENT_SIZE = this.BLOCK_SIZE - BlockSerializationContext.DATA_BLOCK_HEADER_SIZE
 
         this.aes = new BlockAESContext(config)
 
@@ -234,7 +241,7 @@ export default class BlockSerializationContext {
         5     | 8B   | Int64  | Next block address
         13    | 8B   | Int64  | Creation date (Unix timestamp - seconds)
         21    | 8B   | Int64  | Modification date (Unix timestamp - seconds)
-        25    | 4B   | Int32  | Actual usable data inside the block body.
+        25    | 4B   | Int32  | Size of usable block data
         26    | 1B   | Int8   | Resource type
      */
     public serializeHeadBlock(blockData: THeadBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_HEADERR'> {
@@ -313,7 +320,7 @@ export default class BlockSerializationContext {
         0     | 1B   | Int8   | Block type (LINK)
         1     | 4B   | Int32  | CRC checksum
         5     | 8B   | Int64  | Next block address
-        13    | 4B   | Int32  | Actual usable data inside the block body
+        13    | 4B   | Int32  | Size of usable block data
      */
     public serializeLinkBlock(blockData: TLinkBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_LINKERR'> {
         try {
@@ -351,6 +358,12 @@ export default class BlockSerializationContext {
 
     /**
      * Deserializes a link block and returns its information.
+     * 
+        Index | Size | Type   | Description
+        ------|------|--------|------------------------------------------------
+        0     | 1B   | Int8   | Block type (LINK)
+        1     | 4B   | Int32  | CRC checksum
+        5     | 4B   | Int32  | Size of usable block data
      */
     public deserializeLinkBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): T.XEav<TLinkBlock & TCommonReadMeta, 'L0_DS_LINKERR'> {
         try {
@@ -374,6 +387,39 @@ export default class BlockSerializationContext {
         } 
         catch (error) {
             return [new IBFSError("L0_DS_LINKERR", null, error as Error, blockBuffer), null]
+        }
+    }
+
+    public serializeDataBlock(blockData: TDataBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_DATAERR'> {
+        try {
+
+            const hSize = BlockSerializationContext.DATA_BLOCK_HEADER_SIZE
+            const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)
+            const src   = Memory.wrap(blockData.data)
+
+            dist.initialize(0, hSize)
+
+            dist.writeInt8(BlockSerializationContext.BLOCK_TYPES.DATA)
+            dist.writeInt32(0) // Placeholder
+            dist.writeInt32(blockData.data.length)
+
+            dist.bytesWritten = hSize
+            dist.bytesRead    = hSize
+
+            const copied = src.copyTo(dist, this.DATA_CONTENT_SIZE)
+            dist.initialize(hSize + copied, dist.length) // 0-fill leftover uninitialized memory
+
+            const body = dist.read(this.DATA_CONTENT_SIZE)
+            const crc = zlib.crc32(body)
+            this.aes.encrypt(body, blockData.aesKey, blockData.address)
+
+            dist.writeInt32(crc, 1) // Content checksum
+
+            return [null, dist.buffer]
+            
+        } 
+        catch (error) {
+            return [new IBFSError("L0_SR_DATAERR", null, error as Error, blockData), null]
         }
     }
 
