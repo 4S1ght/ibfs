@@ -19,7 +19,6 @@ import zlib from 'zlib'
 export interface TBlockSerializeConfig {
     /** Physical size of individual blocks - Aka. 1024, 2048, 4096, etc... */
     physicalBlockSize: number
-    
 }
 
 // BLocks =========================================================================================
@@ -70,7 +69,7 @@ export interface TCommonReadMeta {
     /** CRC mismatch                                     */ crc32Mismatch:  boolean
 }
 
-export interface TMetadataBlockWriteMeta {
+export interface TMetadataWriteMeta {
     /** Block size (levels 1-15)                         */ blockSize:      keyof typeof BlockSerializationContext.BLOCK_SIZES
 }
 
@@ -193,7 +192,7 @@ export default class BlockSerializationContext {
      * The size is calculated calculated based on the `blockSize * ceil(64kiB / blockSize)` formula
      * in order to ensure the size of the entire cluster is at minimum equal to 64kiB.
      */
-    public static serializeMetaCluster(blockData: TMetaCluster & TMetadataBlockWriteMeta): T.XEav<Buffer, 'L0_SR_METAERR'> {
+    public static serializeMetaCluster(blockData: TMetaCluster & TMetadataWriteMeta): T.XEav<Buffer, 'L0_SR_METAERR'> {
         try {
 
             const blockSize = BlockSerializationContext.BLOCK_SIZES[blockData.blockSize]
@@ -358,12 +357,6 @@ export default class BlockSerializationContext {
 
     /**
      * Deserializes a link block and returns its information.
-     * 
-        Index | Size | Type   | Description
-        ------|------|--------|------------------------------------------------
-        0     | 1B   | Int8   | Block type (LINK)
-        1     | 4B   | Int32  | CRC checksum
-        5     | 4B   | Int32  | Size of usable block data
      */
     public deserializeLinkBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): T.XEav<TLinkBlock & TCommonReadMeta, 'L0_DS_LINKERR'> {
         try {
@@ -390,6 +383,15 @@ export default class BlockSerializationContext {
         }
     }
 
+    /**
+     * Serializes a data block that can be written to the disk.
+     * 
+        Index | Size | Type   | Description
+        ------|------|--------|------------------------------------------------
+        0     | 1B   | Int8   | Block type (DATA)
+        1     | 4B   | Int32  | CRC checksum
+        5     | 4B   | Int32  | Size of usable block data
+     */
     public serializeDataBlock(blockData: TDataBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_DATAERR'> {
         try {
 
