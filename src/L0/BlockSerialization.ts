@@ -1,6 +1,13 @@
 // TODOs ==========================================================================================
-// - Refactor serialization methods to compute CRC's *AFTER* encryption
+/**
+ 
+    --- [Maybe] ---
 
+    - Refactor serialization methods to compute CRC's *AFTER* encryption (maybe)
+        - Pro: Faster certain types of scans & checks integrity of actual data written to the disk.
+        - Con: Doesn't check integrity of decrypted user data and gives more room for ds/rs bugs.
+
+*/
 // Imports ========================================================================================
 
 import * as T from '../../types.js'
@@ -370,6 +377,7 @@ export default class BlockSerializationContext {
             const bodySize      = src.readInt32()
 
             src.bytesRead       = BlockSerializationContext.LINK_BLOCK_HEADER_SIZE
+
             const body          = this.aes.decrypt(src.readRemaining(), aesKey!, blockAddress)
             props.crc32Computed = zlib.crc32(body)
             props.crc32Mismatch = props.crc32Computed !== props.crc32sum
@@ -425,5 +433,32 @@ export default class BlockSerializationContext {
         }
     }
 
+    /**
+     * Deserializes a data block and returns its information.
+     */
+    public deserializeDataBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): T.XEav<TDataBlock & TCommonReadMeta, 'L0_DS_DATAERR'> {
+        try {
+            
+            const props: Partial<TDataBlock & TCommonReadMeta> = {}
+            const src = Memory.wrap(blockBuffer)
+
+            props.blockType     = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
+            props.crc32sum      = src.readInt32()
+            const bodySize      = src.readInt32()
+
+            src.bytesRead       = BlockSerializationContext.DATA_BLOCK_HEADER_SIZE
+
+            const body          = this.aes.decrypt(src.readRemaining(), aesKey, blockAddress)
+            props.crc32Computed = zlib.crc32(body)
+            props.crc32Mismatch = props.crc32Computed !== props.crc32sum
+            props.data          = body.subarray(0, bodySize)
+
+            return [null, props as Required<typeof props>]
+
+        } 
+        catch (error) {
+            return [new IBFSError("L0_DS_DATAERR", null, error as Error, blockBuffer), null]
+        }
+    }
 }
 
