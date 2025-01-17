@@ -37,7 +37,7 @@ export interface TRootBlock {
     /** AES cipher used                                  */ aesCipher:      TAesCipher
     /** AES initialization vector                        */ aesIV:          Buffer
     /** 0-filled buffer encrypted with the original key  */ aesKeyCheck:    Buffer
-    /** Compatibility mode                               */ compatibility:  boolean
+    /** Crypto tweak emulation compatibility mode        */ compatibility:  boolean
     /** Block size (levels 1-15)                         */ blockSize:      keyof typeof BlockSerializationContext.BLOCK_SIZES
     /** Number of blocks in the volume                   */ blockCount:     number
 }

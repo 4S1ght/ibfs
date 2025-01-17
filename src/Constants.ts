@@ -13,3 +13,8 @@ export const MB_2   = 2097152
 export const MB_4   = 4194304
 export const MB_8   = 8388608
 export const MB_16  = 16777216
+
+export const VOLUME_EXT_NAME = '.ibfs'
+
+export const SPEC_MAJOR = 2
+export const SPEC_MINOR = 0

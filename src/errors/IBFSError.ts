@@ -51,21 +51,23 @@ enum ErrorCodes {
 
     // Level 1 ----------------------------------------------------------------
 
+    // Cryptography
     L0_AES_NOKEY     = "AES key was not provided byt required by the encryption settings.",
     L0_AES_KEYDIGEST = "Failed to digest the provided AES key.",
 
+    // De/serialization
     L0_SR_ROOTERR   = "An error occurred while serializing the root block.",
-    L0_SR_METAERR   = "An error occurred while serializing the metadata cluster.",
-    L0_SR_HEADERR   = "An error occurred while serializing a head block.",
-
     L0_DS_ROOTERR   = "An error occurred while deserializing the root block.",
+    L0_SR_METAERR   = "An error occurred while serializing the metadata cluster.",
     L0_DS_METAERR   = "An error occurred while deserializing the metadata cluster.",
+    L0_SR_HEADERR   = "An error occurred while serializing a head block.",
     L0_DS_HEADERR   = "An error occurred while deserializing a head block.",
-
     L0_SR_LINKERR   = "An error occurred while serializing a link block.",
     L0_DS_LINKERR   = "An error occurred while deserializing a link block",
-
     L0_SR_DATAERR   = "An error occurred while serializing a data block.",
     L0_DS_DATAERR   = "An error occurred while deserializing a data block.",
+
+    // Volume creation
+    L0_VC_FAILURE   = "An error occurred while creating the volume.",
 
 }
