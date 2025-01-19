@@ -39,7 +39,7 @@ export interface TVolumeInit {
 
 export default class Volume {
 
-    private declare virtualHandle: fs.FileHandle
+    private declare handle: fs.FileHandle
     private declare bs: BlockSerializationContext
     public  declare rs: TRootBlock
 
@@ -108,6 +108,7 @@ export default class Volume {
             // Set up the serialization contexts and serialize the
             // root lock necessary for mounting the filesystem.
 
+            const blockSize = init.blockSize
             const physicalBlockSize = BlockSerializationContext.getPhysicalBlockSize(init.blockSize)
             const metaBlocks = BlockSerializationContext.getMetaBlockCount(init.blockSize)
             const pack = getPackage()
@@ -120,7 +121,7 @@ export default class Volume {
             const serialize = new BlockSerializationContext({ 
                 cipher: init.aesCipher,
                 iv: aesIV,
-                physicalBlockSize
+                blockSize
             })
 
             // Create key check buffer user later for decryption key verification.
@@ -171,6 +172,43 @@ export default class Volume {
 
     }
 
+    public static async open(image: string): T.XEavA<Volume, 'L0_VI_UNKNOWN'|'L0_VI_ROOTFAULT'|'L0_VI_MODE_INCOMPATIBLE'|'L0_VI_SIZE_MISMATCH'> {
+        
+        const self = new this()
+
+        try {
+
+            self.handle = await fs.open(image, 'r+')
+
+            const rsData = Buffer.alloc(1024)
+            await self.handle.read({ offset: 0, length: 1024, buffer: rsData })
+            const [rsError, rs] = BlockSerializationContext.deserializeRootBlock(rsData)
+
+            if (rsError)                    return IBFSError.eav('L0_VI_ROOTFAULT', null, rsError, { image })
+            if (rs.compatibility === false) return IBFSError.eav('L0_VI_MODE_INCOMPATIBLE', null, null, { image })
+
+            const expectedVolumeSize = rs.blockCount * BlockSerializationContext.getPhysicalBlockSize(rs.blockSize)
+            const { size } = await self.handle.stat()
+
+            if (size !== expectedVolumeSize) return IBFSError.eav('L0_VI_SIZE_MISMATCH', null, null, { size, expectedVolumeSize, diff: Math.abs(size - expectedVolumeSize) })
+            
+            self.bs = new BlockSerializationContext({
+                blockSize: rs.blockSize,
+                cipher: rs.aesCipher,
+                iv: rs.aesIV
+            })
+
+            self.rs = rs
+            return [null, self]
+            
+        } 
+        catch (error) {
+            if (self.handle) await self.handle.close()
+            return [new IBFSError('L0_VI_UNKNOWN', null, error as Error, { image }), null]
+        }
+    }
+
+    // Methods ======================================================
 
     // Helpers ======================================================
 

@@ -24,8 +24,7 @@ import zlib from 'zlib'
 // Types ==========================================================================================
 
 export interface TBlockSerializeConfig {
-    /** Physical size of individual blocks - Aka. 1024, 2048, 4096, etc... */
-    physicalBlockSize: number
+    blockSize: keyof typeof BlockSerializationContext.BLOCK_SIZES
 }
 
 // BLocks =========================================================================================
@@ -115,8 +114,8 @@ export default class BlockSerializationContext {
     public readonly aes: BlockAESContext
 
     constructor(config: TBlockSerializeConfig & TAesConfig) {
-
-        this.BLOCK_SIZE = config.physicalBlockSize
+        
+        this.BLOCK_SIZE = BlockSerializationContext.BLOCK_SIZES[config.blockSize]
         this.HEAD_CONTENT_SIZE = this.BLOCK_SIZE - BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
         this.LINK_CONTENT_SIZE = this.BLOCK_SIZE - BlockSerializationContext.LINK_BLOCK_HEADER_SIZE
         this.DATA_CONTENT_SIZE = this.BLOCK_SIZE - BlockSerializationContext.DATA_BLOCK_HEADER_SIZE

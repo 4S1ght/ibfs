@@ -52,22 +52,28 @@ enum ErrorCodes {
     // Level 1 ----------------------------------------------------------------
 
     // Cryptography
-    L0_AES_NOKEY     = "AES key was not provided byt required by the encryption settings.",
-    L0_AES_KEYDIGEST = "Failed to digest the provided AES key.",
+    L0_AES_NOKEY            = "AES key was not provided byt required by the encryption settings.",
+    L0_AES_KEYDIGEST        = "Failed to digest the provided AES key.",
 
     // De/serialization
-    L0_SR_ROOTERR   = "An error occurred while serializing the root block.",
-    L0_DS_ROOTERR   = "An error occurred while deserializing the root block.",
-    L0_SR_METAERR   = "An error occurred while serializing the metadata cluster.",
-    L0_DS_METAERR   = "An error occurred while deserializing the metadata cluster.",
-    L0_SR_HEADERR   = "An error occurred while serializing a head block.",
-    L0_DS_HEADERR   = "An error occurred while deserializing a head block.",
-    L0_SR_LINKERR   = "An error occurred while serializing a link block.",
-    L0_DS_LINKERR   = "An error occurred while deserializing a link block",
-    L0_SR_DATAERR   = "An error occurred while serializing a data block.",
-    L0_DS_DATAERR   = "An error occurred while deserializing a data block.",
+    L0_SR_ROOTERR           = "An error occurred while serializing the root block.",
+    L0_DS_ROOTERR           = "An error occurred while deserializing the root block.",
+    L0_SR_METAERR           = "An error occurred while serializing the metadata cluster.",
+    L0_DS_METAERR           = "An error occurred while deserializing the metadata cluster.",
+    L0_SR_HEADERR           = "An error occurred while serializing a head block.",
+    L0_DS_HEADERR           = "An error occurred while deserializing a head block.",
+    L0_SR_LINKERR           = "An error occurred while serializing a link block.",
+    L0_DS_LINKERR           = "An error occurred while deserializing a link block",
+    L0_SR_DATAERR           = "An error occurred while serializing a data block.",
+    L0_DS_DATAERR           = "An error occurred while deserializing a data block.",
 
     // Volume creation
-    L0_VC_FAILURE   = "An error occurred while creating the volume.",
+    L0_VC_FAILURE           = "An error occurred while creating the volume.",
+
+    // Volume initialization
+    L0_VI_UNKNOWN           = "An unknown error occurred while mounting the volume.",
+    L0_VI_ROOTFAULT         = "The root sector of the volume is corrupted.",
+    L0_VI_MODE_INCOMPATIBLE = "Can't mount the volume because it was created with a different encryption mode. NodeJS does not natively expose APIs for manipulating encryption tweak values and needs to emulate them. This volume was not set up for and can not be decrypted using this runtime.",
+    L0_VI_SIZE_MISMATCH     = "The size of the volume image does not match the size expected according to volume metadata. This is likely a sign of image corruption.",
 
 }

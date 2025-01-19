@@ -64,7 +64,7 @@ describe('Head block de/serialize', () => {
     const [_, key] = BlockAESContext.deriveAESKey('aes-256-xts', 'some key') as [null, Buffer]
 
     const bs = new BlockSerializationContext({
-        physicalBlockSize: 1024,
+        blockSize: 1,
         cipher: 'aes-256-xts',
         iv: crypto.randomBytes(16)
     })
@@ -102,7 +102,7 @@ describe('Link block de/serialize', () => {
     const [_, key] = BlockAESContext.deriveAESKey('aes-256-xts', 'some key') as [null, Buffer]
 
     const bs = new BlockSerializationContext({
-        physicalBlockSize: 1024,
+        blockSize: 1,
         cipher: 'aes-256-xts',
         iv: crypto.randomBytes(16)
     })
@@ -134,7 +134,7 @@ describe('Data block de/serialize', () => {
     const [_, key] = BlockAESContext.deriveAESKey('aes-256-xts', 'some key') as [null, Buffer]
 
     const bs = new BlockSerializationContext({
-        physicalBlockSize: 1024,
+        blockSize: 1,
         cipher: 'aes-256-xts',
         iv: crypto.randomBytes(16)
     })
