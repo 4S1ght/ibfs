@@ -140,7 +140,7 @@ export default class BlockSerializationContext {
         29    | 16B  | Buffer | AES key check
         45    | 1B   | Int8   | Compatibility mode (0: off, 1: on)
         46    | 1B   | Int8   | Block size
-        47    | 8B   | Int64  | Block count - addressable
+        47    | 8B   | Int64  | Block count
      */
     public static serializeRootBlock(blockData: TRootBlock): T.XEav<Buffer, 'L0_SR_ROOTERR'> {
         try {
@@ -459,6 +459,17 @@ export default class BlockSerializationContext {
         catch (error) {
             return [new IBFSError("L0_DS_DATAERR", null, error as Error, blockBuffer), null]
         }
+    }
+
+
+    // Misc & Helpers ===============================================
+
+    public static getPhysicalBlockSize(blockSize: keyof typeof BlockSerializationContext.BLOCK_SIZES) {
+        return BlockSerializationContext.BLOCK_SIZES[blockSize]
+    }
+
+    public static getMetaBlockCount(blockSize: keyof typeof BlockSerializationContext.BLOCK_SIZES) {
+        return Math.ceil(C.KB_64 / BlockSerializationContext.getPhysicalBlockSize(blockSize))
     }
 }
 

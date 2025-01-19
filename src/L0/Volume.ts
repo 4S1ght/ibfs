@@ -11,8 +11,9 @@ import BlockSerializationContext, { TRootBlock } from './BlockSerialization.js'
 import BlockAESContext from './BlockAES.js'
 import IBFSError from '../errors/IBFSError.js'
 import ssc from '../misc/safeShallowCopy.js'
-import { KB_64, VOLUME_EXT_NAME } from '../Constants.js'
-import packageVersion from '../misc/packageVersion.js'
+import { VOLUME_EXT_NAME } from '../Constants.js'
+import getPackage from '../misc/package.js'
+import { off } from 'node:process'
 
 // Types ==========================================================================================
 
@@ -42,16 +43,6 @@ export default class Volume {
     private declare bs: BlockSerializationContext
     public  declare rs: TRootBlock
 
-    // Static =======================================================
-
-    /** 
-     * Returns the minimum number of blocks required to accommodate 
-     * the minimum of 64kiB of space for volume metadata
-     */
-    public static metaBlockCount(blockSize: number) {
-        return Math.ceil(KB_64 / blockSize)
-    }
-
     // Factory ======================================================
 
     private constructor() {}
@@ -63,76 +54,26 @@ export default class Volume {
 
         try {
 
-            // Setup ================================================
+            // File bootstrap =======================================
 
-            // Ensure file EXT
-            if (path.extname(init.fileLocation) !== VOLUME_EXT_NAME) init.fileLocation += VOLUME_EXT_NAME
-            
-            // Root block ===========================================
-
-            const aesIV = crypto.randomBytes(16)
-            const [aesKeyError, aesKey] = BlockAESContext.deriveAESKey(init.aesCipher, init.aesKey)
-            if (aesKeyError) throw aesKeyError
-
-            // Deps setup
-            const serialize = new BlockSerializationContext({ 
-                physicalBlockSize: init.blockSize,
-                cipher:            init.aesCipher,
-                iv:                aesIV
-            })
-
-            // Deps
-            const metaBlocks = Volume.metaBlockCount(init.blockSize)
-
-            // Create key check buffer user later for decryption key verification.
-            const aesKeyCheck = (() => {
-                if (init.aesCipher === 'none') return Buffer.alloc(16)
-                return serialize.aes.encrypt(Buffer.alloc(16), aesKey, 0)
-            })()
-
-            const { major, minor } = packageVersion()
-            const [rootError, rootBlock] = BlockSerializationContext.serializeRootBlock({
-                specMajor: major,
-                specMinor: minor,
-                root: 1 + metaBlocks,
-                compatibility: true,
-                blockSize: init.blockSize,
-                blockCount: init.blockCount,
-                aesCipher: init.aesCipher,
-                aesIV,
-                aesKeyCheck,
-            })
-            if (rootError) throw rootError
-
-            // Meta cluster =========================================
-
-            const [metaError, metaCluster] = BlockSerializationContext.serializeMetaCluster({
-                metadata: { ibfs: {} },
-                blockSize: init.blockSize
-            })
-            if (metaError) throw metaError
-
-            // Fill =================================================
+            // Create an empty IBFS file and allocate empty space
+            // that will be used by the filesystem.
 
             const fileMakeError = await Volume.ensureEmptyFile(init.fileLocation)
             if (fileMakeError) return new IBFSError('L0_VC_FAILURE', null, fileMakeError, ssc(init, ['aesKey']))
-
+            
             file = await fs.open(init.fileLocation, 'w+')
             ws = file.createWriteStream({ highWaterMark: init.blockSize * 128 })
 
             const updateFrequency = init.update && init.update.frequency || 5_000_000 // Bytes
-            const emptySpace = Buffer.alloc(init.blockSize)
+            const emptySpace = Buffer.alloc(BlockSerializationContext.getPhysicalBlockSize(init.blockSize))
             let canWrite = true
             let broken = false
+            let bw = 0
             let wsError: { i: number, error: Error }
 
-            let { bytesWritten: bw } = await file.write(Buffer.concat([
-                rootBlock,
-                metaCluster
-            ]))
+            for (let i = 0; i < init.blockCount; i++) {
 
-            for (let i = metaBlocks + 1; i < init.blockCount; i++) {
-                
                 if (broken) break
 
                 canWrite = ws.write(emptySpace, error => {
@@ -162,16 +103,72 @@ export default class Volume {
                 return new IBFSError('L0_VC_FAILURE', null, wsError.error, ssc({ ...init, failedAtBlock: wsError.i }, ['aesKey']))
             }
 
+            // Root block ===========================================
+
+            // Set up the serialization contexts and serialize the
+            // root lock necessary for mounting the filesystem.
+
+            const physicalBlockSize = BlockSerializationContext.getPhysicalBlockSize(init.blockSize)
+            const metaBlocks = BlockSerializationContext.getMetaBlockCount(init.blockSize)
+            const pack = getPackage()
+
+            const aesIV = crypto.randomBytes(16)
+            const [aesKeyError, aesKey] = BlockAESContext.deriveAESKey(init.aesCipher, init.aesKey)
+            if (aesKeyError) throw aesKeyError
+
+            // Deps setup
+            const serialize = new BlockSerializationContext({ 
+                cipher: init.aesCipher,
+                iv: aesIV,
+                physicalBlockSize
+            })
+
+            // Create key check buffer user later for decryption key verification.
+            const aesKeyCheck = (() => {
+                if (init.aesCipher === 'none') return Buffer.alloc(16)
+                return serialize.aes.encrypt(Buffer.alloc(16), aesKey, 0)
+            })()
+
+            const [rootError, rootBlock] = await BlockSerializationContext.serializeRootBlock({
+                specMajor: pack.version.major,
+                specMinor: pack.version.minor,
+                root: metaBlocks + 1,
+                compatibility: true,
+                blockSize: init.blockSize,
+                blockCount: init.blockCount,
+                aesCipher: init.aesCipher,
+                aesIV,
+                aesKeyCheck,
+            })
+            if (rootError) throw rootError
+
+            await file.write(rootBlock, { position: 0 })
+
+            // Metadata blocks ======================================
+            // Write volume metadata
+
+            const [metaError, metaCluster] = BlockSerializationContext.serializeMetaCluster({
+                blockSize: init.blockSize,
+                metadata: { 
+                    ibfs: {
+                        originalDriverVersion: pack.versionString
+                    } 
+                }
+            })
+            if (metaError) throw metaError
+
+            await file.write(metaCluster, { position: physicalBlockSize })
+    
 
         } 
         catch (error) {
-            console.error(error)
             return new IBFSError('L0_VC_FAILURE', null, error as Error, ssc(init, ['aesKey']))
         }
         finally {
             if (ws!) ws.close()
             if (file!) await file.close()
         }
+
     }
 
 

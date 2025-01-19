@@ -33,12 +33,13 @@ The scope covers:
       include:
         - [filesystem root](#filesystem-root) - Critical filesystem settings & information.
         - [Driver metadata](#driver-metadata) - Arbitrary driver configuration
-        - [head blocks](#head-block) - Roots of every filesystem structure's metadata.
+        - [head blocks](#head-block) - Roots of every filesystem structure.
         - [Link blocks](#link-block) - N'th link following a root block.
-        - [Storage blocks](#storage-block) - Hold actual user file data.
+        - [Storage blocks](#storage-block) - Holds actual user file data.
     - Encryption
         - Encryption key constraints
         - Encryption strategies & compatibility
+        - Types of encrypted data
     - Data integrity
 
 
