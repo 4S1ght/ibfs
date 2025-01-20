@@ -67,13 +67,19 @@ enum ErrorCodes {
     L0_SR_DATAERR           = "An error occurred while serializing a data block.",
     L0_DS_DATAERR           = "An error occurred while deserializing a data block.",
 
-    // Volume creation
-    L0_VC_FAILURE           = "An error occurred while creating the volume.",
+    // Volume creation/initialization
+    L0_VI_FAILURE           = "An error occurred while initializing the volume.",
 
-    // Volume initialization
-    L0_VI_UNKNOWN           = "An unknown error occurred while mounting the volume.",
-    L0_VI_ROOTFAULT         = "The root sector of the volume is corrupted.",
-    L0_VI_MODE_INCOMPATIBLE = "Can't mount the volume because it was created with a different encryption mode. NodeJS does not natively expose APIs for manipulating encryption tweak values and needs to emulate them. This volume was not set up for and can not be decrypted using this runtime.",
-    L0_VI_SIZE_MISMATCH     = "The size of the volume image does not match the size expected according to volume metadata. This is likely a sign of image corruption.",
+    // Volume closing
+    L0_VC_FAILURE           = "An error occurred while closing the volume.",
 
-}
+    // Volume mounting
+    L0_VO_UNKNOWN           = "An unknown error occurred while mounting the volume.",
+    L0_VO_ROOTFAULT         = "The root sector of the volume is corrupted.",
+    L0_VO_MODE_INCOMPATIBLE = "Can't mount the volume because it was created with a different encryption mode. NodeJS does not natively expose APIs for manipulating encryption tweak values and needs to emulate them. This volume was not set up for and can not be decrypted using this runtime.",
+    L0_VO_SIZE_MISMATCH     = "The size of the volume image does not match the size expected according to volume metadata. This is likely a sign of image corruption.",
+
+    // I/O
+    L0_READ_ERROR           = "An error occurred while reading from the volume.",
+    L0_WRITE_ERROR          = "An error occurred while writing to the volume.",
+}   

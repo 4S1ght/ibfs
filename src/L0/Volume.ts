@@ -11,9 +11,7 @@ import BlockSerializationContext, { TRootBlock } from './BlockSerialization.js'
 import BlockAESContext from './BlockAES.js'
 import IBFSError from '../errors/IBFSError.js'
 import ssc from '../misc/safeShallowCopy.js'
-import { VOLUME_EXT_NAME } from '../Constants.js'
 import getPackage from '../misc/package.js'
-import { off } from 'node:process'
 
 // Types ==========================================================================================
 
@@ -27,10 +25,15 @@ export interface TVolumeInit {
     
     /** Configures an update handler called every N bytes written to monitor progress. */
     update?: {
-        /** Specifies every how many bytes to call an update. */
+        /** Specifies every how many bytes to call an update. @default 5_000_000 */
         frequency?: number
         /** Called whenever an update threshold is reached. */
         onUpdate: (written: number) => any
+    }
+
+    init?: {
+        /** Size of the high water mark for the write stream. @default 16 */
+        highWaterMarkBlocks?: number
     }
 
 }
@@ -47,7 +50,7 @@ export default class Volume {
 
     private constructor() {}
 
-    public static async createEmptyVolume(init: TVolumeInit): T.EavSA<IBFSError> {
+    public static async createEmptyVolume(init: TVolumeInit): T.XEavSA<'L0_VI_FAILURE'> {
 
         let file: fs.FileHandle
         let ws: WriteStream
@@ -60,10 +63,11 @@ export default class Volume {
             // that will be used by the filesystem.
 
             const fileMakeError = await Volume.ensureEmptyFile(init.fileLocation)
-            if (fileMakeError) return new IBFSError('L0_VC_FAILURE', null, fileMakeError, ssc(init, ['aesKey']))
+            if (fileMakeError) return new IBFSError('L0_VI_FAILURE', null, fileMakeError, ssc(init, ['aesKey']))
             
+            const highWaterMark = init.init && init.init.highWaterMarkBlocks || 16
             file = await fs.open(init.fileLocation, 'w+')
-            ws = file.createWriteStream({ highWaterMark: init.blockSize * 128 })
+            ws = file.createWriteStream({ highWaterMark })
 
             const updateFrequency = init.update && init.update.frequency || 5_000_000 // Bytes
             const emptySpace = Buffer.alloc(BlockSerializationContext.getPhysicalBlockSize(init.blockSize))
@@ -100,7 +104,7 @@ export default class Volume {
             }
             
             if (wsError!) {
-                return new IBFSError('L0_VC_FAILURE', null, wsError.error, ssc({ ...init, failedAtBlock: wsError.i }, ['aesKey']))
+                return new IBFSError('L0_VI_FAILURE', null, wsError.error, ssc({ ...init, failedAtBlock: wsError.i }, ['aesKey']))
             }
 
             // Root block ===========================================
@@ -163,7 +167,7 @@ export default class Volume {
 
         } 
         catch (error) {
-            return new IBFSError('L0_VC_FAILURE', null, error as Error, ssc(init, ['aesKey']))
+            return new IBFSError('L0_VI_FAILURE', null, error as Error, ssc(init, ['aesKey']))
         }
         finally {
             if (ws!) ws.close()
@@ -172,7 +176,7 @@ export default class Volume {
 
     }
 
-    public static async open(image: string): T.XEavA<Volume, 'L0_VI_UNKNOWN'|'L0_VI_ROOTFAULT'|'L0_VI_MODE_INCOMPATIBLE'|'L0_VI_SIZE_MISMATCH'> {
+    public static async open(image: string): T.XEavA<Volume, 'L0_VO_UNKNOWN'|'L0_VO_ROOTFAULT'|'L0_VO_MODE_INCOMPATIBLE'|'L0_VO_SIZE_MISMATCH'> {
         
         const self = new this()
 
@@ -184,13 +188,13 @@ export default class Volume {
             await self.handle.read({ offset: 0, length: 1024, buffer: rsData })
             const [rsError, rs] = BlockSerializationContext.deserializeRootBlock(rsData)
 
-            if (rsError)                    return IBFSError.eav('L0_VI_ROOTFAULT', null, rsError, { image })
-            if (rs.compatibility === false) return IBFSError.eav('L0_VI_MODE_INCOMPATIBLE', null, null, { image })
+            if (rsError)                    return IBFSError.eav('L0_VO_ROOTFAULT', null, rsError, { image })
+            if (rs.compatibility === false) return IBFSError.eav('L0_VO_MODE_INCOMPATIBLE', null, null, { image })
 
             const expectedVolumeSize = rs.blockCount * BlockSerializationContext.getPhysicalBlockSize(rs.blockSize)
             const { size } = await self.handle.stat()
 
-            if (size !== expectedVolumeSize) return IBFSError.eav('L0_VI_SIZE_MISMATCH', null, null, { size, expectedVolumeSize, diff: Math.abs(size - expectedVolumeSize) })
+            if (size !== expectedVolumeSize) return IBFSError.eav('L0_VO_SIZE_MISMATCH', null, null, { size, expectedVolumeSize, diff: Math.abs(size - expectedVolumeSize) })
             
             self.bs = new BlockSerializationContext({
                 blockSize: rs.blockSize,
@@ -204,11 +208,70 @@ export default class Volume {
         } 
         catch (error) {
             if (self.handle) await self.handle.close()
-            return [new IBFSError('L0_VI_UNKNOWN', null, error as Error, { image }), null]
+            return [new IBFSError('L0_VO_UNKNOWN', null, error as Error, { image }), null]
+        }
+    }
+
+    // Lifecycle ====================================================
+
+    public async close(): T.XEavSA<"L0_VC_FAILURE"> {
+        try {
+            await this.handle.close()
+        } 
+        catch (error) {
+            return new IBFSError('L0_VC_FAILURE', null, error as Error)
+        }
+    }
+
+    // Internal =====================================================
+
+    private async readBlock(address: number): T.XEavA<Buffer, 'L0_READ_ERROR'> {
+        try {
+            // No need to use slower Buffer.alloc as it will be filled
+            // entirely on each read.
+            const buffer = Buffer.allocUnsafe(this.bs.BLOCK_SIZE)
+            await this.handle.read({ 
+                offset: this.bs.BLOCK_SIZE * address, 
+                length: this.bs.BLOCK_SIZE, 
+                buffer
+            })
+            return [null, buffer]
+        } 
+        catch (error) {
+            return [new IBFSError('L0_READ_ERROR', null, error as Error), null]
+        }
+    }
+
+    private async writeBlock(address: number, block: Buffer): T.XEavSA<'L0_WRITE_ERROR'> {
+        try {
+            await this.handle.write(
+                /* data */          block, 
+                /* data start */    0, 
+                /* data length */   block.length, 
+                /* File position */ this.bs.BLOCK_SIZE * address
+            )
+        } 
+        catch (error) {
+            return new IBFSError('L0_WRITE_ERROR', null, error as Error)
         }
     }
 
     // Methods ======================================================
+
+    // public async readRootBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
+    // public async writeRootBlock(): T.EavSA {}
+
+    // public async readMetaCluster(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
+    // public async writeMetaCluster(): T.EavSA {}
+
+    // public async readHeadBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
+    // public async writeHeadBlock(): T.EavSA {}
+
+    // public async readLinkBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
+    // public async writeLinkBlock(): T.EavSA {}
+
+    // public async readDataBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
+    // public async writeDataBlock(): T.EavSA {}
 
     // Helpers ======================================================
 
