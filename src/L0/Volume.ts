@@ -7,7 +7,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { WriteStream } from 'node:fs'
 
-import BlockSerializationContext, { TRootBlock } from './BlockSerialization.js'
+import BlockSerializationContext, { TMetaCluster, TRootBlock } from './BlockSerialization.js'
 import BlockAESContext from './BlockAES.js'
 import IBFSError from '../errors/IBFSError.js'
 import ssc from '../misc/safeShallowCopy.js'
@@ -225,13 +225,33 @@ export default class Volume {
 
     // Internal =====================================================
 
+    private async read(position: number, length: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'> {
+        try {
+            const buffer = Buffer.allocUnsafe(length)
+            await this.handle.read({ position, length, buffer })
+            return [null, buffer]
+        } 
+        catch (error) {
+            return [new IBFSError('L0_IO_READ_ERROR', null, error as Error, { position, length }), null]
+        }
+    }
+    
+    private async write(position: number, data: Buffer): T.XEavSA<'L0_IO_WRITE_ERROR'> {
+        try {
+            await this.handle.write(data, 0, data.length, position)
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_WRITE_ERROR', null, error as Error, { position })
+        }
+    }
+
     private async readBlock(address: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'> {
         try {
             // No need to use slower Buffer.alloc as it will be filled
             // entirely on each read.
             const buffer = Buffer.allocUnsafe(this.bs.BLOCK_SIZE)
             await this.handle.read({ 
-                offset: this.bs.BLOCK_SIZE * address, 
+                position: this.bs.BLOCK_SIZE * address,
                 length: this.bs.BLOCK_SIZE, 
                 buffer
             })
@@ -258,23 +278,6 @@ export default class Volume {
 
     // Methods ======================================================
 
-    public async readRootBlock(): T.XEavA<TRootBlock, 'L0_IO_ROOT_READ_ERROR'|'L0_IO_ROOT_DS_ERROR'> {
-        try {
-
-            const [readError, buffer] = await this.readBlock(0)
-            if (readError) return [new IBFSError('L0_IO_ROOT_READ_ERROR', null, readError), null]
-            
-            const [dsError, root] = BlockSerializationContext.deserializeRootBlock(buffer)
-            if (dsError) return [new IBFSError('L0_IO_ROOT_DS_ERROR', null, dsError), null]
-
-            return [null, root]
-
-        } 
-        catch (error) {
-            return [new IBFSError('L0_IO_ROOT_READ_ERROR', null, error as Error), null]
-        }
-    }
-
     public async writeRootBlock(): T.XEavSA<'L0_IO_ROOT_WRITE_ERROR'|'L0_IO_ROOT_SR_ERROR'> {
         try {
 
@@ -290,8 +293,44 @@ export default class Volume {
         }
     }
 
-    // public async readMetaCluster(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
-    // public async writeMetaCluster(): T.EavSA {}
+    public async readMetaCluster(): T.XEavA<TMetaCluster, 'L0_IO_META_READ_ERROR'|'L0_IO_META_DS_ERROR'> {
+        try {
+            
+            const clusterSize = BlockSerializationContext.getMetaBlockCount(this.rs.blockSize)
+            const clusterPosition = 1 * this.bs.BLOCK_SIZE
+
+            const [readError, buffer] = await this.read(clusterPosition, clusterSize)
+            if (readError) return [new IBFSError('L0_IO_META_READ_ERROR', null, readError), null]
+
+            const [dsError, cluster] = BlockSerializationContext.deserializeMetaCluster(buffer)
+            if (dsError) return [new IBFSError('L0_IO_META_DS_ERROR', null, dsError), null]
+
+            return [null, cluster]
+
+        } 
+        catch (error) {
+            return [new IBFSError('L0_IO_META_READ_ERROR', null, error as Error), null]
+        }
+    }
+    
+    public async writeMetaCluster(cluster: TMetaCluster): T.XEavSA<'L0_IO_META_WRITE_ERROR'> {
+        try {
+            
+            const [srError, buffer] = BlockSerializationContext.serializeMetaCluster({
+                metadata: cluster.metadata,
+                blockSize: this.rs.blockSize
+            })
+            if (srError) return new IBFSError('L0_IO_META_WRITE_ERROR', null, srError)
+
+            const clusterPosition = 1 * this.bs.BLOCK_SIZE
+            const writeError = await this.write(clusterPosition, buffer)
+            if (writeError) return new IBFSError('L0_IO_META_WRITE_ERROR', null, writeError)
+
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_META_WRITE_ERROR', null, error as Error)
+        }
+    }
 
     // public async readHeadBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
     // public async writeHeadBlock(): T.EavSA {}

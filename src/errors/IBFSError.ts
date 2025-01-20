@@ -83,8 +83,11 @@ enum ErrorCodes {
     L0_IO_READ_ERROR        = "An error occurred while reading from the volume.",
     L0_IO_WRITE_ERROR       = "An error occurred while writing to the volume.",
 
-    L0_IO_ROOT_READ_ERROR   = "An error occurred while reading a head block.",
     L0_IO_ROOT_WRITE_ERROR  = "An error occurred while writing a head block.",
-    L0_IO_ROOT_DS_ERROR     = "An error occurred while deserializing a head block.",
     L0_IO_ROOT_SR_ERROR     = "An error occurred while serializing a head block.",
+
+    L0_IO_META_READ_ERROR   = "An error occurred while reading a metadata cluster.",
+    L0_IO_META_DS_ERROR     = "An error occurred while deserializing a metadata cluster.",
+    L0_IO_META_WRITE_ERROR  = "An error occurred while writing a metadata cluster.",
+    L0_IO_META_SR_ERROR     = "An error occurred while serializing a metadata cluster.",
 }   
