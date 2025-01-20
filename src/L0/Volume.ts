@@ -225,7 +225,7 @@ export default class Volume {
 
     // Internal =====================================================
 
-    private async readBlock(address: number): T.XEavA<Buffer, 'L0_READ_ERROR'> {
+    private async readBlock(address: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'> {
         try {
             // No need to use slower Buffer.alloc as it will be filled
             // entirely on each read.
@@ -238,11 +238,11 @@ export default class Volume {
             return [null, buffer]
         } 
         catch (error) {
-            return [new IBFSError('L0_READ_ERROR', null, error as Error), null]
+            return [new IBFSError('L0_IO_READ_ERROR', null, error as Error, { address }), null]
         }
     }
 
-    private async writeBlock(address: number, block: Buffer): T.XEavSA<'L0_WRITE_ERROR'> {
+    private async writeBlock(address: number, block: Buffer): T.XEavSA<'L0_IO_WRITE_ERROR'> {
         try {
             await this.handle.write(
                 /* data */          block, 
@@ -252,14 +252,43 @@ export default class Volume {
             )
         } 
         catch (error) {
-            return new IBFSError('L0_WRITE_ERROR', null, error as Error)
+            return new IBFSError('L0_IO_WRITE_ERROR', null, error as Error, { address })
         }
     }
 
     // Methods ======================================================
 
-    // public async readRootBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
-    // public async writeRootBlock(): T.EavSA {}
+    public async readRootBlock(): T.XEavA<TRootBlock, 'L0_IO_ROOT_READ_ERROR'|'L0_IO_ROOT_DS_ERROR'> {
+        try {
+
+            const [readError, buffer] = await this.readBlock(0)
+            if (readError) return [new IBFSError('L0_IO_ROOT_READ_ERROR', null, readError), null]
+            
+            const [dsError, root] = BlockSerializationContext.deserializeRootBlock(buffer)
+            if (dsError) return [new IBFSError('L0_IO_ROOT_DS_ERROR', null, dsError), null]
+
+            return [null, root]
+
+        } 
+        catch (error) {
+            return [new IBFSError('L0_IO_ROOT_READ_ERROR', null, error as Error), null]
+        }
+    }
+
+    public async writeRootBlock(): T.XEavSA<'L0_IO_ROOT_WRITE_ERROR'|'L0_IO_ROOT_SR_ERROR'> {
+        try {
+
+            const [srError, buffer] = BlockSerializationContext.serializeRootBlock(this.rs)
+            if (srError) return new IBFSError('L0_IO_ROOT_SR_ERROR', null, srError)
+
+            const writeError = await this.writeBlock(0, buffer)
+            if (writeError) return new IBFSError('L0_IO_ROOT_WRITE_ERROR', null, writeError)
+            
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_ROOT_WRITE_ERROR', null, error as Error)    
+        }
+    }
 
     // public async readMetaCluster(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
     // public async writeMetaCluster(): T.EavSA {}

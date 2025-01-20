@@ -80,6 +80,11 @@ enum ErrorCodes {
     L0_VO_SIZE_MISMATCH     = "The size of the volume image does not match the size expected according to volume metadata. This is likely a sign of image corruption.",
 
     // I/O
-    L0_READ_ERROR           = "An error occurred while reading from the volume.",
-    L0_WRITE_ERROR          = "An error occurred while writing to the volume.",
+    L0_IO_READ_ERROR        = "An error occurred while reading from the volume.",
+    L0_IO_WRITE_ERROR       = "An error occurred while writing to the volume.",
+
+    L0_IO_ROOT_READ_ERROR   = "An error occurred while reading a head block.",
+    L0_IO_ROOT_WRITE_ERROR  = "An error occurred while writing a head block.",
+    L0_IO_ROOT_DS_ERROR     = "An error occurred while deserializing a head block.",
+    L0_IO_ROOT_SR_ERROR     = "An error occurred while serializing a head block.",
 }   
