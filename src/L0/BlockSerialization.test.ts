@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import crypto from 'node:crypto'
-import BlockSerializationContext, { TCommonWriteMeta, TDataBlock, THeadBlock, TLinkBlock, TMetaCluster, TRootBlock } from './BlockSerialization'
+import BlockSerializationContext, { TCommonWriteMeta, TDataBlock, THeadBlock, TLinkBlock, TMetaCluster, TRootBlock } from './BlockSerialization.js'
 import * as C from '../Constants.js'
 import BlockAESContext from './BlockAES.js'
 

@@ -6,7 +6,7 @@ import url from 'url'
 const dirname = path.dirname(url.fileURLToPath(import.meta.url))
 
 import { describe, expect, test } from "vitest"
-import Volume from "./Volume"
+import Volume from "./Volume.js"
 
 const key = 'hello world'
 const alg = 'aes-256-xts'

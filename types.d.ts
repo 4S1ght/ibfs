@@ -1,4 +1,4 @@
-import IBFSError, { IBFSErrorCode } from './src/errors/IBFSError'
+import IBFSError, { IBFSErrorCode } from './src/errors/IBFSError.js'
 
 /** 
  * GO-like error-as-value return  type. Used specifically to avoid

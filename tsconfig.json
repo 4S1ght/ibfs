@@ -1,16 +1,21 @@
 {
     "include": [
-        "./src/*"
+        "./src/**/*.ts",
+        "./types.d.ts"
     ],
-
+    "exclude": [
+        "node_modules", 
+        "dist"
+    ],
     "compilerOptions": {
         
         // Base options
         "esModuleInterop": true,
-        "skipLibCheck": true,
         "target": "es2022",
         "moduleDetection": "force",
         "isolatedModules": true,
+        "strictNullChecks": true,
+        "skipLibCheck": true,
     
         // Strictness
         "strict": true,
