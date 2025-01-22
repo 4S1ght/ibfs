@@ -107,4 +107,13 @@ enum ErrorCodes {
     L0_IO_LINK_WRITE_UNKNOWN_ERROR  = "An unknown error occurred while writing a link block.",
     L0_IO_LINK_SR_ERROR             = "An error occurred while serializing a link block.",
 
+    L0_IO_DATA_READ_ERROR           = "An error occurred while reading a data block.",
+    L0_IO_DATA_READ_INTEGRITY_ERROR = "Detected an integrity mismatch while reading a data block - This probably indicates corruption.",
+    L0_IO_DATA_READ_UNKNOWN_ERROR   = "An unknown error occurred while reading a data block.",
+    L0_IO_DATA_DS_ERROR             = "An error occurred while deserializing a data block.",
+    L0_IO_DATA_WRITE_ERROR          = "An error occurred while writing a data block.",
+    L0_IO_DATA_WRITE_UNKNOWN_ERROR  = "An unknown error occurred while writing a data block.",
+    L0_IO_DATA_SR_ERROR             = "An error occurred while serializing a data block.",
+    
+
 }   

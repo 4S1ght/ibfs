@@ -7,7 +7,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { WriteStream } from 'node:fs'
 
-import BlockSerializationContext, { TCommonWriteMeta, THeadBlock, TLinkBlock, TMetaCluster, TRootBlock } from './BlockSerialization.js'
+import BlockSerializationContext, { TCommonWriteMeta, TDataBlock, THeadBlock, TLinkBlock, TMetaCluster, TRootBlock } from './BlockSerialization.js'
 import BlockAESContext from './BlockAES.js'
 import IBFSError from '../errors/IBFSError.js'
 import ssc from '../misc/safeShallowCopy.js'
@@ -414,8 +414,47 @@ export default class Volume {
         
     }
 
-    // public async readDataBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
-    // public async writeDataBlock(): T.EavSA {}
+
+    public async readDataBlock(address: number, aesKey: Buffer, integrity = true): 
+        T.XEavA<TDataBlock, 'L0_IO_DATA_READ_ERROR'|'L0_IO_DATA_DS_ERROR'|'L0_IO_DATA_READ_INTEGRITY_ERROR'|'L0_IO_DATA_READ_UNKNOWN_ERROR'> {
+        try {
+
+            const position = this.bs.BLOCK_SIZE * address
+
+            const [readError, buffer] = await this.readBlock(position)
+            if (readError) return IBFSError.eav('L0_IO_DATA_READ_ERROR', null, readError, { address })
+
+            const [dsError, block] = this.bs.deserializeDataBlock(buffer, address, aesKey)
+            if (dsError) return IBFSError.eav('L0_IO_DATA_DS_ERROR', null, dsError, { address })
+
+            if (integrity && block.crc32Mismatch)
+                return IBFSError.eav('L0_IO_DATA_READ_INTEGRITY_ERROR', null, null, { address })
+
+            return [null, block]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_DATA_READ_UNKNOWN_ERROR', null, error as Error, { address })
+        }
+        
+    }
+
+    public async writeDataBlock(block: TDataBlock & TCommonWriteMeta): 
+        T.XEavSA<'L0_IO_DATA_SR_ERROR'|'L0_IO_DATA_WRITE_ERROR'|'L0_IO_DATA_WRITE_UNKNOWN_ERROR'> {
+        try {
+
+            const [srError, buffer] = this.bs.serializeDataBlock(block)
+            if (srError) return new IBFSError('L0_IO_DATA_SR_ERROR', null, srError, ssc(block, ['aesKey']))
+            
+            const position = this.bs.BLOCK_SIZE * block.address
+            const writeError = await this.writeBlock(position, buffer)
+            if (writeError) return new IBFSError('L0_IO_DATA_WRITE_ERROR', null, writeError, ssc(block, ['aesKey']))
+            
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_DATA_WRITE_UNKNOWN_ERROR', null, error as Error, ssc(block, ['aesKey']))
+        }
+    }
 
     // Helpers ======================================================
 
