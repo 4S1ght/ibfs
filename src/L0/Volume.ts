@@ -7,7 +7,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { WriteStream } from 'node:fs'
 
-import BlockSerializationContext, { TMetaCluster, TRootBlock } from './BlockSerialization.js'
+import BlockSerializationContext, { TCommonWriteMeta, THeadBlock, TMetaCluster, TRootBlock } from './BlockSerialization.js'
 import BlockAESContext from './BlockAES.js'
 import IBFSError from '../errors/IBFSError.js'
 import ssc from '../misc/safeShallowCopy.js'
@@ -184,8 +184,8 @@ export default class Volume {
 
             self.handle = await fs.open(image, 'r+')
 
-            const rsData = Buffer.alloc(1024)
-            await self.handle.read({ offset: 0, length: 1024, buffer: rsData })
+            const rsData = Buffer.allocUnsafe(1024)
+            await self.handle.read({ position: 0, length: 1024, buffer: rsData })
             const [rsError, rs] = BlockSerializationContext.deserializeRootBlock(rsData)
 
             if (rsError)                    return IBFSError.eav('L0_VO_ROOTFAULT', null, rsError, { image })
@@ -278,20 +278,6 @@ export default class Volume {
 
     // Methods ======================================================
 
-    public async writeRootBlock(): T.XEavSA<'L0_IO_ROOT_WRITE_ERROR'|'L0_IO_ROOT_SR_ERROR'> {
-        try {
-
-            const [srError, buffer] = BlockSerializationContext.serializeRootBlock(this.rs)
-            if (srError) return new IBFSError('L0_IO_ROOT_SR_ERROR', null, srError)
-
-            const writeError = await this.writeBlock(0, buffer)
-            if (writeError) return new IBFSError('L0_IO_ROOT_WRITE_ERROR', null, writeError)
-            
-        } 
-        catch (error) {
-            return new IBFSError('L0_IO_ROOT_WRITE_ERROR', null, error as Error)    
-        }
-    }
 
     public async readMetaCluster(): T.XEavA<TMetaCluster, 'L0_IO_META_READ_ERROR'|'L0_IO_META_DS_ERROR'> {
         try {
@@ -310,6 +296,21 @@ export default class Volume {
         } 
         catch (error) {
             return [new IBFSError('L0_IO_META_READ_ERROR', null, error as Error), null]
+        }
+    }
+
+    public async writeRootBlock(): T.XEavSA<'L0_IO_ROOT_WRITE_ERROR'|'L0_IO_ROOT_SR_ERROR'> {
+        try {
+
+            const [srError, buffer] = BlockSerializationContext.serializeRootBlock(this.rs)
+            if (srError) return new IBFSError('L0_IO_ROOT_SR_ERROR', null, srError)
+
+            const writeError = await this.writeBlock(0, buffer)
+            if (writeError) return new IBFSError('L0_IO_ROOT_WRITE_ERROR', null, writeError)
+            
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_ROOT_WRITE_ERROR', null, error as Error)    
         }
     }
     
@@ -332,8 +333,45 @@ export default class Volume {
         }
     }
 
-    // public async readHeadBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
-    // public async writeHeadBlock(): T.EavSA {}
+    public async readHeadBlock(address: number, aesKey: Buffer, integrity = true): 
+        T.XEavA<THeadBlock, 'L0_IO_HEAD_READ_ERROR'|'L0_IO_HEAD_DS_ERROR'|'L0_IO_HEAD_READ_INTEGRITY_ERROR'|'L0_IO_HEAD_READ_UNKNOWN_ERROR'> {
+        try {
+            
+            const position = this.bs.BLOCK_SIZE * address
+
+            const [readError, buffer] = await this.readBlock(position)
+            if (readError) return IBFSError.eav('L0_IO_HEAD_READ_ERROR', null, readError, { address, integrity })
+
+            const [dsError, block] = this.bs.deserializeHeadBlock(buffer, address, aesKey)
+            if (dsError) return IBFSError.eav('L0_IO_HEAD_DS_ERROR', null, dsError, { address, integrity })
+
+            if (integrity && block.crc32Mismatch)
+                return IBFSError.eav('L0_IO_HEAD_READ_INTEGRITY_ERROR', null, null, { address, integrity })
+
+            return [null, block]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_HEAD_READ_UNKNOWN_ERROR', null, error as Error, { address, integrity })
+        }
+    }
+
+    public async writeHeadBlock(block: THeadBlock & TCommonWriteMeta): 
+        T.XEavSA<'L0_IO_HEAD_SR_ERROR'|'L0_IO_HEAD_WRITE_ERROR'|'L0_IO_HEAD_WRITE_UNKNOWN_ERROR'> {
+        try {
+
+            const [srError, buffer] = this.bs.serializeHeadBlock(block)
+            if (srError) return new IBFSError('L0_IO_HEAD_SR_ERROR', null, srError, ssc(block, ['aesKey']))
+            
+            const position = this.bs.BLOCK_SIZE * block.address
+            const writeError = await this.writeBlock(position, buffer)
+            if (writeError) return new IBFSError('L0_IO_HEAD_WRITE_ERROR', null, writeError, ssc(block, ['aesKey']))
+            
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_HEAD_WRITE_UNKNOWN_ERROR', null, error as Error)
+        }
+    }
 
     // public async readLinkBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
     // public async writeLinkBlock(): T.EavSA {}
