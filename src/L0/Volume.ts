@@ -7,7 +7,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { WriteStream } from 'node:fs'
 
-import BlockSerializationContext, { TCommonWriteMeta, THeadBlock, TMetaCluster, TRootBlock } from './BlockSerialization.js'
+import BlockSerializationContext, { TCommonWriteMeta, THeadBlock, TLinkBlock, TMetaCluster, TRootBlock } from './BlockSerialization.js'
 import BlockAESContext from './BlockAES.js'
 import IBFSError from '../errors/IBFSError.js'
 import ssc from '../misc/safeShallowCopy.js'
@@ -369,12 +369,50 @@ export default class Volume {
             
         } 
         catch (error) {
-            return new IBFSError('L0_IO_HEAD_WRITE_UNKNOWN_ERROR', null, error as Error)
+            return new IBFSError('L0_IO_HEAD_WRITE_UNKNOWN_ERROR', null, error as Error, ssc(block, ['aesKey']))
         }
     }
 
-    // public async readLinkBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
-    // public async writeLinkBlock(): T.EavSA {}
+    public async readLinkBlock(address: number, aesKey: Buffer, integrity = true): 
+        T.XEavA<TLinkBlock, 'L0_IO_LINK_READ_ERROR'|'L0_IO_LINK_DS_ERROR'|'L0_IO_LINK_READ_INTEGRITY_ERROR'|'L0_IO_LINK_READ_UNKNOWN_ERROR'> {
+        try {
+            
+            const position = this.bs.BLOCK_SIZE * address
+
+            const [readError, buffer] = await this.readBlock(position)
+            if (readError) return IBFSError.eav('L0_IO_LINK_READ_ERROR', null, readError, { address, integrity })
+
+            const [dsError, block] = this.bs.deserializeLinkBlock(buffer, address, aesKey)
+            if (dsError) return IBFSError.eav('L0_IO_LINK_DS_ERROR', null, dsError, { address, integrity })
+
+            if (integrity && block.crc32Mismatch)
+                return IBFSError.eav('L0_IO_LINK_READ_INTEGRITY_ERROR', null, null, { address, integrity })
+
+            return [null, block]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_LINK_READ_UNKNOWN_ERROR', null, error as Error, { address, integrity })
+        }
+    }
+    
+    public async writeLinkBlock(block: TLinkBlock & TCommonWriteMeta): 
+        T.XEavSA<'L0_IO_LINK_SR_ERROR'|'L0_IO_LINK_WRITE_ERROR'|'L0_IO_LINK_WRITE_UNKNOWN_ERROR'> {
+        try {
+
+            const [srError, buffer] = this.bs.serializeLinkBlock(block)
+            if (srError) return new IBFSError('L0_IO_LINK_SR_ERROR', null, srError, ssc(block, ['aesKey']))
+            
+            const position = this.bs.BLOCK_SIZE * block.address
+            const writeError = await this.writeBlock(position, buffer)
+            if (writeError) return new IBFSError('L0_IO_LINK_WRITE_ERROR', null, writeError, ssc(block, ['aesKey']))
+            
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_LINK_WRITE_UNKNOWN_ERROR', null, error as Error, ssc(block, ['aesKey']))
+        }
+        
+    }
 
     // public async readDataBlock(): T.EavA<Buffer, 'L0_READ_ERROR'> {}
     // public async writeDataBlock(): T.EavSA {}

@@ -92,11 +92,19 @@ enum ErrorCodes {
     L0_IO_META_SR_ERROR             = "An error occurred while serializing a metadata cluster.",
 
     L0_IO_HEAD_READ_ERROR           = "An error occurred while reading a head block.",
+    L0_IO_HEAD_READ_INTEGRITY_ERROR = "Detected an integrity mismatch while reading a head block - This probably indicates corruption.",
+    L0_IO_HEAD_READ_UNKNOWN_ERROR   = "An unknown error occurred while reading a head block.",
     L0_IO_HEAD_DS_ERROR             = "An error occurred while deserializing a head block.",
     L0_IO_HEAD_WRITE_ERROR          = "An error occurred while writing a head block.",
     L0_IO_HEAD_WRITE_UNKNOWN_ERROR  = "An unknown error occurred while writing a head block.",
     L0_IO_HEAD_SR_ERROR             = "An error occurred while serializing a head block.",
-    L0_IO_HEAD_READ_INTEGRITY_ERROR = "Detected an integrity mismatch while reading a head block - This probably indicates corruption.",
-    L0_IO_HEAD_READ_UNKNOWN_ERROR   = "An unknown error occurred while reading a head block.",
+
+    L0_IO_LINK_READ_ERROR           = "An error occurred while reading a link block.",
+    L0_IO_LINK_READ_INTEGRITY_ERROR = "Detected an integrity mismatch while reading a link block - This probably indicates corruption.",
+    L0_IO_LINK_READ_UNKNOWN_ERROR   = "An unknown error occurred while reading a link block.",
+    L0_IO_LINK_DS_ERROR             = "An error occurred while deserializing a link block.",
+    L0_IO_LINK_WRITE_ERROR          = "An error occurred while writing a link block.",
+    L0_IO_LINK_WRITE_UNKNOWN_ERROR  = "An unknown error occurred while writing a link block.",
+    L0_IO_LINK_SR_ERROR             = "An error occurred while serializing a link block.",
 
 }   
