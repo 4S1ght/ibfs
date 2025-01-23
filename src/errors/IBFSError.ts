@@ -115,5 +115,9 @@ enum ErrorCodes {
     L0_IO_DATA_WRITE_UNKNOWN_ERROR  = "An unknown error occurred while writing a data block.",
     L0_IO_DATA_SR_ERROR             = "An error occurred while serializing a data block.",
     
+    // Level 2 ----------------------------------------------------------------
+
+    L1_DIR_SR                       = "An error occurred while serializing a directory entry.",
+    L1_DIR_DS                       = "An error occurred while deserializing a directory entry.",
 
 }   

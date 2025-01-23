@@ -36,6 +36,7 @@
     "vitest": "2.1.8"
   },
   "dependencies": {
-    "ini": "5.0.0"
+    "ini": "5.0.0",
+    "protobufjs": "7.4.0"
   }
 }
