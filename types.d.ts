@@ -1,4 +1,4 @@
-import type IBFSError, { BFSErrorCode, IBFSErrorCode } from "@errors"
+import IBFSError, { IBFSErrorCode } from './src/errors/IBFSError.js'
 
 /** 
  * GO-like error-as-value return  type. Used specifically to avoid
@@ -24,16 +24,6 @@ export type XEavS<EC extends IBFSErrorCode> = IBFSError<EC> | void
 */
 export type EavSA<E extends Error = Error> = Promise<EavS<E>>
 export type XEavSA<EC extends IBFSErrorCode> = Promise<XEavS<EC>>
-
-/**s
- * Extracts enum values.
- */
-export type Values<T> = T[keyof T]
-
-/** 
- * Makes selected keys optional.
-*/
-export type Optional<O, K extends keyof O> = Omit<O, K> & Partial<Pick<O, K>>
 
 /**
  * Excludes the first constructor parameter.

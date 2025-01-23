@@ -3,7 +3,6 @@
  * An abstraction class for allocating/reading buffers and handling their I/O sequentially.
  * This class is here to ease development and omit hardcoding sector metadata indexes inside
  * of serialize/deserialize methods.
- * Random I/O can be achieved through the static methods.
  */
 export default class Memory {
 
@@ -25,15 +24,15 @@ export default class Memory {
         this.length = buffer.length
     }
 
-    /** Takes in an existing buffer and exposes it under the `Bytes` class' API. */
-    public static intake(buffer: Buffer) {
+    /** Wraps an existing buffer and returns a new Memory instance */
+    public static wrap(buffer: Buffer) {
         return new this(buffer)
     }
-    /** Allocates a portion of memory equal to `size` and exposes it through the `Bytes` class' API. */
+    /** Allocates a portion of memory equal to `size`. */
     public static alloc(size: number) {
         return new this(Buffer.allocUnsafe(size).fill(0))
     }
-    /** Allocates a portion of memory equal to `size` and exposes it through the `Bytes` class' API. */
+    /** Allocates a portion of memory equal to `size` without initializing it */
     public static allocUnsafe(size: number) {
         return new this(Buffer.allocUnsafe(size))
     }
@@ -41,18 +40,16 @@ export default class Memory {
     // Misc =========================================================
 
     /** 
-     * Creates a reference of only the data that's been written
-     * to the internal buffer.  
-     * Depends on the value of the `Memory.bytesWritten` property which
-     * can be changed by the user!
+     * Creates a subarray reference of the data that's already been written to the internal buffer.  
+     * Depends on the value of the `Memory.bytesWritten` property which can be changed by the user!
      */
     public readFilled() {
         return this.buffer.subarray(0, this.bytesWritten)
     }
 
     /** 
-     * Reads out only the part of the buffer that hasn't yet been read from.
-     * Depends in the value of the `Memory.bytesRead` property.
+     * Creates a subarray reference of the remaining data that hasn't yet been read from.
+     * Depends in the value of the `Memory.bytesRead` property which can be changed by the user!
      */
     public readRemaining() {
         return this.buffer.subarray(this.bytesRead, this.length)
@@ -61,44 +58,51 @@ export default class Memory {
     // Sequential input =============================================
 
     /** Sequentially writes an 8-bit integer. */
-    public writeInt8(value: number) {
-        this.bytesWritten = this.buffer.writeUInt8(value, this.bytesWritten)
+    public writeInt8(value: number, index?: number) {
+         this.buffer.writeUInt8(value, index || this.bytesWritten)
+        if (!index) this.bytesWritten += 1
     }
     /** Sequentially writes a 16-bit integer. */
-    public writeInt16(value: number) {
-        this.bytesWritten = this.buffer.writeUInt16LE(value, this.bytesWritten)
+    public writeInt16(value: number, index?: number) {
+        this.buffer.writeUInt16LE(value, index || this.bytesWritten)
+        if (!index) this.bytesWritten += 2
     }
     /** Sequentially writes a 32-bit integer. */
-    public writeInt32(value: number) {
-        this.bytesWritten = this.buffer.writeUInt32LE(value, this.bytesWritten)
+    public writeInt32(value: number, index?: number) {
+        this.buffer.writeUInt32LE(value, index || this.bytesWritten)
+        if (!index) this.bytesWritten += 4
     }
     /** Sequentially writes a 64-bit integer. (Limited to 52 bits due to float64 / IEEE-754 maximum integer value)  */
-    public writeInt64(value: number) {
-        this.bytesWritten = this.buffer.writeBigInt64LE(BigInt(value), this.bytesWritten)
+    public writeInt64(value: number, index?: number) {
+        this.buffer.writeBigInt64LE(BigInt(value), index || this.bytesWritten)
+        if (!index) this.bytesWritten += 8
     }
     /** Sequentially writes a 64-bit integer. (Limited to 52 bits due to float64 / IEEE-754 maximum integer value)  */
-    public writeInt64B(value: bigint) {
-        this.bytesWritten = this.buffer.writeBigInt64LE(value, this.bytesWritten)
+    public writeInt64B(value: bigint, index?: number) {
+        this.buffer.writeBigInt64LE(value, index || this.bytesWritten)
+        if (!index) this.bytesWritten += 8
     }
     /** Sequentially writes a bitwise 0/1 8-bit integer. */
-    public writeBool(value: boolean) {
-        this.bytesWritten = this.buffer.writeUInt8(value ? 1 : 0, this.bytesWritten)
+    public writeBool(value: boolean, index?: number) {
+        this.buffer.writeUInt8(value ? 1 : 0, index || this.bytesWritten)
+        if (!index) this.bytesWritten += 1
     }
     /** Sequentially writes a UTF-8 string. */
-    public writeString(value: string) {
-        this.bytesWritten += this.buffer.write(value, this.bytesWritten, 'utf-8')
+    public writeString(value: string, index?: number) {
+        const shift = this.buffer.write(value, index || this.bytesWritten, 'utf-8')
+        if (!index) this.bytesWritten += shift
     }
     /** Sequentially writes raw data. */
-    public write(value: Buffer) {
-        value.copy(this.buffer, this.bytesWritten)
-        this.bytesWritten += value.length
+    public write(value: Buffer, index?: number) {
+        value.copy(this.buffer, index || this.bytesWritten)
+        if (!index) this.bytesWritten += value.length
     }
     /** 
-     * Copies N amount of bytes from the source to another memory instance.
+     * Copies N amount of bytes to another `Memory` instance.
      * This can be done fully sequentially, as both the source and target
      * `bytesRead` and `bytesWritten` values are synced respectively.
      */
-    public copyTo(target: Memory, length: number) {
+    public copyTo(target: Memory, length: number): number {
         const copied = this.buffer.copy(
             target.buffer, 
             target.bytesWritten,
@@ -107,60 +111,67 @@ export default class Memory {
         )
         this.bytesRead += copied
         target.bytesWritten += copied
+        return copied
+    }
+    /** Used to initialize a part of memory to 0's. */
+    public initialize(start: number, end: number) {
+        this.buffer.fill(0, start, end)
     }
 
     // Sequential output ============================================
 
     /** Sequentially reads an 8-bit integer. */
-    public readInt8() {
-        const data = this.buffer.readUint8(this.bytesRead)
-        this.bytesRead += 1
+    public readInt8(index?: number) {
+        const data = this.buffer.readUint8(index || this.bytesRead)
+        if (!index) this.bytesRead += 1
         return data
     }
     /** Sequentially reads a 16-bit integer. */
-    public readInt16() {
-        const data = this.buffer.readUint16LE(this.bytesRead)
-        this.bytesRead += 2
+    public readInt16(index?: number) {
+        const data = this.buffer.readUint16LE(index || this.bytesRead)
+        if (!index) this.bytesRead += 2
         return data
     }
     /** Sequentially reads a 32-bit integer. */
-    public readInt32() {
-        const data = this.buffer.readUint32LE(this.bytesRead)
-        this.bytesRead += 4
+    public readInt32(index?: number) {
+        const data = this.buffer.readUint32LE(index || this.bytesRead)
+        if (!index) this.bytesRead += 4
         return data
     }
     /** Sequentially reads a 64-bit integer. */
-    public readInt64B() {
-        const data = this.buffer.readBigInt64LE(this.bytesRead)
-        this.bytesRead += 8
+    public readInt64B(index?: number) {
+        const data = this.buffer.readBigInt64LE(index || this.bytesRead)
+        if (!index) this.bytesRead += 8
         return data
     }
     /** Sequentially reads a 64-bit integer. */
-    public readInt64() {
-        const data = this.buffer.readBigInt64LE(this.bytesRead)
-        this.bytesRead += 8
+    public readInt64(index?: number) {
+        const data = this.buffer.readBigInt64LE(index || this.bytesRead)
+        if (!index) this.bytesRead += 8
         return Number(data)
     }
     /** Sequentially reads an 8-bit bitwise 1/0 integer - Boolean. */
-    public readBool() {
-        const data = this.buffer.readUInt8(this.bytesRead)
-        this.bytesRead += 1
+    public readBool(index?: number) {
+        const data = this.buffer.readUInt8(index || this.bytesRead)
+        if (!index) this.bytesRead += 1
         return Boolean(data)
     }
     /** Sequentially reads a UTF-8 string. */
-    public readString(length: number) {
-        const data = this.buffer.subarray(this.bytesRead, this.bytesRead + length).toString('utf-8')
-        this.bytesRead += length
+    public readString(length: number, index?: number) {
+        const start = index || this.bytesRead
+        const data = this.buffer.subarray(start, start+length).toString('utf-8')
+        if (!index) this.bytesRead += length
         return data
     }
     /** 
      * Sequentially reads raw data. 
      * Uses `Buffer.subarray` internally, modifying the content will
-     * cause changes to the original buffer due to shared memory.
+     * cause changes to the original buffer due to memory being shared.
     */
-    public read(length: number) {
-        const data = this.buffer.subarray(this.bytesRead, this.bytesRead + length)
-        this.bytesRead += length
+    public read(length: number, index?: number) {
+        const start = index || this.bytesRead
+        const data = this.buffer.subarray(start, start+length)
+        if (!index) this.bytesRead += length
         return data
     }
 
@@ -175,8 +186,8 @@ export default class Memory {
             ? string.split('').filter(char => char.charCodeAt(0) <= 127).join('')
             : string
 
-    /** Adds 0-filled padding at the end of the buffer. */
-    public static toLength = (length: number, buffer: Buffer) => 
+    /** Returns a new buffer padded to a specific length with zeros. */
+    public static padTo = (buffer: Buffer, length: number) => 
         buffer.length > length
             ? Buffer.concat([buffer, Buffer.allocUnsafe(length - buffer.length).fill(0)])
             : buffer

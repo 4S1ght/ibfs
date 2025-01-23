@@ -1,128 +1,169 @@
+import fs, { write } from 'fs'
+import fsp from 'fs/promises'
+import path from 'path'
+import url from 'url'
+import { describe, expect, test } from "vitest"
 
-import { describe, test, expect } from 'vitest'
-import Volume from './Volume.js'
-import path from 'node:path'
-import url from 'node:url'
-import { CommonWriteMeta, HeadBlock, LinkBlock, StorageBlock } from './Serialize.js';
-import BlockAES from './AES.js';
+const dirname = path.dirname(url.fileURLToPath(import.meta.url))
 
-const dirname = url.fileURLToPath(new URL('.', import.meta.url))
+import Volume, { TVolumeInit } from "./Volume.js"
+import * as C from '../Constants.js'
+import BlockAESContext from './BlockAES.js'
+import { TCommonWriteMeta, TDataBlock, THeadBlock, TLinkBlock, TMetaCluster } from './BlockSerialization.js'
 
-// Encryption
-const aesCipher              = 'aes-256-xts'
-const aesKey                 = Buffer.from('Top secret!')
-const [aesErr, aesKeyDigest] = BlockAES.deriveAESKey(aesCipher, aesKey)
-if (aesErr) throw aesErr
+const keyString = 'hello world'
+const alg = 'aes-256-xts'
+const [_, key] = BlockAESContext.deriveAESKey(alg, keyString) as [null, Buffer]
+const testDir = path.join(dirname, '../../tests')
+const volumeFile = path.join(testDir, 'test.ibfs')
 
-const useEncryption = false
+const volumeStat = () => fs.statSync(volumeFile)
+const clear = async () => Promise.all((await fsp.readdir(testDir)).map(file => fsp.rm(path.join(testDir, file))))
 
-describe('Create/open volume', async () => { 
+describe('Volume initialization & mounting', async () => {
 
-    const createError = await Volume.createEmptyVolume({
-        file: path.join(dirname, '../../tests/Volume.ibfs'),
-        sectorSize: 1024,
-        sectorCount: 1000,
-        aesCipher: useEncryption ? aesCipher : "",
-        aesKey: aesKey,
-        driver: {
-            addressStackPageSize: 1024,
-            addressStackPagePreloadThreshold: 1024,
-            addressStackPageUnloadThreshold: 1025,
-        },
-        update: {
-            onUpdate() {}
-        }
-    })
-    if (createError) throw createError
+    await clear()
 
-    const [volumeError, volume] = await Volume.open(path.join(dirname, '../../tests/Volume.ibfs'))
-    if (volumeError) {
-        console.error(volumeError)
-        throw volumeError
+    const meta: TVolumeInit = {
+        fileLocation: volumeFile,
+        blockSize: 1,
+        blockCount: 150,
+        aesCipher: alg,
+        aesKey: key
     }
 
-    test('volume.rs.sectorSize',                 () => expect(volume.rs.sectorSize)      .toBe(1024))
-    test('volume.rs.sectorCount',                () => expect(volume.rs.sectorCount)     .toBe(1000))
-    test('volume.rs.cryptoCompatMode',           () => expect(volume.rs.cryptoCompatMode).toBe(true))
-    useEncryption && test('volume.rs.aesCipher', () => expect(volume.rs.aesCipher)       .toBe(256))
+    const volumeCreateError = await Volume.createEmptyVolume(meta)
+    const stats = volumeStat()
 
+    test('create error', () => expect(volumeCreateError).toBe(undefined))
+    test('stat',         () => expect(stats.isFile())   .toBe(true))
 
-    describe('read/write meta block', async () => {
+    const [openError, volume] = await Volume.open(volumeFile)
+    if (openError) {
+        console.error(openError)
+        throw openError
+    }
 
-        const testObject = { ibfs: 'test' }
+    test('volume.rs.blockSize',     () => expect(volume.rs.blockSize)       .toBe(meta.blockSize))
+    test('volume.rs.blockCount',    () => expect(volume.rs.blockCount)      .toBe(meta.blockCount))
+    test('volume.rs.compatibility', () => expect(volume.rs.compatibility)   .toBe(true))
+    test('volume.rs.aesCipher',     () => expect(volume.rs.aesCipher)       .toBe(alg))
+    test('Volume.rs.specMajor',     () => expect(volume.rs.specMajor)       .toBe(C.SPEC_MAJOR))
+    test('Volume.rs.specMinor',     () => expect(volume.rs.specMinor)       .toBe(C.SPEC_MINOR))
 
-        const writeError = await volume.writeMetaBlock({ ibfs: 'test' })
-        if (writeError) throw writeError
-        const [readError, meta] = await volume.readMetaBlock()
-        if (readError) throw readError
+    test('Root block writes', async () => {
 
-        test('block.data', () => expect(meta).toStrictEqual(testObject))
+        const writeError = await volume.writeRootBlock()
+        if (writeError) {
+            console.log(writeError)
+            throw writeError
+        }
 
     })
 
-    // describe('read/write head block', async () => {
+    test('Meta cluster I/O', async () => {
 
-    //     const meta: HeadBlock & CommonWriteMeta = {
-    //         created: Math.floor(Date.now()/1000),
-    //         modified: Math.floor(Date.now()/1000),
-    //         next: 0,
-    //         nextSize: 0,
-    //         data: Buffer.from('Hello world!'),
-    //         blockSize: 0,
-    //         address: 150,
-    //         aesKey: aesKeyDigest,
-    //         resourceType: 0
-    //     }
+        const meta: TMetaCluster = {
+            metadata: { ibfs: { string: 'string', boolean: true } }
+        }
 
-    //     const writeError = await volume.writeHeadBlock(meta)
-    //     if (writeError) throw writeError
+        const writeError = await volume.writeMetaCluster(meta)
+        if (writeError) {
+            console.log(writeError)
+            throw writeError
+        }
 
-    //     const [readError, block] = await volume.readHeadBlock(150, aesKeyDigest)
-    //     if (readError) throw readError
+        const [readError, cluster] = await volume.readMetaCluster()
+        if (readError) {
+            console.log(readError)
+            throw readError
+        }
 
-    //     test('block.data', () => expect(block.data).toStrictEqual(meta.data))
+        expect(cluster!.ibfs!.string).toBe('string')
+        expect(cluster!.ibfs!.boolean).toBe(true)
 
-    // })
+    })
 
-    // describe('read/write link block', async () => {
+    test('Head block I/O', async () => {
 
-    //     const meta: LinkBlock & CommonWriteMeta = {
-    //         next: 0,
-    //         nextSize: 0,
-    //         data: Buffer.from('Hello world!'),
-    //         blockSize: 0,
-    //         address: 151,
-    //         aesKey: aesKeyDigest
-    //     }
+        const meta: THeadBlock & TCommonWriteMeta = {
+            created: Math.ceil(Date.now()/1000),
+            modified: Math.ceil(Date.now()/1000),
+            resourceType: 'FILE',
+            data: Buffer.from('hello world'),
+            aesKey: key,
+            address: 100,
+            next: 101,
+        }
 
-    //     const writeError = await volume.writeLinkBlock(meta)
-    //     if (writeError) throw writeError
+        const writeError = await volume.writeHeadBlock(meta)
+        if (writeError) {
+            console.log(writeError)
+            throw writeError
+        }
 
-    //     const [readError, block] = await volume.readLinkBlock(151, 0, aesKeyDigest)
-    //     if (readError) throw readError
+        const [readError, block] = await volume.readHeadBlock(meta.address, key)
+        if (readError) {
+            console.log(readError)
+            throw readError
+        }
 
-    //     test('block.data', () => expect(block.data).toStrictEqual(meta.data))
+        expect(block.created)      .toBe(meta.created)
+        expect(block.modified)     .toBe(meta.modified)
+        expect(block.resourceType) .toBe(meta.resourceType)
+        expect(block.next)         .toBe(meta.next)
+        expect(block.data)         .toStrictEqual(meta.data)
 
-    // })
+    })
 
-    // describe('read/write storage block', async () => {
+    test('Link block I/O', async () => {
 
-    //     const meta: StorageBlock & CommonWriteMeta = {
-    //         data: Buffer.from('Hello world!'),
-    //         blockSize: 0,
-    //         address: 152,
-    //         aesKey: aesKeyDigest
-    //     }
+        const meta: TLinkBlock & TCommonWriteMeta = {
+            data: Buffer.from('hello world'),
+            aesKey: key,
+            address: 101,
+            next: 0,
+        }
 
-    //     const writeError = await volume.writeStoreBlock(meta)
-    //     if (writeError) throw writeError
+        const writeError = await volume.writeLinkBlock(meta)
+        if (writeError) {
+            console.log(writeError)
+            throw writeError
+        }
 
-    //     const [readError, block] = await volume.readStoreBlock(152, 0, aesKeyDigest)
-    //     if (readError) throw readError
+        const [readError, block] = await volume.readLinkBlock(meta.address, key)
+        if (readError) {
+            console.log(readError)
+            throw readError
+        }
 
-    //     test('block.data', () => expect(block.data).toStrictEqual(meta.data))
+        expect(block.next).toBe(meta.next)
+        expect(block.data).toStrictEqual(meta.data)
 
-    // })
+    })
 
+    test('Data block I/O', async () => {
+
+        const meta: TDataBlock & TCommonWriteMeta = {
+            data: Buffer.from('hello world'),
+            aesKey: key,
+            address: 102,
+        }
+
+        const writeError = await volume.writeDataBlock(meta)
+        if (writeError) {
+            console.log(writeError)
+            throw writeError
+        }
+
+        const [readError, block] = await volume.readDataBlock(meta.address, key)
+        if (readError) {
+            console.log(readError)
+            throw readError
+        }
+
+        expect(block.data).toStrictEqual(meta.data)
+
+    })
 
 })

@@ -1,75 +1,11 @@
-import type * as T from '@types'
-
-enum ErrorCodes {
-    
-    // Level 0 (physical) errors =======================================================================================
-
-    L0_ROOT_CANT_OVERWRITE       = 'Could not overwrite the root sector.',
-
-    L0_VCREATE_CANT_CREATE       = 'Could not create the IBFS volume.',
-    L0_VCREATE_WS_ERROR          = 'A WriteStream occurred while creating the IBFS volume.', 
-    L0_VCREATE_DRIVER_MISCONFIG  = 'Missing, conflicting or wrong configuration.',
-    
-    L0_CRYPTO_KEY_REQUIRED       = 'An AES key is required for the operation but was not provided.',
-    L0_CRYPTO_KEY_CANT_DIGEST    = 'An error ocurred while digesting an AES key',
-    L0_CRCSUM_MISMATCH           = "Block CRC checksum does not match the contents - Possible corruption",
-    
-    L0_VOPEN_UNKNOWN             = 'Could not open the IBFS volume.',
-    L0_VOPEN_ROOT_DESERIALIZE    = 'Failed to deserialize the root sector data required for further driver initialization.',
-    L0_VOPEN_MODE_INCOMPATIBLE   = 'The IBFS volume was not in NodeJS crypto API compatibility mode and is impossible to be decrypted by this driver',
-    L0_VOPEN_SIZE_MISMATCH       = 'Volume metadata describes different IBFS volume size than what was found on the host FS - This *MEANS* data corruption or loss.', 
- 
-    L0_BS_ROOT_SR                = 'Could not serialize root sector data.',
-    L0_BS_ROOT_DS                = 'Could not deserialize root sector data.',
-    L0_BS_HEAD_SR                = 'Could not serialize head sector data.',
-    L0_BS_HEAD_DS                = 'Could not deserialize head sector data.',
-    L0_BS_LINK_SR                = 'Could not serialize link sector data.',
-    L0_BS_LINK_DS                = 'Could not deserialize link sector data.',
-    L0_BS_STORE_SR               = 'Could not serialize storage sector data.',
-    L0_BS_STORE_DS               = 'Could not deserialize storage sector data.',
-    L0_BS_META_SR                = 'Could not serialize volume metadata block.',
-    L0_BS_META_DS                = 'Could not deserialize volume metadata block.', 
-
-    L0_IO_UNKNOWN                = 'Unknown I/O error.', 
-    L0_IO_RESOURCE_BUSY          = 'The resource is occupied by another I/O operation.',
-    L0_IO_READ                   = 'Failed to read data from the disk.',
-    L0_IO_READ_DS                = 'Failed to deserialize data from the disk - Data was read but failed deserialization',
-    L0_IO_READ_META              = 'Failed to read volume metadata.',
-    L0_IO_READ_HEAD              = 'Could not read metadata sector of a head block.',
-    L0_IO_READ_HEAD_TAIL         = 'Could not read trailing sectors of a head block.',
-    L0_IO_READ_LINK              = 'Could not read a link block from the disk.',
-    L0_IO_READ_STORAGE           = 'Could not read a storage block from the disk.',
-    L0_IO_WRITE                  = 'Failed to write data to the disk',
-    L0_IO_WRITE_SR               = 'Failed to serialize data before write.',
-    L0_IO_WRITE_META             = 'Could not write volume metadata.',
-    L0_IO_WRITE_HEAD             = 'Failed to write a head block.',
-    L0_IO_WRITE_LINK             = 'Failed to write a link block',
-    L0_IO_WRITE_STORAGE          = 'Failed to write a storage block.',
-
-    // Level 1 (filesystem) errors =====================================================================================
-
-    L1_FSCREATE_CANT_CREATE      = 'Failed to create a filesystem',
-
-    L1_DIR_INIT                  = 'Could not initialize directory transcoder.',
-
-    L1_DIR_DECODE                = 'Failed to decode a directory buffer.',
-    L1_DIR_ENCODE                = 'Failed to encode a directory buffer.',
-
-    L1_AS_CANT_INITIALIZE        = 'Failed to initialize the address stack required for managing sector allocation.',
-    L1_AS_CANT_LOAD_CHUNK        = 'Failed to load an address stack chunk from the disk.',
-    L1_AS_CANT_UNLOAD_CHUNK      = 'Failed to unload an address stack chunk to the disk.',
-
-}
-
-export type IBFSErrorCode = keyof typeof ErrorCodes
-export type IBFSErrorMetadata = { [key: string]: any }
+import type * as T from '../../types.js'
 
 export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> extends Error {
 
     public readonly code: Code
-    public readonly rootCause?: IBFSError
     public readonly causes: Error[] = []
     public readonly meta: IBFSErrorMetadata = {}
+    public readonly rootCause?: IBFSError
 
     constructor(code: Code, message?: string | null, cause?: Error | null, meta?: IBFSErrorMetadata) {
         
@@ -86,20 +22,15 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
                 this.causes = [cause, ...cause.causes]
                 // @ts-ignore - Readonly only outside the error class.
                 cause.causes = []
+                // @ts-ignore
+                delete cause.rootCause
             }
             else {
                 this.causes.unshift(cause)
             }
         } 
 
-    }
-
-    private static messageCause(cause: Error | IBFSError) {
-        return cause.message.startsWith('[Root cause')
-            // @ts-ignore
-            ? cause.code ? `[Root cause <${cause.code}>] ${cause.message}` : `[Root cause] ${cause.message}`
-            : cause.message
-    }
+    } 
 
     /**
      * Constructs a new IBFSError instance in an Eav (error-as-value) format. 
@@ -110,3 +41,79 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
     }
 
 }
+
+export type IBFSErrorCode = keyof typeof ErrorCodes
+export type IBFSErrorMetadata = { [key: string]: any }
+
+enum ErrorCodes {
+
+    // Scheme: LEVEL_SCOPE_ERROR_CODE_...
+
+    // Level 1 ----------------------------------------------------------------
+
+    // Cryptography
+    L0_AES_NOKEY                    = "AES key was not provided byt required by the encryption settings.",
+    L0_AES_KEYDIGEST                = "Failed to digest the provided AES key.",
+
+    // De/serialization
+    L0_SR_ROOTERR                   = "An error occurred while serializing the root block.",
+    L0_DS_ROOTERR                   = "An error occurred while deserializing the root block.",
+    L0_SR_METAERR                   = "An error occurred while serializing the metadata cluster.",
+    L0_DS_METAERR                   = "An error occurred while deserializing the metadata cluster.",
+    L0_SR_HEADERR                   = "An error occurred while serializing a head block.",
+    L0_DS_HEADERR                   = "An error occurred while deserializing a head block.",
+    L0_SR_LINKERR                   = "An error occurred while serializing a link block.",
+    L0_DS_LINKERR                   = "An error occurred while deserializing a link block",
+    L0_SR_DATAERR                   = "An error occurred while serializing a data block.",
+    L0_DS_DATAERR                   = "An error occurred while deserializing a data block.",
+
+    // Volume creation/initialization
+    L0_VI_FAILURE                   = "An error occurred while initializing the volume.",
+
+    // Volume closing
+    L0_VC_FAILURE                   = "An error occurred while closing the volume.",
+
+    // Volume mounting      
+    L0_VO_UNKNOWN                   = "An unknown error occurred while mounting the volume.",
+    L0_VO_ROOTFAULT                 = "The root sector of the volume is corrupted.",
+    L0_VO_MODE_INCOMPATIBLE         = "Can't mount the volume because it was created with a different encryption mode. NodeJS does not natively expose APIs for manipulating encryption tweak values and needs to emulate them. This volume was not set up for and can not be decrypted using this runtime.",
+    L0_VO_SIZE_MISMATCH             = "The size of the volume image does not match the size expected according to volume metadata. This is likely a sign of image corruption.",
+
+    // I/O      
+    L0_IO_READ_ERROR                = "An error occurred while reading from the volume.",
+    L0_IO_WRITE_ERROR               = "An error occurred while writing to the volume.",
+
+    L0_IO_ROOT_WRITE_ERROR          = "An error occurred while writing a head block.",
+    L0_IO_ROOT_SR_ERROR             = "An error occurred while serializing a head block.",
+
+    L0_IO_META_READ_ERROR           = "An error occurred while reading a metadata cluster.",
+    L0_IO_META_DS_ERROR             = "An error occurred while deserializing a metadata cluster.",
+    L0_IO_META_WRITE_ERROR          = "An error occurred while writing a metadata cluster.",
+    L0_IO_META_SR_ERROR             = "An error occurred while serializing a metadata cluster.",
+
+    L0_IO_HEAD_READ_ERROR           = "An error occurred while reading a head block.",
+    L0_IO_HEAD_READ_INTEGRITY_ERROR = "Detected an integrity mismatch while reading a head block - This probably indicates corruption.",
+    L0_IO_HEAD_READ_UNKNOWN_ERROR   = "An unknown error occurred while reading a head block.",
+    L0_IO_HEAD_DS_ERROR             = "An error occurred while deserializing a head block.",
+    L0_IO_HEAD_WRITE_ERROR          = "An error occurred while writing a head block.",
+    L0_IO_HEAD_WRITE_UNKNOWN_ERROR  = "An unknown error occurred while writing a head block.",
+    L0_IO_HEAD_SR_ERROR             = "An error occurred while serializing a head block.",
+
+    L0_IO_LINK_READ_ERROR           = "An error occurred while reading a link block.",
+    L0_IO_LINK_READ_INTEGRITY_ERROR = "Detected an integrity mismatch while reading a link block - This probably indicates corruption.",
+    L0_IO_LINK_READ_UNKNOWN_ERROR   = "An unknown error occurred while reading a link block.",
+    L0_IO_LINK_DS_ERROR             = "An error occurred while deserializing a link block.",
+    L0_IO_LINK_WRITE_ERROR          = "An error occurred while writing a link block.",
+    L0_IO_LINK_WRITE_UNKNOWN_ERROR  = "An unknown error occurred while writing a link block.",
+    L0_IO_LINK_SR_ERROR             = "An error occurred while serializing a link block.",
+
+    L0_IO_DATA_READ_ERROR           = "An error occurred while reading a data block.",
+    L0_IO_DATA_READ_INTEGRITY_ERROR = "Detected an integrity mismatch while reading a data block - This probably indicates corruption.",
+    L0_IO_DATA_READ_UNKNOWN_ERROR   = "An unknown error occurred while reading a data block.",
+    L0_IO_DATA_DS_ERROR             = "An error occurred while deserializing a data block.",
+    L0_IO_DATA_WRITE_ERROR          = "An error occurred while writing a data block.",
+    L0_IO_DATA_WRITE_UNKNOWN_ERROR  = "An unknown error occurred while writing a data block.",
+    L0_IO_DATA_SR_ERROR             = "An error occurred while serializing a data block.",
+    
+
+}   

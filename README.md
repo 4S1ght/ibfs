@@ -1,4 +1,8 @@
 # IBFS
-IBFS is a fully custom filesystem designed specifically to provide a virtualization layer for network file sharing solutions such as hosting sites, network attached storage, upload sites and anything else that requires user-provided data and may benefit from extra security against directory traversal, file inclusion or arbitrary file upload attacks.
+IBFS (Indirect Block File System) is a 64-bit virtual filesystem designed with strict focus on 
+security and low implementation complexity. The primary purpose of this project is to provide an 
+easy to implement security layer for network file sharing services through **virtualization**, 
+native **encryption** and fine-grained **directory-scoped permissions**.
 
-The specification can be found [here](./spec/spec-1.0.md).
+# Specification
+The final IBFS (v2) specification is currently a work-in-progress and can be found [here](./spec/spec-2.0.md).
