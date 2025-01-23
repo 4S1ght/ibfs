@@ -218,7 +218,7 @@ export default class BlockSerializationContext {
     /**
      * Deserializes the metadata cluster and returns its information.
      */
-    public static deserializeMetaCluster(blockBuffer: Buffer): T.XEav<TMetaCluster, 'L0_DS_METAERR'> {
+    public static deserializeMetaCluster(blockBuffer: Buffer): T.XEav<TMetaCluster['metadata'], 'L0_DS_METAERR'> {
         try {
          
             const firstNullByte = blockBuffer.indexOf(0)
@@ -226,7 +226,7 @@ export default class BlockSerializationContext {
             const text = blockBuffer.toString('utf-8', 0, textEnd)
             const metadata = ini.parse(text)
 
-            return [null, { metadata: metadata }]
+            return [null, metadata]
 
         }
          catch (error) {

@@ -13,6 +13,8 @@ import IBFSError from '../errors/IBFSError.js'
 import ssc from '../misc/safeShallowCopy.js'
 import getPackage from '../misc/package.js'
 
+import * as C from '../Constants.js'
+
 // Types ==========================================================================================
 
 export interface TVolumeInit {
@@ -62,8 +64,8 @@ export default class Volume {
             // Create an empty IBFS file and allocate empty space
             // that will be used by the filesystem.
 
-            const fileMakeError = await Volume.ensureEmptyFile(init.fileLocation)
-            if (fileMakeError) return new IBFSError('L0_VI_FAILURE', null, fileMakeError, ssc(init, ['aesKey']))
+            // const fileMakeError = await Volume.ensureEmptyFile(init.fileLocation)
+            // if (fileMakeError) return new IBFSError('L0_VI_FAILURE', null, fileMakeError, ssc(init, ['aesKey']))
             
             const highWaterMark = init.init && init.init.highWaterMarkBlocks || 16
             file = await fs.open(init.fileLocation, 'w+')
@@ -134,9 +136,9 @@ export default class Volume {
                 return serialize.aes.encrypt(Buffer.alloc(16), aesKey, 0)
             })()
 
-            const [rootError, rootBlock] = await BlockSerializationContext.serializeRootBlock({
-                specMajor: pack.version.major,
-                specMinor: pack.version.minor,
+            const [rootError, rootBlock] = BlockSerializationContext.serializeRootBlock({
+                specMajor: C.SPEC_MAJOR,
+                specMinor: C.SPEC_MINOR,
                 root: metaBlocks + 1,
                 compatibility: true,
                 blockSize: init.blockSize,
@@ -278,8 +280,22 @@ export default class Volume {
 
     // Methods ======================================================
 
+    public async writeRootBlock(): T.XEavSA<'L0_IO_ROOT_WRITE_ERROR'|'L0_IO_ROOT_SR_ERROR'> {
+        try {
 
-    public async readMetaCluster(): T.XEavA<TMetaCluster, 'L0_IO_META_READ_ERROR'|'L0_IO_META_DS_ERROR'> {
+            const [srError, buffer] = BlockSerializationContext.serializeRootBlock(this.rs)
+            if (srError) return new IBFSError('L0_IO_ROOT_SR_ERROR', null, srError)
+
+            const writeError = await this.writeBlock(0, buffer)
+            if (writeError) return new IBFSError('L0_IO_ROOT_WRITE_ERROR', null, writeError)
+            
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_ROOT_WRITE_ERROR', null, error as Error)    
+        }
+    }
+
+    public async readMetaCluster(): T.XEavA<TMetaCluster['metadata'], 'L0_IO_META_READ_ERROR'|'L0_IO_META_DS_ERROR'> {
         try {
             
             const clusterSize = BlockSerializationContext.getMetaBlockCount(this.rs.blockSize)
@@ -296,21 +312,6 @@ export default class Volume {
         } 
         catch (error) {
             return [new IBFSError('L0_IO_META_READ_ERROR', null, error as Error), null]
-        }
-    }
-
-    public async writeRootBlock(): T.XEavSA<'L0_IO_ROOT_WRITE_ERROR'|'L0_IO_ROOT_SR_ERROR'> {
-        try {
-
-            const [srError, buffer] = BlockSerializationContext.serializeRootBlock(this.rs)
-            if (srError) return new IBFSError('L0_IO_ROOT_SR_ERROR', null, srError)
-
-            const writeError = await this.writeBlock(0, buffer)
-            if (writeError) return new IBFSError('L0_IO_ROOT_WRITE_ERROR', null, writeError)
-            
-        } 
-        catch (error) {
-            return new IBFSError('L0_IO_ROOT_WRITE_ERROR', null, error as Error)    
         }
     }
     
@@ -337,9 +338,7 @@ export default class Volume {
         T.XEavA<THeadBlock, 'L0_IO_HEAD_READ_ERROR'|'L0_IO_HEAD_DS_ERROR'|'L0_IO_HEAD_READ_INTEGRITY_ERROR'|'L0_IO_HEAD_READ_UNKNOWN_ERROR'> {
         try {
             
-            const position = this.bs.BLOCK_SIZE * address
-
-            const [readError, buffer] = await this.readBlock(position)
+            const [readError, buffer] = await this.readBlock(address)
             if (readError) return IBFSError.eav('L0_IO_HEAD_READ_ERROR', null, readError, { address, integrity })
 
             const [dsError, block] = this.bs.deserializeHeadBlock(buffer, address, aesKey)
@@ -363,8 +362,7 @@ export default class Volume {
             const [srError, buffer] = this.bs.serializeHeadBlock(block)
             if (srError) return new IBFSError('L0_IO_HEAD_SR_ERROR', null, srError, ssc(block, ['aesKey']))
             
-            const position = this.bs.BLOCK_SIZE * block.address
-            const writeError = await this.writeBlock(position, buffer)
+            const writeError = await this.writeBlock(block.address, buffer)
             if (writeError) return new IBFSError('L0_IO_HEAD_WRITE_ERROR', null, writeError, ssc(block, ['aesKey']))
             
         } 
@@ -376,10 +374,8 @@ export default class Volume {
     public async readLinkBlock(address: number, aesKey: Buffer, integrity = true): 
         T.XEavA<TLinkBlock, 'L0_IO_LINK_READ_ERROR'|'L0_IO_LINK_DS_ERROR'|'L0_IO_LINK_READ_INTEGRITY_ERROR'|'L0_IO_LINK_READ_UNKNOWN_ERROR'> {
         try {
-            
-            const position = this.bs.BLOCK_SIZE * address
 
-            const [readError, buffer] = await this.readBlock(position)
+            const [readError, buffer] = await this.readBlock(address)
             if (readError) return IBFSError.eav('L0_IO_LINK_READ_ERROR', null, readError, { address, integrity })
 
             const [dsError, block] = this.bs.deserializeLinkBlock(buffer, address, aesKey)
@@ -403,8 +399,7 @@ export default class Volume {
             const [srError, buffer] = this.bs.serializeLinkBlock(block)
             if (srError) return new IBFSError('L0_IO_LINK_SR_ERROR', null, srError, ssc(block, ['aesKey']))
             
-            const position = this.bs.BLOCK_SIZE * block.address
-            const writeError = await this.writeBlock(position, buffer)
+            const writeError = await this.writeBlock(block.address, buffer)
             if (writeError) return new IBFSError('L0_IO_LINK_WRITE_ERROR', null, writeError, ssc(block, ['aesKey']))
             
         } 
@@ -414,14 +409,11 @@ export default class Volume {
         
     }
 
-
     public async readDataBlock(address: number, aesKey: Buffer, integrity = true): 
         T.XEavA<TDataBlock, 'L0_IO_DATA_READ_ERROR'|'L0_IO_DATA_DS_ERROR'|'L0_IO_DATA_READ_INTEGRITY_ERROR'|'L0_IO_DATA_READ_UNKNOWN_ERROR'> {
         try {
 
-            const position = this.bs.BLOCK_SIZE * address
-
-            const [readError, buffer] = await this.readBlock(position)
+            const [readError, buffer] = await this.readBlock(address)
             if (readError) return IBFSError.eav('L0_IO_DATA_READ_ERROR', null, readError, { address })
 
             const [dsError, block] = this.bs.deserializeDataBlock(buffer, address, aesKey)
@@ -446,8 +438,7 @@ export default class Volume {
             const [srError, buffer] = this.bs.serializeDataBlock(block)
             if (srError) return new IBFSError('L0_IO_DATA_SR_ERROR', null, srError, ssc(block, ['aesKey']))
             
-            const position = this.bs.BLOCK_SIZE * block.address
-            const writeError = await this.writeBlock(position, buffer)
+            const writeError = await this.writeBlock(block.address, buffer)
             if (writeError) return new IBFSError('L0_IO_DATA_WRITE_ERROR', null, writeError, ssc(block, ['aesKey']))
             
         } 

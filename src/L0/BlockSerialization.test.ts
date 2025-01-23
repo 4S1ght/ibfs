@@ -54,7 +54,7 @@ describe('Meta cluster de/code', () => {
     if (dsError) return expect(dsError).toBeUndefined()
 
     test('buffer length', () => expect(serialized.length).toBeGreaterThanOrEqual(C.KB_64))
-    test('metadata',      () => expect(deserialized.metadata).toEqual(metadata))
+    test('metadata',      () => expect(deserialized).toEqual(metadata))
 
 
 })
