@@ -23,7 +23,7 @@ export interface TVolumeInit {
     /** Physical size of blocks in the volume.     */ blockSize: TRootBlock['blockSize']
     /** Total number of blocks in the volume.      */ blockCount: number
     /** AES cipher used for encryption.            */ aesCipher: TRootBlock['aesCipher']
-    /** AES key used for encryption.               */ aesKey: Buffer | string
+    /** AES key used for encryption.               */ aesKey: Buffer
     
     /** Configures an update handler called every N bytes written to monitor progress. */
     update?: {
@@ -46,7 +46,9 @@ export default class Volume {
 
     private declare handle: fs.FileHandle
     private declare bs: BlockSerializationContext
-    public  declare rs: TRootBlock
+    public  declare rb: TRootBlock
+
+    public declare isOpen: boolean
 
     // Factory ======================================================
 
@@ -116,7 +118,7 @@ export default class Volume {
 
             const blockSize = init.blockSize
             const physicalBlockSize = BlockSerializationContext.getPhysicalBlockSize(init.blockSize)
-            const metaBlocks = BlockSerializationContext.getMetaBlockCount(init.blockSize)
+            // const metaBlocks = BlockSerializationContext.getMetaBlockCount(init.blockSize)
             const pack = getPackage()
 
             const aesIV = crypto.randomBytes(16)
@@ -139,7 +141,7 @@ export default class Volume {
             const [rootError, rootBlock] = BlockSerializationContext.serializeRootBlock({
                 specMajor: C.SPEC_MAJOR,
                 specMinor: C.SPEC_MINOR,
-                root: metaBlocks + 1,
+                root: 0, // 1 + metaBlocks
                 compatibility: true,
                 blockSize: init.blockSize,
                 blockCount: init.blockCount,
@@ -178,7 +180,7 @@ export default class Volume {
 
     }
 
-    public static async open(image: string): T.XEavA<Volume, 'L0_VO_UNKNOWN'|'L0_VO_ROOTFAULT'|'L0_VO_MODE_INCOMPATIBLE'|'L0_VO_SIZE_MISMATCH'> {
+    public static async open(image: string, integrity = true): T.XEavA<Volume, 'L0_VO_UNKNOWN'|'L0_VO_ROOTFAULT'|'L0_VO_MODE_INCOMPATIBLE'|'L0_VO_SIZE_MISMATCH'> {
         
         const self = new this()
 
@@ -188,23 +190,25 @@ export default class Volume {
 
             const rsData = Buffer.allocUnsafe(1024)
             await self.handle.read({ position: 0, length: 1024, buffer: rsData })
-            const [rsError, rs] = BlockSerializationContext.deserializeRootBlock(rsData)
+            const [rbError, rb] = BlockSerializationContext.deserializeRootBlock(rsData)
 
-            if (rsError)                    return IBFSError.eav('L0_VO_ROOTFAULT', null, rsError, { image })
-            if (rs.compatibility === false) return IBFSError.eav('L0_VO_MODE_INCOMPATIBLE', null, null, { image })
+            if (rbError)                    return IBFSError.eav('L0_VO_ROOTFAULT', null, rbError, { image })
+            if (rb.compatibility === false) return IBFSError.eav('L0_VO_MODE_INCOMPATIBLE', null, null, { image })
 
-            const expectedVolumeSize = rs.blockCount * BlockSerializationContext.getPhysicalBlockSize(rs.blockSize)
-            const { size } = await self.handle.stat()
+            if (integrity) {
+                const expectedVolumeSize = rb.blockCount * BlockSerializationContext.getPhysicalBlockSize(rb.blockSize)
+                const { size } = await self.handle.stat()
+                if (size !== expectedVolumeSize) return IBFSError.eav('L0_VO_SIZE_MISMATCH', null, null, { size, expectedVolumeSize, diff: Math.abs(size - expectedVolumeSize) })
+            }
 
-            if (size !== expectedVolumeSize) return IBFSError.eav('L0_VO_SIZE_MISMATCH', null, null, { size, expectedVolumeSize, diff: Math.abs(size - expectedVolumeSize) })
-            
             self.bs = new BlockSerializationContext({
-                blockSize: rs.blockSize,
-                cipher: rs.aesCipher,
-                iv: rs.aesIV
+                blockSize: rb.blockSize,
+                cipher: rb.aesCipher,
+                iv: rb.aesIV
             })
 
-            self.rs = rs
+            self.isOpen = true
+            self.rb = rb
             return [null, self]
             
         } 
@@ -219,12 +223,12 @@ export default class Volume {
     public async close(): T.XEavSA<"L0_VC_FAILURE"> {
         try {
             await this.handle.close()
+            this.isOpen = false
         } 
         catch (error) {
             return new IBFSError('L0_VC_FAILURE', null, error as Error)
         }
     }
-
     // Internal =====================================================
 
     private async read(position: number, length: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'> {
@@ -283,7 +287,7 @@ export default class Volume {
     public async writeRootBlock(): T.XEavSA<'L0_IO_ROOT_WRITE_ERROR'|'L0_IO_ROOT_SR_ERROR'> {
         try {
 
-            const [srError, buffer] = BlockSerializationContext.serializeRootBlock(this.rs)
+            const [srError, buffer] = BlockSerializationContext.serializeRootBlock(this.rb)
             if (srError) return new IBFSError('L0_IO_ROOT_SR_ERROR', null, srError)
 
             const writeError = await this.writeBlock(0, buffer)
@@ -298,7 +302,7 @@ export default class Volume {
     public async readMetaCluster(): T.XEavA<TMetaCluster['metadata'], 'L0_IO_META_READ_ERROR'|'L0_IO_META_DS_ERROR'> {
         try {
             
-            const clusterSize = BlockSerializationContext.getMetaBlockCount(this.rs.blockSize)
+            const clusterSize = BlockSerializationContext.getMetaBlockCount(this.rb.blockSize)
             const clusterPosition = 1 * this.bs.BLOCK_SIZE
 
             const [readError, buffer] = await this.read(clusterPosition, clusterSize)
@@ -320,7 +324,7 @@ export default class Volume {
             
             const [srError, buffer] = BlockSerializationContext.serializeMetaCluster({
                 metadata: cluster.metadata,
-                blockSize: this.rs.blockSize
+                blockSize: this.rb.blockSize
             })
             if (srError) return new IBFSError('L0_IO_META_WRITE_ERROR', null, srError)
 

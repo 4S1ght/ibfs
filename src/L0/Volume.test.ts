@@ -1,8 +1,8 @@
-import fs, { write } from 'fs'
+import fs from 'fs'
 import fsp from 'fs/promises'
 import path from 'path'
 import url from 'url'
-import { describe, expect, test } from "vitest"
+import { beforeAll, describe, expect, test } from "vitest"
 
 const dirname = path.dirname(url.fileURLToPath(import.meta.url))
 
@@ -22,7 +22,7 @@ const clear = async () => Promise.all((await fsp.readdir(testDir)).map(file => f
 
 describe('Volume initialization & mounting', async () => {
 
-    await clear()
+    beforeAll(async () => await clear())
 
     const meta: TVolumeInit = {
         fileLocation: volumeFile,
@@ -30,7 +30,7 @@ describe('Volume initialization & mounting', async () => {
         blockCount: 150,
         aesCipher: alg,
         aesKey: key
-    }
+    } 
 
     const volumeCreateError = await Volume.createEmptyVolume(meta)
     const stats = volumeStat()
@@ -44,12 +44,12 @@ describe('Volume initialization & mounting', async () => {
         throw openError
     }
 
-    test('volume.rs.blockSize',     () => expect(volume.rs.blockSize)       .toBe(meta.blockSize))
-    test('volume.rs.blockCount',    () => expect(volume.rs.blockCount)      .toBe(meta.blockCount))
-    test('volume.rs.compatibility', () => expect(volume.rs.compatibility)   .toBe(true))
-    test('volume.rs.aesCipher',     () => expect(volume.rs.aesCipher)       .toBe(alg))
-    test('Volume.rs.specMajor',     () => expect(volume.rs.specMajor)       .toBe(C.SPEC_MAJOR))
-    test('Volume.rs.specMinor',     () => expect(volume.rs.specMinor)       .toBe(C.SPEC_MINOR))
+    test('volume.rb.blockSize',     () => expect(volume.rb.blockSize)       .toBe(meta.blockSize))
+    test('volume.rb.blockCount',    () => expect(volume.rb.blockCount)      .toBe(meta.blockCount))
+    test('volume.rb.compatibility', () => expect(volume.rb.compatibility)   .toBe(true))
+    test('volume.rb.aesCipher',     () => expect(volume.rb.aesCipher)       .toBe(alg))
+    test('Volume.rb.specMajor',     () => expect(volume.rb.specMajor)       .toBe(C.SPEC_MAJOR))
+    test('Volume.rb.specMinor',     () => expect(volume.rb.specMinor)       .toBe(C.SPEC_MINOR))
 
     test('Root block writes', async () => {
 
