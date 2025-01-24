@@ -25,12 +25,23 @@ export interface TDirectory {
 
 export default class DirectoryBuffersContext {
 
-    private root: pb.Root
-    private dirProto: pb.Type
+    private static dirProto = path.join(__dirname, '../../schemas/Directories.proto')
 
-    constructor() {
-        this.root = pb.loadSync(path.join(__dirname, '../../schemas/Directories.proto'),)
-        this.dirProto = this.root.lookupType('dir.Directory')
+    private declare root: pb.Root
+    private declare dirProto: pb.Type
+
+    private constructor() {}
+
+    public static async create(): T.XEavA<DirectoryBuffersContext, "L1_DIR_INIT"> {
+        try {
+            const self = new this()
+            self.root = await pb.load(DirectoryBuffersContext.dirProto)
+            self.dirProto = self.root.lookupType('dir.Directory')
+            return [null, self]
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_DIR_INIT', null, error as Error)
+        }
     }
 
     public serializeDirectory(directory: TDirectory): T.XEav<Buffer, 'L1_DIR_SR'> {

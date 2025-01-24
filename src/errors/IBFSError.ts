@@ -117,6 +117,7 @@ enum ErrorCodes {
     
     // Level 2 ----------------------------------------------------------------
 
+    L1_DIR_INIT                     = "An error occurred while initializing directory buffers context.",
     L1_DIR_SR                       = "An error occurred while serializing a directory entry.",
     L1_DIR_DS                       = "An error occurred while deserializing a directory entry.",
 
