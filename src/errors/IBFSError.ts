@@ -123,4 +123,8 @@ const errorCodes = {
 
     L1_FS_CREATE_ROOT               : "An error occurred while creating the filesystem root.",
 
+    L1_FS_OPEN                      : "An error occurred while opening the filesystem.",
+
+    L1_ALLOC_ADDRESS_EXHAUSTION     : "All available block addresses have been exhausted. Either expand the volume or free some space.",
+
 }

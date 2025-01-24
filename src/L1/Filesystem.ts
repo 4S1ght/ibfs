@@ -22,7 +22,11 @@ export interface TFSInit extends TVolumeInit {
 export default class FilesystemContext {
 
     public declare volume: Volume
-    public declare directoryBuffersContext: DirectoryBuffersContext
+    public declare dbc: DirectoryBuffersContext
+
+    private constructor() {}
+
+    // Factory ------------------------------------------------------
 
     public static async createFilesystemRoot(init: TFSInit): T.XEavSA<'L1_FS_CREATE_ROOT'> {
         
@@ -94,6 +98,27 @@ export default class FilesystemContext {
         }
         finally {
             if (volume! && volume!.isOpen) await volume!.close()
+        }
+    }
+
+    // Lifecycle ----------------------------------------------------
+
+    public static async open(image: string): T.XEavSA<'L1_FS_OPEN'> {
+        try {
+
+            const self = new this()
+            
+            const [openError, volume] = await Volume.open(image)
+            if (openError) return new IBFSError('L1_FS_OPEN', null, openError, { image })
+            self.volume = volume
+
+            const [dbcError, dbc] = await DirectoryBuffersContext.create()
+            if (dbcError) return new IBFSError('L1_FS_OPEN', null, dbcError, { image })
+            self.dbc = dbc
+
+        } 
+        catch (error) {
+            return new IBFSError('L1_FS_OPEN', null, error as Error, { image })
         }
     }
 

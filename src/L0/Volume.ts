@@ -229,6 +229,7 @@ export default class Volume {
             return new IBFSError('L0_VC_FAILURE', null, error as Error)
         }
     }
+    
     // Internal =====================================================
 
     private async read(position: number, length: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'> {
