@@ -80,6 +80,8 @@ const errorCodes = {
     L0_VO_SIZE_MISMATCH             : "The size of the volume image does not match the size expected according to volume metadata. This is likely a sign of image corruption.",
 
     // I/O      
+    L0_IO_TIMED_OUT                 : "An I/O operation timed out. It was registered and probably performed, but did not fit within the time window.",
+    
     L0_IO_READ_ERROR                : "An error occurred while reading from the volume.",
     L0_IO_WRITE_ERROR               : "An error occurred while writing to the volume.",
 
