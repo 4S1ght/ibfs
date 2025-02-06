@@ -5,16 +5,16 @@ import IBFSError from "../errors/IBFSError.js"
 
 // Types ==========================================================================================
 
-type TTurnCallback = (next: () => void) => void
+type TLockCallback = (next: () => void) => void
 
-export interface TBlockIOTurn {
+/** A temporary lock guarding filesystem I/O. */
+export interface TTemporaryLock {
     release: () => T.XEavS<"L0_IO_TIMED_OUT">
 }
 
 export interface TLockOptions {
     /** 
      * The time after which the temporary lock will be timed out and the next item will be processed. 
-     * 
      * @default 3000ms
      */
     timeout?: number
@@ -24,21 +24,32 @@ export interface TLockOptions {
 
 export default class BlockIOQueue {
     
-    private queue: TTurnCallback[] = []
+    private queue: TLockCallback[] = []
     private ongoing = false
 
-    public acquireLock(options?: TLockOptions) {
-        return new Promise<TBlockIOTurn>(grant => {
-
-            const time = this.createTimer(options && options.timeout)
+    public acquireTemporaryLock(options?: TLockOptions) {
+        return new Promise<TTemporaryLock>(grant => {
 
             this.queue.push((next) => {
+
+                const grantedAt = Date.now()
+                const timeout = setTimeout(() => next(), options?.timeout || 3000)
+                const hasExpired = () => Date.now() - grantedAt > (options?.timeout || 3000)
+
                 grant({
                     release: () => {
-                        if (time.expired) return new IBFSError('L0_IO_TIMED_OUT')
-                        next()
+                        const expired = hasExpired()
+                        if (expired) {
+                            return new IBFSError('L0_IO_TIMED_OUT')
+                        }
+                        else {
+                            clearTimeout(timeout)
+                            next()
+                        }
                     }
                 })
+
+
             })
 
             this.cycle()
@@ -61,21 +72,12 @@ export default class BlockIOQueue {
                 const thisTurnHandler = this.queue[i]!
                 thisTurnHandler($continue)
             })
+            i++
         }
 
         this.ongoing = false
+        this.queue = []
 
-    }
-
-    private createTimer(timeout: number = 3000) {
-        const start = Date.now()
-        return {
-            get expired() { return Date.now() - start >= timeout }
-        }
     }
 
 }
-
-const b = new BlockIOQueue()
-const lock = await b.acquireLock()
-lock.release()
