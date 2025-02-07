@@ -292,7 +292,7 @@ export default class Volume {
         }
     }
 
-    private async writeBlock(address: number, block: Buffer): T.XEavSA<'L0_IO_WRITE_ERROR'> {
+    private async writeBlock(address: number, block: Buffer): T.XEavSA<'L0_IO_WRITE_ERROR'|'L0_IO_TIMED_OUT'> {
 
         let lock: TTemporaryLock
 
