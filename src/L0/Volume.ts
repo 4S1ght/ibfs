@@ -9,7 +9,7 @@ import { WriteStream }  from 'node:fs'
 
 import BlockSerializationContext, { TCommonWriteMeta, TDataBlock, THeadBlock, TLinkBlock, TMetaCluster, TRootBlock } from './BlockSerialization.js'
 import BlockAESContext  from './BlockAES.js'
-import BlockIOQueue     from './BlockIOQueue.js'
+import BlockIOQueue, { TTemporaryLock }     from './BlockIOQueue.js'
 import IBFSError        from '../errors/IBFSError.js'
 import ssc              from '../misc/safeShallowCopy.js'
 import getPackage       from '../misc/package.js'
@@ -209,6 +209,7 @@ export default class Volume {
                 iv: rb.aesIV
             })
 
+            self.queue = new BlockIOQueue()
             self.isOpen = true
             self.rb = rb
             return [null, self]
@@ -234,53 +235,79 @@ export default class Volume {
     
     // Internal =====================================================
 
-    private async read(position: number, length: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'> {
+    private async read(position: number, length: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'|'L0_IO_TIMED_OUT'> {
+
+        let lock: TTemporaryLock
+
         try {
+            lock = await this.queue.acquireTemporaryLock()
             const buffer = Buffer.allocUnsafe(length)
             await this.handle.read({ position, length, buffer })
-            return [null, buffer]
+            const relError = lock.release()
+
+            return relError ? [relError, null] : [null, buffer]
         } 
         catch (error) {
+            if (lock!.expired == false) lock!.release()
             return [new IBFSError('L0_IO_READ_ERROR', null, error as Error, { position, length }), null]
         }
+
     }
     
-    private async write(position: number, data: Buffer): T.XEavSA<'L0_IO_WRITE_ERROR'> {
+    private async write(position: number, data: Buffer): T.XEavSA<'L0_IO_WRITE_ERROR'|'L0_IO_TIMED_OUT'> {
+
+        let lock: TTemporaryLock
+
         try {
+            lock = await this.queue.acquireTemporaryLock()
             await this.handle.write(data, 0, data.length, position)
+            return lock.release()
         } 
         catch (error) {
+            if (lock!.expired == false) lock!.release()
             return new IBFSError('L0_IO_WRITE_ERROR', null, error as Error, { position })
         }
     }
 
-    private async readBlock(address: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'> {
+    private async readBlock(address: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'|'L0_IO_TIMED_OUT'> {
+
+        let lock: TTemporaryLock
+
         try {
-            // No need to use slower Buffer.alloc as it will be filled
-            // entirely on each read.
+            lock = await this.queue.acquireTemporaryLock()
+            // No need to use slower Buffer.alloc as it will be filled entirely on each read.
             const buffer = Buffer.allocUnsafe(this.bs.BLOCK_SIZE)
             await this.handle.read({ 
                 position: this.bs.BLOCK_SIZE * address,
                 length: this.bs.BLOCK_SIZE, 
                 buffer
             })
-            return [null, buffer]
+
+            const relError = lock.release()
+            return relError ? [relError, null] : [null, buffer]
         } 
         catch (error) {
+            if (lock!.expired == false) lock!.release()
             return [new IBFSError('L0_IO_READ_ERROR', null, error as Error, { address }), null]
         }
     }
 
     private async writeBlock(address: number, block: Buffer): T.XEavSA<'L0_IO_WRITE_ERROR'> {
+
+        let lock: TTemporaryLock
+
         try {
+            lock = await this.queue.acquireTemporaryLock()
             await this.handle.write(
                 /* data */          block, 
                 /* data start */    0, 
                 /* data length */   block.length, 
                 /* File position */ this.bs.BLOCK_SIZE * address
             )
+            return lock.release()
         } 
         catch (error) {
+            if (lock!.expired == false) lock!.release()
             return new IBFSError('L0_IO_WRITE_ERROR', null, error as Error, { address })
         }
     }
