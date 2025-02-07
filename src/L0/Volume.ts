@@ -1,29 +1,30 @@
 // Imports ========================================================================================
 
-import type * as T from '../../types.js'
+import type * as T      from '../../types.js'
 
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import crypto from 'node:crypto'
-import { WriteStream } from 'node:fs'
+import fs               from 'node:fs/promises'
+import path             from 'node:path'
+import crypto           from 'node:crypto'
+import { WriteStream }  from 'node:fs'
 
 import BlockSerializationContext, { TCommonWriteMeta, TDataBlock, THeadBlock, TLinkBlock, TMetaCluster, TRootBlock } from './BlockSerialization.js'
-import BlockAESContext from './BlockAES.js'
-import IBFSError from '../errors/IBFSError.js'
-import ssc from '../misc/safeShallowCopy.js'
-import getPackage from '../misc/package.js'
+import BlockAESContext  from './BlockAES.js'
+import BlockIOQueue     from './BlockIOQueue.js'
+import IBFSError        from '../errors/IBFSError.js'
+import ssc              from '../misc/safeShallowCopy.js'
+import getPackage       from '../misc/package.js'
 
-import * as C from '../Constants.js'
+import * as C           from '../Constants.js'
 
 // Types ==========================================================================================
 
 export interface TVolumeInit {
 
     /** Physical location of the IBFS volume file. */ fileLocation: string
-    /** Physical size of blocks in the volume.     */ blockSize: TRootBlock['blockSize']
-    /** Total number of blocks in the volume.      */ blockCount: number
-    /** AES cipher used for encryption.            */ aesCipher: TRootBlock['aesCipher']
-    /** AES key used for encryption.               */ aesKey: Buffer
+    /** Physical size of blocks in the volume.     */ blockSize:    TRootBlock['blockSize']
+    /** Total number of blocks in the volume.      */ blockCount:   number
+    /** AES cipher used for encryption.            */ aesCipher:    TRootBlock['aesCipher']
+    /** AES key used for encryption.               */ aesKey:       Buffer
     
     /** Configures an update handler called every N bytes written to monitor progress. */
     update?: {
@@ -34,7 +35,7 @@ export interface TVolumeInit {
     }
 
     init?: {
-        /** Size of the high water mark for the write stream. @default 16 */
+        /** Size of the high water mark (in blocks) for the write stream. @default 16 */
         highWaterMarkBlocks?: number
     }
 
@@ -45,8 +46,9 @@ export interface TVolumeInit {
 export default class Volume {
 
     private declare handle: fs.FileHandle
-    private declare bs: BlockSerializationContext
-    public  declare rb: TRootBlock
+    private declare bs:     BlockSerializationContext
+    private declare queue:  BlockIOQueue
+    public  declare rb:     TRootBlock
 
     public declare isOpen: boolean
 
@@ -69,7 +71,7 @@ export default class Volume {
             // const fileMakeError = await Volume.ensureEmptyFile(init.fileLocation)
             // if (fileMakeError) return new IBFSError('L0_VI_FAILURE', null, fileMakeError, ssc(init, ['aesKey']))
             
-            const highWaterMark = init.init && init.init.highWaterMarkBlocks || 16
+            const highWaterMark = (init.init && init.init.highWaterMarkBlocks || 16) * init.blockSize
             file = await fs.open(init.fileLocation, 'w+')
             ws = file.createWriteStream({ highWaterMark })
 
