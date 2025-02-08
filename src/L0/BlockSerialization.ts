@@ -195,7 +195,7 @@ export default class BlockSerializationContext {
 
     /**
      * Serialized the metadata cluster and returns a buffer that can be written to the disk.  
-     * The size is calculated calculated based on the `blockSize * ceil(64kiB / blockSize)` formula
+     * The size is calculated based on the `blockSize * ceil(64kiB / blockSize)` formula
      * in order to ensure the size of the entire cluster is at minimum equal to 64kiB.
      */
     public static serializeMetaCluster(blockData: TMetaCluster & TMetadataWriteMeta): T.XEav<Buffer, 'L0_SR_METAERR'> {
