@@ -46,7 +46,7 @@ export interface TVolumeInit {
 export default class Volume {
 
     private declare handle: fs.FileHandle
-    private declare bs:     BlockSerializationContext
+    public  declare bs:     BlockSerializationContext
     private declare queue:  BlockIOQueue
     public  declare rb:     TRootBlock
 
