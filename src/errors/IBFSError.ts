@@ -130,7 +130,7 @@ const errorCodes = {
     L1_ALLOC_ADDRESS_EXHAUSTION     : "All available block addresses have been exhausted. Either expand the volume or free some space.",
     L1_ALLOC_ADDRESS_OUT_OF_RANGE   : "The block address is out of range.",
 
-    L1_TLFD_OPEN                    : "An error occurred while instantiating a top-level file descriptor.",
+    L1_FH_OPEN                      : "Failed to open a file handle.",
 
 
 }
