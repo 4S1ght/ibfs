@@ -111,14 +111,21 @@ export default class BlockSerializationContext {
     public readonly LINK_CONTENT_SIZE: number
     public readonly DATA_CONTENT_SIZE: number
 
+    public readonly HEAD_ADDRESS_SPACE: number
+    public readonly LINK_ADDRESS_SPACE: number
+
     public readonly aes: BlockAESContext
 
     constructor(config: TBlockSerializeConfig & TAesConfig) {
         
         this.BLOCK_SIZE = BlockSerializationContext.BLOCK_SIZES[config.blockSize]
+
         this.HEAD_CONTENT_SIZE = this.BLOCK_SIZE - BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
         this.LINK_CONTENT_SIZE = this.BLOCK_SIZE - BlockSerializationContext.LINK_BLOCK_HEADER_SIZE
         this.DATA_CONTENT_SIZE = this.BLOCK_SIZE - BlockSerializationContext.DATA_BLOCK_HEADER_SIZE
+
+        this.HEAD_ADDRESS_SPACE = this.HEAD_CONTENT_SIZE / 8
+        this.LINK_ADDRESS_SPACE = this.LINK_CONTENT_SIZE / 8
 
         this.aes = new BlockAESContext(config)
 
