@@ -73,13 +73,33 @@ export default class FileAllocationList {
         try {
 
             const links: TLinkBlock[] = []
+            const visited = new Set<number>()
             let nextAddress = this.head.next
 
             while (nextAddress !== 0) {
+
+                // Prevents an infinite loop in cases of a circular pointer
+                if (visited.has(nextAddress)) return new IBFSError(
+                    'L1_FAL_SCAN_EAGER', 'Circular address detected.', 
+                    null, { addressesVisited: visited, circularAddress: nextAddress }
+                )
+                visited.add(nextAddress)
+
                 const [linkError, link] = await this.fsRef.volume.readLinkBlock(nextAddress, this.aesKey)
-                if (linkError) return new IBFSError('L1_FAL_SCAN_EAGER', null, linkError as Error)
+
+                if (linkError) {
+                    this.links = links
+                    return new IBFSError(
+                        'L1_FAL_SCAN_EAGER', 
+                        'eagerScan failed gracefully due to link read error. ' +
+                        'The FAL may therefore have only partially scanned.', 
+                        linkError
+                    )
+                }
+
                 links.push(link)
                 nextAddress = link.next
+
             }
 
             this.links = links
