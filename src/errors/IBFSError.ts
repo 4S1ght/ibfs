@@ -131,6 +131,7 @@ const errorCodes = {
     L1_ALLOC_ADDRESS_OUT_OF_RANGE   : "The block address is out of range.",
 
     L1_FAL_OPEN                     : "Failed to open a file allocation list.",
+    L1_FAL_SCAN_EAGER               : "Failed at an eager FAL block scan.",
     L1_FH_OPEN                      : "Failed to open a file handle.",
 
 

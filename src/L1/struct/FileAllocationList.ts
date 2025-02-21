@@ -1,4 +1,4 @@
-// Imports =============================================================================================================
+             // Imports =============================================================================================================
 
 import type * as T      from '../../../types.js'
 import ssc              from '../../misc/safeShallowCopy.js'
@@ -29,13 +29,19 @@ export default class FileAllocationList {
 
     // Computed --------------------------------------------------------------------------------------------------------
 
-    /** References the live copy of FAL's head block. */ public declare head: THeadBlock
+    /** References the live copy of FAL's head block. */ public declare head:  THeadBlock
     /** Stores link blocks following the head block.  */ public declare links: TLinkBlock[]
 
     private constructor() {}
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
+    /**
+     * Opens the file allocation list.  
+     * A FAL must only be opened on an already initialized file, meaning there has to be a starting head
+     * block. This design choice is there to ensure no FAL is loaded with leftover link blocks that
+     * may have been left after soft file deletions or due to hanging pointers.
+     */
     public static async open(options: TFALOpenOptions): T.XEavA<FileAllocationList, "L1_FAL_OPEN"> {
         try {
             
@@ -61,21 +67,40 @@ export default class FileAllocationList {
     // Methods ---------------------------------------------------------------------------------------------------------
 
     /** 
-     * Scans the entire FAL and caches the link blocks. 
+     * Scans all FAL blocks from within the volume and caches it in the `links` prop.
      */
-    private async eagerScan() {
+    private async eagerScan(): T.XEavSA<"L1_FAL_SCAN_EAGER"> {
         try {
+
+            const links: TLinkBlock[] = []
+            let nextAddress = this.head.next
+
+            while (nextAddress !== 0) {
+                const [linkError, link] = await this.fsRef.volume.readLinkBlock(nextAddress, this.aesKey)
+                if (linkError) return new IBFSError('L1_FAL_SCAN_EAGER', null, linkError as Error)
+                links.push(link)
+                nextAddress = link.next
+            }
+
+            this.links = links
             
         } 
         catch (error) {
-            
+            return new IBFSError('L1_FAL_SCAN_EAGER', null, error as Error)
         }
     }
 
     /** 
      * Scans the FAL until the target address is found.
     */
-    private async lazyScan(targetAddress: number) {}
+    private async lazyScan(targetAddress: number) {
+        try {
+
+        } 
+        catch (error) {
+            
+        }
+    }
 
     /**
      * Traverses the FAL until it reaches the target address, without caching any link blocks.
