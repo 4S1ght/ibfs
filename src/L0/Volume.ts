@@ -378,7 +378,7 @@ export default class Volume {
             const [dsError, block] = this.bs.deserializeHeadBlock(buffer, address, aesKey)
             if (dsError) return IBFSError.eav('L0_IO_HEAD_DS_ERROR', null, dsError, { address, integrity })
 
-            if (integrity && block.crc32Mismatch)
+            if (integrity && (block.crc32Mismatch || block.blockType !== 'HEAD'))
                 return IBFSError.eav('L0_IO_HEAD_READ_INTEGRITY_ERROR', null, null, { address, integrity })
 
             return [null, block]
@@ -415,7 +415,7 @@ export default class Volume {
             const [dsError, block] = this.bs.deserializeLinkBlock(buffer, address, aesKey)
             if (dsError) return IBFSError.eav('L0_IO_LINK_DS_ERROR', null, dsError, { address, integrity })
 
-            if (integrity && block.crc32Mismatch)
+            if (integrity && (block.crc32Mismatch || block.blockType !== 'LINK'))
                 return IBFSError.eav('L0_IO_LINK_READ_INTEGRITY_ERROR', null, null, { address, integrity })
 
             return [null, block]
@@ -453,7 +453,7 @@ export default class Volume {
             const [dsError, block] = this.bs.deserializeDataBlock(buffer, address, aesKey)
             if (dsError) return IBFSError.eav('L0_IO_DATA_DS_ERROR', null, dsError, { address })
 
-            if (integrity && block.crc32Mismatch)
+            if (integrity && (block.crc32Mismatch || block.blockType !== 'DATA'))
                 return IBFSError.eav('L0_IO_DATA_READ_INTEGRITY_ERROR', null, null, { address })
 
             return [null, block]
