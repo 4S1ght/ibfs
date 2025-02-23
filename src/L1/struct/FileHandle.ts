@@ -4,7 +4,7 @@
 
 import type * as T from "../../../types.js"
 import type { THeadBlock, TLinkBlock } from "../../L0/BlockSerialization.js"
-import { Lookup } from "../../misc/lookup.js"
+import { new Set } from "../../misc/new Set.js"
 
 import IBFSError    from "../../errors/IBFSError.js"
 import Volume       from "../../L0/Volume.js"
@@ -23,7 +23,7 @@ import Volume       from "../../L0/Volume.js"
 // ax+ |  Read + Append, fail if exists
 type TFileOpenFlag = 'r' | 'r+' | 'w' | 'w+' | 'a' | 'a+' | 'wx' | 'wx+' | 'ax' | 'ax+'
 type TFileOpenMode = 'read' | 'write' | 'required' | 'exclusive' | 'trunc' | 'append'
-type TFileModeLookup = Record<TFileOpenMode, boolean>
+type TFileModeLookup = Set<TFileOpenMode>
 
 export interface TFHOpenOptions {
     /** Reference to the volume containing the file. */ volumeRef:   Volume
@@ -44,16 +44,16 @@ export default class FileHandle {
     // * append     - (modifies "write") All write operations can only append to the end of the file.
     // * trunc      - Truncate the file if it exists.
     public static openModes: Record<TFileOpenFlag, Record<TFileOpenMode, boolean>> = {
-        'r':    Lookup([ 'read',          'required'            ]),
-        'r+':   Lookup([ 'read', 'write', 'required'            ]),
-        'w':    Lookup([         'write', 'trunc'               ]),
-        'w+':   Lookup([ 'read', 'write', 'trunc'               ]),
-        'a':    Lookup([         'write',              'append' ]),
-        'a+':   Lookup([ 'read', 'write',              'append' ]),
-        'wx':   Lookup([         'write', 'exclusive'           ]),
-        'wx+':  Lookup([ 'read', 'write', 'exclusive',          ]),
-        'ax':   Lookup([         'write', 'exclusive', 'append' ]),
-        'ax+':  Lookup([ 'read', 'write', 'exclusive', 'append' ]),
+        'r':    new Set([ 'read',          'required'            ]),
+        'r+':   new Set([ 'read', 'write', 'required'            ]),
+        'w':    new Set([         'write', 'trunc'               ]),
+        'w+':   new Set([ 'read', 'write', 'trunc'               ]),
+        'a':    new Set([         'write',              'append' ]),
+        'a+':   new Set([ 'read', 'write',              'append' ]),
+        'wx':   new Set([         'write', 'exclusive'           ]),
+        'wx+':  new Set([ 'read', 'write', 'exclusive',          ]),
+        'ax':   new Set([         'write', 'exclusive', 'append' ]),
+        'ax+':  new Set([ 'read', 'write', 'exclusive', 'append' ]),
     }
 
     // Initial ---------------------------------------------------------------------------------------------------------
