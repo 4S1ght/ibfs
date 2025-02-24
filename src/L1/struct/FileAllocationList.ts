@@ -67,7 +67,6 @@ export default class FileAllocationList {
                     'L1_FAL_OPEN_CIRC', 'Circular address detected.', 
                     null, { addressesVisited: visited, circularAddress: nextAddress }
                 )
-                visited.add(nextAddress)
 
                 const [linkError, link] = await self.fsRef.volume.readLinkBlock(nextAddress, self.aesKey)
                 if (linkError) {
@@ -80,6 +79,7 @@ export default class FileAllocationList {
                 }
 
                 self.addressBlocks.push(link)
+                visited.add(nextAddress)
                 nextAddress = link.next
                 
             }
