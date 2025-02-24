@@ -133,5 +133,8 @@ const errorCodes = {
     L1_FAL_OPEN                     : "Failed to open a file allocation list.",
     L1_FAL_OPEN_CIRC                : `Could not open the entire file allocation list due to a circular "next" address.`,
 
+    L1_FAL_APPEND                   : "Failed to append address(es) to the file allocation list.",
+    L1_FAL_POP                      : "Failed to pop address(es) from the file allocation list.",
+
 
 }

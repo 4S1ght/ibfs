@@ -92,4 +92,41 @@ export default class FileAllocationList {
         }
     }
 
+
+    /**
+     * Appends a new address to the file allocation list and allocates new link blocks as needed.
+     * Note that this should be done `AFTER` the related data blocks have been written to in order null pointers.
+     * These addresses do not have to be appended after every new block is written, but MUST be before the file is closed.
+     * in order to retain changes.
+     * @param address 
+     */
+    public async append(addresses: number | number[]): T.XEavSA<"L1_FAL_APPEND"> {
+        try {
+            
+
+        } 
+        catch (error) {
+            return new IBFSError('L1_FAL_APPEND', null, error as Error)    
+        }
+    }
+
+    /**
+     * Pops `N` addresses from the file allocation list and reclaims any leftover link blocks for reallocation.  
+     * Note that this should be done `BEFORE` the related data blocks are deleted in order to prevent null pointers.
+     * @param count 
+     */
+    public async pop(count: number): T.XEavA<number[], "L1_FAL_POP"> {
+        try {
+        
+            const popped: number[] = []
+            
+
+            return [null, popped]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FAL_POP', null, error as Error)
+        }
+    }
+
 }
