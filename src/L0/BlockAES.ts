@@ -7,13 +7,13 @@ import IBFSError   from '../errors/IBFSError.js'
 
 // Types & Constants ==============================================================================
 
-export type TAesCipher = 'none' | 'aes-128-xts' | 'aes-256-xts'
+export type TAESCipher = 'none' | 'aes-128-xts' | 'aes-256-xts'
 
-export interface TAesConfig {
+export interface TAESConfig {
     /**
      * AES/XTS cipher used. Enter empty string for no encryption. 
      */
-    cipher: TAesCipher
+    cipher: TAESCipher
     /** 
      * 8-byte initialization vector provided from the volume's metadata.  
      * This value is combined with an 8-byte sector address to simulate
@@ -28,12 +28,12 @@ export interface TAesConfig {
 export default class BlockAESContext {
 
     public readonly iv: Buffer
-    public readonly cipher: TAesCipher
+    public readonly cipher: TAESCipher
 
     /** Combines 8-byte IV with 8-byte sector address to emulate tweak values. */
     public readonly workingIV = Buffer.alloc(16)
 
-    constructor(config: TAesConfig) {
+    constructor(config: TAESConfig) {
 
         this.iv = config.iv
         this.cipher = config.cipher
@@ -117,7 +117,7 @@ export default class BlockAESContext {
      * @param key encryption key
      * @returns [Error | Key]
      */
-    public static deriveAESKey(cipher: TAesCipher, key: string | Buffer | undefined): 
+    public static deriveAESKey(cipher: TAESCipher, key: string | Buffer | undefined): 
         T.XEav<Buffer, 'L0_AES_NOKEY'|'L0_AES_KEYDIGEST'> {
         try {
             if (cipher && !key) throw new IBFSError(

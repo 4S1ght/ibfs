@@ -56,7 +56,11 @@ const errorCodes = {
     L0_AES_KEYDIGEST:               'Could not SHA-digest the provided encryption key.',
 
     // IO queuing
-    L0_IO_TIMED_OUT:                'The block read/write operation was timed out and the next one (if scheduled) has already been evaluated.'
+    L0_IO_TIMED_OUT:                'The block read/write operation was timed out and the next one (if scheduled) has already been evaluated.',
+
+    // Block serialization 
+    L0_SR_ROOT:                     'Failed to serialize the root block.',
+    L0_DS_ROOT:                     'Failed to deserialize the root block.',    
 
     // Level 1 ----------------------------------------------------------------
 
