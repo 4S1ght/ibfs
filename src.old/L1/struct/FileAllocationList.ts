@@ -1,7 +1,7 @@
 // Imports ============================================================================================================
 
 import type * as T                  from '../../../types.js'
-import ssc                          from '../../misc/safeShallowCopy.js'
+import ssc                          from '../../../src/misc/safeShallowCopy.js'
 
 import IBFSError                    from '../../errors/IBFSError.js'
 import FilesystemContext            from '../Filesystem.js'

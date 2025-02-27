@@ -12,11 +12,11 @@
 
 import * as T from '../../types.js'
 
-import * as C from '../Constants.js'
+import * as C from '../../src/Constants.js'
 import Memory from './Memory.js'
 import BlockAESContext, { TAesCipher, TAesConfig } from './BlockAES.js'
 import IBFSError from '../errors/IBFSError.js'
-import Enum from '../misc/enum.js'
+import Enum from '../../src/misc/enum.js'
 
 import ini from 'ini'
 import zlib from 'zlib'

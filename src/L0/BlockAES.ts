@@ -3,7 +3,7 @@
 import type * as T from '../../types.js'
 
 import crypto      from 'node:crypto'
-import IBFSError   from '../../src/errors/IBFSError.js'
+import IBFSError   from '../errors/IBFSError.js'
 
 // Types & Constants ==============================================================================
 

@@ -11,10 +11,10 @@ import BlockSerializationContext, { TCommonWriteMeta, TDataBlock, THeadBlock, TL
 import BlockAESContext  from './BlockAES.js'
 import BlockIOQueue, { TTemporaryLock }     from './BlockIOQueue.js'
 import IBFSError        from '../errors/IBFSError.js'
-import ssc              from '../misc/safeShallowCopy.js'
-import getPackage       from '../misc/package.js'
+import ssc              from '../../src/misc/safeShallowCopy.js'
+import getPackage       from '../../src/misc/package.js'
 
-import * as C           from '../Constants.js'
+import * as C           from '../../src/Constants.js'
 
 // Types ==========================================================================================
 

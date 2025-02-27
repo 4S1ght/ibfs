@@ -51,6 +51,13 @@ const errorCodes = {
 
     // Level 0 ----------------------------------------------------------------
 
+    // AES encryption
+    L0_AES_NOKEY:                   'AES encryption is being used but no key was provided.',
+    L0_AES_KEYDIGEST:               'Could not SHA-digest the provided encryption key.',
+
+    // IO queuing
+    L0_IO_TIMED_OUT:                'The block read/write operation was timed out and the next one (if scheduled) has already been evaluated.'
+
     // Level 1 ----------------------------------------------------------------
 
     // Level 2 ----------------------------------------------------------------

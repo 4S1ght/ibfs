@@ -1,6 +1,6 @@
 {
     "include": [
-        "src.old/**/*.ts",
+        "src/**/*.ts",
         "./types.d.ts"
     ],
     "exclude": [

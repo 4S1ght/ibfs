@@ -4,7 +4,7 @@
 
 import type * as T from "../../../types.js"
 import type { THeadBlock, TLinkBlock } from "../../L0/BlockSerialization.js"
-import { new Set } from "../../misc/new Set.js"
+import { new Set } from "../../../src/misc/new Set.js"
 
 import IBFSError    from "../../errors/IBFSError.js"
 import Volume       from "../../L0/Volume.js"

@@ -8,8 +8,8 @@ import DirectoryBuffersContext from './DirectoryBuffers.js'
 import BlockSerializationContext from '../L0/BlockSerialization.js'
 
 import IBFSError from '../errors/IBFSError.js'
-import Time from '../misc/time.js'
-import ssc from '../misc/safeShallowCopy.js'
+import Time from '../../src/misc/time.js'
+import ssc from '../../src/misc/safeShallowCopy.js'
 
 // Types ==========================================================================================
 
