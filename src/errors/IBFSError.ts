@@ -60,7 +60,11 @@ const errorCodes = {
 
     // Block serialization 
     L0_SR_ROOT:                     'Failed to serialize the root block.',
-    L0_DS_ROOT:                     'Failed to deserialize the root block.',    
+    L0_DS_ROOT:                     'Failed to deserialize the root block.',
+
+    L0_SR_META:                     'Failed to serialize the metadata block cluster.',
+    L0_SR_META_SEGFAULT:            'A segmentation fault occurred while serializing the metadata block cluster.',
+    L0_DS_META:                     'Failed to deserialize the metadata block cluster.',
 
     // Level 1 ----------------------------------------------------------------
 

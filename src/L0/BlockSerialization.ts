@@ -8,10 +8,15 @@ import BlockAESContext, { TAESConfig } from './BlockAES.js'
 import IBFSError from '../errors/IBFSError.js'
 
 import RootBlock, { TRootBlock } from './blocks/RootBlock.js'
+import MetaBlocks, { TMetadata } from './blocks/MetaBlocks.js'
 
 // Types ===============================================================================================================
 
 export interface TBlockSerializeConfig {
+    blockSize: keyof typeof BlockSerializationContext.BLOCK_SIZES
+}
+
+export interface TMetadataWriteMeta {
     blockSize: keyof typeof BlockSerializationContext.BLOCK_SIZES
 }
 
@@ -102,7 +107,7 @@ export default class BlockSerializationContext {
      */
     public static createRootBlockView(blockBuffer: Buffer): T.XEav<TRootBlock, 'L0_DS_ROOT'> {
         try {
-            const block = RootBlock.wrap(blockBuffer)
+            const block = RootBlock.from(blockBuffer)
             return [null, block]
         } 
         catch (error) {
@@ -110,6 +115,30 @@ export default class BlockSerializationContext {
         }
     }
     
+    public static createMetaBlocks(cluster: TMetadata & TMetadataWriteMeta): T.XEav<MetaBlocks, 'L0_SR_META'> {
+        try {
 
+            const blockSize = BlockSerializationContext.BLOCK_SIZES[cluster.blockSize]
+            const clusterSize = blockSize * Math.ceil(C.KB_64 / blockSize)
+            const metaBlocks = MetaBlocks.alloc(clusterSize)
+            metaBlocks.metadata = cluster.metadata
+
+            return [null, metaBlocks]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_SR_META', null, error as Error)
+        }
+    }
+
+    public static createMetaBlocksView(blockBuffer: Buffer): T.XEav<TMetadata, 'L0_DS_META'> {
+        try {
+            const block = MetaBlocks.from(blockBuffer)
+            return [null, block]
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_DS_META', null, error as Error)
+        }
+    }
 
 }

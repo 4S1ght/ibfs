@@ -84,4 +84,15 @@ export default class Struct {
     public read = (at: number, length: number): Buffer =>
         this.buffer.subarray(at, length)
 
+    // Misc ---------------------------------------------------------
+
+    public get length(): number {
+        return this.buffer.length
+    }
+
+    /** Empties the internal buffer. */
+    public empty() {
+        this.buffer = Buffer.allocUnsafe(this.buffer.length).fill(0)
+    }
+
 }

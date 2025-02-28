@@ -50,15 +50,10 @@ export default class RootBlock implements TRootBlock {
     }
 
     /** Wraps existing memory and returns a new RootBlock instance that maps to it. */
-    public static wrap(buffer: Buffer) {
+    public static from(buffer: Buffer) {
         const self = new this()
         self.struct = Struct.wrap(buffer)
         return self
-    }
-
-    /** Finalizes any in-flight changes and returns the underlying buffer */
-    public final() {
-        return this.struct
     }
 
     set specMajor(value: number)                    { this.struct.writeInt16(0, value) }
