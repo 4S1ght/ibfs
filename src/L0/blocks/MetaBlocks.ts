@@ -6,9 +6,7 @@ import Struct from "../Struct.js"
 // Types ===============================================================================================================
 
 export interface TMetadata {
-    metadata: {
-        [key: string]: any
-    }
+    [key: string]: any
 }
 
 // Exports =============================================================================================================
@@ -16,6 +14,7 @@ export interface TMetadata {
 export default class MetaBlocks {
 
     public declare struct: Struct
+    public declare metadata: TMetadata
 
     private constructor() {}
 
@@ -23,24 +22,28 @@ export default class MetaBlocks {
     public static alloc(size: number) {
         const self = new this()
         self.struct = Struct.alloc(size)
+        self.metadata = {}
         return self
     }
 
     /** Warps existing memory and returns a new MetaBlocks instance that maps to it. */
     public static from(buffer: Buffer) {
+
         const self = new this()
         self.struct = Struct.wrap(buffer)
+
+        const firstNullByte = self.struct.indexOf(0)
+        const textEnd = firstNullByte > -1 ? firstNullByte : self.struct.length - 1
+        const text = self.struct.buffer.toString('utf-8', 0, textEnd)
+        self.metadata = JSON.parse(text)
+
         return self
+    
     }
 
-    get metadata(): any {
-        const firstNullByte = this.struct.buffer.indexOf(0)
-        const textEnd = firstNullByte === -1 ? this.struct.buffer.length - 1 : firstNullByte
-        const text = this.struct.buffer.toString('utf-8', 0, textEnd)
-        return JSON.parse(text)
-    }
-    set metadata(props: any) {
-        const jsonString = JSON.stringify(props)
+    /** Finalizes the metadata block cluster and returns its internal buffer so it can be written to the disk. */
+    public final() {
+        const jsonString = JSON.stringify(this.metadata)
         if (jsonString.length > this.struct.length) throw new IBFSError('L0_SR_META_SEGFAULT')
         this.struct.empty()
         this.struct.writeString(0, jsonString)

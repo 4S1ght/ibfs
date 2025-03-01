@@ -38,7 +38,7 @@ export interface TRootBlock {
 */
 export default class RootBlock implements TRootBlock {
 
-    public declare struct: Struct
+    private declare struct: Struct
 
     private constructor() {}
 
@@ -54,6 +54,11 @@ export default class RootBlock implements TRootBlock {
         const self = new this()
         self.struct = Struct.wrap(buffer)
         return self
+    }
+
+    /** Finalizes the root block and returns its internal buffer so it can be written to the disk. */
+    public final() {
+        return this.struct.buffer
     }
 
     set specMajor(value: number)                    { this.struct.writeInt16(0, value) }

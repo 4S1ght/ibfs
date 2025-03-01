@@ -95,4 +95,8 @@ export default class Struct {
         this.buffer = Buffer.allocUnsafe(this.buffer.length).fill(0)
     }
 
+    public indexOf(value: string | number | Uint8Array) {
+        return this.buffer.indexOf(value)
+    }
+
 }
