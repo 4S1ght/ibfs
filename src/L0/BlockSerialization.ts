@@ -121,6 +121,8 @@ export default class BlockSerializationContext {
             const blockSize = BlockSerializationContext.BLOCK_SIZES[cluster.blockSize]
             const clusterSize = blockSize * Math.ceil(C.KB_64 / blockSize)
             const metaBlocks = MetaBlocks.alloc(clusterSize)
+            // @ts-ignore
+            delete cluster.blockSize
             metaBlocks.metadata = cluster.metadata
 
             return [null, metaBlocks]
