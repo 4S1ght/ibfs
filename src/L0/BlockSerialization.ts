@@ -14,7 +14,7 @@ import * as T from '../../types.js'
 
 import * as C from '../Constants.js'
 import Memory from './Memory.js'
-import BlockAESContext, { TAesCipher, TAesConfig } from './BlockAES.js'
+import BlockAESContext, { TAESCipher, TAESConfig } from './BlockAES.js'
 import IBFSError from '../errors/IBFSError.js'
 import Enum from '../misc/enum.js'
 
