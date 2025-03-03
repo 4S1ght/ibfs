@@ -1,5 +1,7 @@
 // Imports =============================================================================================================
 
+import zlib from 'node:zlib'
+
 // Utils
 import type * as T from "../../types.js"
 import Enum from "../misc/enum.js"
@@ -240,7 +242,43 @@ export default class BlockSerializationContext {
         64    | N    | Body   | Block body
 
      */
-    public serializeHeadBlock(blockData: THeadBlock & TCommonWriteMeta) {}
+    public serializeHeadBlock(blockData: THeadBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_HEAD'> {
+        try {
+            
+            const hSize = BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
+            const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)
+            const src   = Memory.wrap(blockData.data)
+
+            dist.initialize(0, hSize) // Initialize header section
+
+            dist.writeInt8(BlockSerializationContext.BLOCK_TYPES.HEAD)
+            dist.writeInt32(0) // Placeholder
+            dist.writeInt64(blockData.next)
+            dist.writeInt64(blockData.created || 0)
+            dist.writeInt64(blockData.modified || 0)
+            dist.writeInt32(blockData.data.length)
+            dist.writeInt8(BlockSerializationContext.RESOURCE_TYPES[blockData.resourceType])
+
+            dist.bytesWritten = hSize
+            dist.bytesRead    = hSize
+
+            const copied = src.copyTo(dist, this.HEAD_CONTENT_SIZE)
+            dist.initialize(hSize + copied, dist.length) // initialize leftover uninitialized memory
+
+            const body = dist.read(this.HEAD_CONTENT_SIZE)
+            const crc = zlib.crc32(body)
+            this.aes.encrypt(body, blockData.aesKey!, blockData.address)
+
+            dist.writeInt32(crc, 1) // Write CRC checksum
+
+            return [null, dist.buffer]
+            
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_SR_HEAD', null, error as Error, blockData)
+        }
+    }
 
 
 

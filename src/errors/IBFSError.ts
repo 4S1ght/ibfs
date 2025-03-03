@@ -59,8 +59,11 @@ const errorCodes = {
     L0_SR_ROOT:         'Unable to serialize the root block.',
     L0_DS_ROOT:         'Unable to deserialize the root block.',
 
-    L0_SR_META:         'Unable to serialize a the metadata cluster.',
-    L0_DS_META:         'Unable to deserialize a the metadata cluster.',
+    L0_SR_META:         'Unable to serialize the metadata cluster.',
+    L0_DS_META:         'Unable to deserialize the metadata cluster.',
+
+    L0_SR_HEAD:         'Unable to serialize a head block.',
+    L0_DS_HEAD:         'Unable to deserialize a head block.',
 
     // Queuing
     L0_IO_TIMED_OUT:    'I/O operation timed out. It was registered and probably has been/will be performed, but did not fit within the maximum time window.'
