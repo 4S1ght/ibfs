@@ -52,10 +52,20 @@ export interface THeadBlock {
     /** Next block address (0: final block)              */ next:           number
     /** Block body data                                  */ data:           Buffer
 }
-export interface THeadBlockReadMeta {
-    /** Appends an address to the head block's part of the file allocation 
+
+// Link blocks ---------------------------------------------------------------------------------------------------------
+
+export interface TLinkBlock {
+    /** Next block's address (0: final block)            */ next:           number
+    /** block body data                                  */ data:           Buffer
+}
+
+// Index block metadata ------------------------------------------------------------------------------------------------
+
+export interface TIndexBlockReadMeta {
+    /** Appends an address to the block's part of the file allocation 
      * list. Returns `true` when the block body is full. */ append: (address: number) => boolean
-    /** Pops an address off the end of the head block's part of the file allocation 
+    /** Pops an address off the end of the block's part of the file allocation 
      * list. Returns `undefined` if the block is empty.  */ pop: () => number | undefined
     /** Gets a specific address by its index.            */ get: (index: number) => number
 }
@@ -255,15 +265,15 @@ export default class BlockSerializationContext {
         21    | 8B   | Int64  | Modification date (Unix timestamp - seconds)
         25    | 4B   | Int32  | Number of stored addresses
         26    | 1B   | Int8   | Resource type
-        27-64 | ---- | ------ | ------------------ Reserved -------------------
+        27-63 | ---- | ------ | ------------------ Reserved -------------------
         64    | N    | Body   | Block body
 
      */
-    public serializeHeadBlock(blockData: THeadBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_HEAD'|'L0_SR_HEAD_SEGFAULT'> {
+    public serializeHeadBlock(blockData: THeadBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_HEAD'|'L0_SR_HEAD_SEGFAULT'|'L0_SR_HEAD_ADDR_REMAINDER'> {
         try {
 
-            if (blockData.data.length > this.HEAD_CONTENT_SIZE) 
-                return IBFSError.eav('L0_SR_HEAD_SEGFAULT', null, null, blockData)
+            if (blockData.data.length > this.HEAD_CONTENT_SIZE) return IBFSError.eav('L0_SR_HEAD_SEGFAULT', null, null, blockData)
+            if (blockData.data.length & 7) return IBFSError.eav('L0_SR_HEAD_ADDR_REMAINDER', null, null, blockData)
             
             const hSize = BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
             const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)
@@ -309,7 +319,7 @@ export default class BlockSerializationContext {
      * @returns 
      */
     public deserializeHeadBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): 
-        T.XEav<THeadBlock & THeadBlockReadMeta & TCommonReadMeta, 'L0_DS_HEAD'|'L0_DS_HEAD_CORRUPT'> {
+        T.XEav<THeadBlock & TIndexBlockReadMeta & TCommonReadMeta, 'L0_DS_HEAD'|'L0_DS_HEAD_CORRUPT'> {
         try {
             
             const src = Memory.wrap(blockBuffer)
@@ -330,7 +340,7 @@ export default class BlockSerializationContext {
 
             if (addresses > this.HEAD_ADDRESS_SPACE) return IBFSError.eav('L0_DS_HEAD_CORRUPT', null, null, blockBuffer)            
 
-            const block: THeadBlock & TCommonReadMeta & THeadBlockReadMeta = {
+            const block: THeadBlock & TCommonReadMeta & TIndexBlockReadMeta = {
                 blockType,
                 crc32sum,
                 next,
@@ -346,7 +356,7 @@ export default class BlockSerializationContext {
                 append: (address: number): boolean => {
                     if (addresses < this.HEAD_ADDRESS_SPACE) {
                         body.writeBigUint64LE(BigInt(address), addresses*8)
-                        src.writeInt32(addresses*8, 25)
+                        src.writeInt32(addresses, 25)
                         addresses++
                         return false
                     }
@@ -355,7 +365,7 @@ export default class BlockSerializationContext {
                 pop: () => {
                     if (addresses > 0) {
                         addresses--
-                        src.writeInt32(addresses*8, 25)
+                        src.writeInt32(addresses, 25)
                         return Number(body.readBigUint64LE(addresses*8))
                     }
                 }
@@ -369,6 +379,110 @@ export default class BlockSerializationContext {
         }
     }
 
+    // Link block -------------------------------------------------------------
+
+    /**
+     * Serializes a link block and returns a buffer that can be written to the disk.
+     *
+        Index | Size | Type   | Description
+        ------|------|--------|------------------------------------------------
+        0     | 1B   | Int8   | Block type (LINK)
+        1     | 4B   | Int32  | CRC checksum
+        5     | 8B   | Int64  | Next block address
+        13    | 4B   | Int32  | Size of usable block data
+        17-31 | ---- | ------ | ------------------ Reserved -------------------
+        32    | N    | Body   | Block body
+
+     */
+    public serializeLinkBlock(blockData: TLinkBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_LINK'|'L0_SR_LINK_SEGFAULT'|'L0_SR_LINK_ADDR_REMAINDER'> {
+        try {
+
+            if (blockData.data.length > this.LINK_CONTENT_SIZE) return IBFSError.eav('L0_SR_LINK_SEGFAULT', null, null, blockData)
+            if (blockData.data.length & 7) return IBFSError.eav('L0_SR_LINK_ADDR_REMAINDER', null, null, blockData)
+
+            const hSize = BlockSerializationContext.LINK_BLOCK_HEADER_SIZE
+            const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)
+            const src   = Memory.wrap(blockData.data)
+
+            dist.initialize(0, hSize)
+
+            dist.writeInt8(BlockSerializationContext.BLOCK_TYPES.LINK)
+            dist.writeInt32(0) // Placeholder
+            dist.writeInt64(blockData.next)
+            dist.writeInt32(blockData.data.length / 8)
+
+            dist.bytesWritten = hSize
+            dist.bytesRead    = hSize
+
+            const copied = src.copyTo(dist, this.LINK_CONTENT_SIZE)
+            dist.initialize(hSize + copied, dist.length) // 0-fill leftover uninitialized memory
+
+            const body = dist.read(this.LINK_CONTENT_SIZE)
+            const crc = zlib.crc32(body)
+            this.aes.encrypt(body, blockData.aesKey!, blockData.address)
+
+            dist.writeInt32(crc, 1) // Content checksum
+
+            return [null, dist.buffer]    
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_SR_LINK', null, error as Error, blockData)
+        }
+    }
+
+    public deserializeLinkBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): 
+        T.XEav<TLinkBlock & TIndexBlockReadMeta & TCommonReadMeta, 'L0_DS_LINK'|'L0_DS_LINK_CORRUPT'> {
+        try {
+
+            const src = Memory.wrap(blockBuffer)
+
+            const blockType     = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
+            const crc32sum      = src.readInt32()
+            const next          = src.readInt64()
+            let   addresses     = src.readInt32()
+
+            src.bytesRead       = BlockSerializationContext.LINK_BLOCK_HEADER_SIZE
+
+            const body          = this.aes.decrypt(src.readRemaining(), aesKey, blockAddress)
+            const crc32Computed = zlib.crc32(body)
+            const crc32Mismatch = crc32Computed !== crc32sum
+
+            const block: TLinkBlock & TIndexBlockReadMeta & TCommonReadMeta = {
+                blockType,
+                crc32sum,
+                next,
+                crc32Computed,
+                crc32Mismatch,
+                get data() { return body.subarray(0, addresses*8) },
+                get: (index: number) => {
+                    return Number(body.readBigUint64LE(index*8))
+                },
+                append: (address: number): boolean => {
+                    if (addresses < this.LINK_ADDRESS_SPACE) {
+                        body.writeBigUint64LE(BigInt(address), addresses*8)
+                        src.writeInt32(addresses, 25)
+                        addresses++
+                        return false
+                    }
+                    return true
+                },
+                pop: () => {
+                    if (addresses > 0) {
+                        addresses--
+                        src.writeInt32(addresses, 25)
+                        return Number(body.readBigUint64LE(addresses*8))
+                    }
+                }
+            }
+
+            return [null, block]
+
+        }
+        catch (error) {
+            return IBFSError.eav('L0_DS_LINK', null, error as Error, blockBuffer)
+        }
+    }
 
 
 
