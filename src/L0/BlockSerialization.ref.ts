@@ -34,9 +34,16 @@ export interface TRootBlock {
     /** Number of blocks in the volume                   */ blockCount:     number
 }
 
+// Metadata blocks -----------------------------------------------------------------------------------------------------
+
 export interface TMetaCluster {
     /** JSON-formatted volume metadata                   */ metadata:       { [scope: string]: Record<string, number|string|boolean|null> }
 }
+export interface TMetadataWriteMeta {
+    /** Block size (levels 1-15)                         */ blockSize:      keyof typeof BlockSerializationContext.BLOCK_SIZES
+}
+
+// Head blocks ---------------------------------------------------------------------------------------------------------
 
 export interface THeadBlock {
     /** Timestamp when the block was created             */ created:        number
@@ -45,11 +52,21 @@ export interface THeadBlock {
     /** Next block address (0: final block)              */ next:           number
     /** Block body data                                  */ data:           Buffer
 }
+export interface THeadBlockReadMeta {
+    /** Appends an address to the head block's part of the file allocation 
+     * list. Returns `true` when the block body is full. */ append: (address: number) => boolean
+    /** Pops an address off the end of the head block's part of the file allocation 
+     * list. Returns `undefined` if the block is empty.  */ pop: () => number | undefined
+    /** Gets a specific address by its index.            */ get: (index: number) => number
+}
 
-// Block I/O metadata --------------------------------------------------------------------------------------------------
+// Common block I/O metadata -------------------------------------------------------------------------------------------
 
-export interface TMetadataWriteMeta {
-    /** Block size (levels 1-15)                         */ blockSize:      keyof typeof BlockSerializationContext.BLOCK_SIZES
+export interface TCommonReadMeta {
+    /** Block type                                       */ blockType:      'HEAD' | 'LINK' | 'DATA'
+    /** CRC32 checksum read from block header            */ crc32sum:       number
+    /** CRC32 checksum computed during deserialization   */ crc32Computed:  number
+    /** CRC mismatch                                     */ crc32Mismatch:  boolean
 }
 
 export interface TCommonWriteMeta {
@@ -236,14 +253,17 @@ export default class BlockSerializationContext {
         5     | 8B   | Int64  | Next block address
         13    | 8B   | Int64  | Creation date (Unix timestamp - seconds)
         21    | 8B   | Int64  | Modification date (Unix timestamp - seconds)
-        25    | 4B   | Int32  | Size of usable block data
+        25    | 4B   | Int32  | Number of stored addresses
         26    | 1B   | Int8   | Resource type
         27-64 | ---- | ------ | ------------------ Reserved -------------------
         64    | N    | Body   | Block body
 
      */
-    public serializeHeadBlock(blockData: THeadBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_HEAD'> {
+    public serializeHeadBlock(blockData: THeadBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_HEAD'|'L0_SR_HEAD_SEGFAULT'> {
         try {
+
+            if (blockData.data.length > this.HEAD_CONTENT_SIZE) 
+                return IBFSError.eav('L0_SR_HEAD_SEGFAULT', null, null, blockData)
             
             const hSize = BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
             const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)
@@ -256,7 +276,7 @@ export default class BlockSerializationContext {
             dist.writeInt64(blockData.next)
             dist.writeInt64(blockData.created || 0)
             dist.writeInt64(blockData.modified || 0)
-            dist.writeInt32(blockData.data.length)
+            dist.writeInt32(blockData.data.length / 8)
             dist.writeInt8(BlockSerializationContext.RESOURCE_TYPES[blockData.resourceType])
 
             dist.bytesWritten = hSize
@@ -277,6 +297,75 @@ export default class BlockSerializationContext {
         } 
         catch (error) {
             return IBFSError.eav('L0_SR_HEAD', null, error as Error, blockData)
+        }
+    }
+
+    /**
+     * Deserializes the meta cluster and returns its information, along with methods for
+     * directly manipulating the addresses stored internally.
+     * @param blockBuffer Source block to deserialize
+     * @param blockAddress Address of the block (needed for XTS decryption)
+     * @param aesKey XTS decryption key
+     * @returns 
+     */
+    public deserializeHeadBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): 
+        T.XEav<THeadBlock & THeadBlockReadMeta & TCommonReadMeta, 'L0_DS_HEAD'|'L0_DS_HEAD_CORRUPT'> {
+        try {
+            
+            const src = Memory.wrap(blockBuffer)
+ 
+            const blockType     = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
+            const crc32sum      = src.readInt32()
+            const next          = src.readInt64()
+            const created       = src.readInt64()
+            const modified      = src.readInt64()
+            let   addresses     = src.readInt32()
+            const resourceType  = BlockSerializationContext.RESOURCE_TYPES[src.readInt8() as 1|2]
+ 
+            src.bytesRead       = BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
+
+            const body          = this.aes.decrypt(src.readRemaining(), aesKey, blockAddress)
+            const crc32Computed = zlib.crc32(body)
+            const crc32Mismatch = crc32Computed !== crc32sum
+
+            if (addresses > this.HEAD_ADDRESS_SPACE) return IBFSError.eav('L0_DS_HEAD_CORRUPT', null, null, blockBuffer)            
+
+            const block: THeadBlock & TCommonReadMeta & THeadBlockReadMeta = {
+                blockType,
+                crc32sum,
+                next,
+                created,
+                modified,
+                resourceType,
+                crc32Computed,
+                crc32Mismatch,
+                get data() { return body.subarray(0, addresses*8) },
+                get: (index: number) => {
+                    return Number(body.readBigUint64LE(index*8))
+                },
+                append: (address: number): boolean => {
+                    if (addresses < this.HEAD_ADDRESS_SPACE) {
+                        body.writeBigUint64LE(BigInt(address), addresses*8)
+                        src.writeInt32(addresses*8, 25)
+                        addresses++
+                        return false
+                    }
+                    return true
+                },
+                pop: () => {
+                    if (addresses > 0) {
+                        addresses--
+                        src.writeInt32(addresses*8, 25)
+                        return Number(body.readBigUint64LE(addresses*8))
+                    }
+                }
+            }
+
+            return [null, block]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_DS_HEAD', null, error as Error, blockBuffer)    
         }
     }
 

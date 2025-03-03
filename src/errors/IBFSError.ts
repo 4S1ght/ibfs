@@ -52,20 +52,22 @@ const errorCodes = {
     // Level 0 ----------------------------------------------------------------
 
     // Cryptography
-    L0_AES_NOKEY:       'AES encryption key was not provided.',
-    L0_AES_KEYDIGEST:   'Unable to SHA-digest the AES encryption key.',
+    L0_AES_NOKEY:           'AES encryption key was not provided.',
+    L0_AES_KEYDIGEST:       'Unable to SHA-digest the AES encryption key.',
 
     // Block serialization
-    L0_SR_ROOT:         'Unable to serialize the root block.',
-    L0_DS_ROOT:         'Unable to deserialize the root block.',
+    L0_SR_ROOT:             'Unable to serialize the root block.',
+    L0_DS_ROOT:             'Unable to deserialize the root block.',
 
-    L0_SR_META:         'Unable to serialize the metadata cluster.',
-    L0_DS_META:         'Unable to deserialize the metadata cluster.',
+    L0_SR_META:             'Unable to serialize the metadata cluster.',
+    L0_DS_META:             'Unable to deserialize the metadata cluster.',
 
-    L0_SR_HEAD:         'Unable to serialize a head block.',
-    L0_DS_HEAD:         'Unable to deserialize a head block.',
+    L0_SR_HEAD:             'Unable to serialize a head block.',
+    L0_SR_HEAD_SEGFAULT:    'Provided body data is too large to fit within a head block.',
+    L0_DS_HEAD:             'Unable to deserialize a head block.',
+    L0_DS_HEAD_CORRUPT:     'The head block is corrupted, `addressCount` meta-tag does not reflect a proper block address count.',
 
     // Queuing
-    L0_IO_TIMED_OUT:    'I/O operation timed out. It was registered and probably has been/will be performed, but did not fit within the maximum time window.'
+    L0_IO_TIMED_OUT:        'I/O operation timed out. It was registered and probably has been/will be performed, but did not fit within the maximum time window.'
 
 }
