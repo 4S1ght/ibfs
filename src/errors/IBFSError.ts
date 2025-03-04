@@ -74,6 +74,12 @@ const errorCodes = {
     L0_DS_LINK:                 'Unable to deserialize a link block.',
     L0_DS_LINK_CORRUPT:         'The link block is corrupted, `addressCount` meta-tag does not reflect a proper block address count.',
 
+    L0_SR_DATA:                 'Unable to serialize a data block.',
+    L0_SR_DATA_SEGFAULT:        'Provided body data is too large to fit within a data block.',
+    L0_DS_DATA:                 'Unable to deserialize a data block.',
+    L0_
+
+
     // Queuing
     L0_IO_TIMED_OUT:            'I/O operation timed out. It was registered and probably has been/will be performed, but did not fit within the maximum time window.'
 

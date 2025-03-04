@@ -60,13 +60,27 @@ export interface TLinkBlock {
     /** block body data                                  */ data:           Buffer
 }
 
+// Data blocks ---------------------------------------------------------------------------------------------------------
+
+export interface TDataBlock {
+    /** Block body data                                  */ data:           Buffer
+}
+export interface TDataBlockReadMeta {
+    /** Entire block body (used for append writes) to 
+     * avoid buffer concatenation.                       */ body:           Buffer
+}
+
 // Index block metadata ------------------------------------------------------------------------------------------------
 
-export interface TIndexBlockReadMeta {
-    /** Appends an address to the block's part of the file allocation 
-     * list. Returns `true` when the block body is full. */ append: (address: number) => boolean
-    /** Pops an address off the end of the block's part of the file allocation 
-     * list. Returns `undefined` if the block is empty.  */ pop: () => number | undefined
+export interface TIndexBlockManage {
+    /** Appends an address to the block's part of the 
+     * file allocation list. Returns `true` when the 
+     * block body is full.                               */ append: (address: number) => boolean
+
+    /** Pops an address off the end of the block's part 
+     * of the file allocation list. Returns `undefined` 
+     * if the block is empty.                            */ pop: () => number | undefined
+
     /** Gets a specific address by its index.            */ get: (index: number) => number
 }
 
@@ -263,7 +277,7 @@ export default class BlockSerializationContext {
         5     | 8B   | Int64  | Next block address
         13    | 8B   | Int64  | Creation date (Unix timestamp - seconds)
         21    | 8B   | Int64  | Modification date (Unix timestamp - seconds)
-        25    | 4B   | Int32  | Number of stored addresses
+        25    | 4B   | Int32  | Number of addresses stored
         26    | 1B   | Int8   | Resource type
         27-63 | ---- | ------ | ------------------ Reserved -------------------
         64    | N    | Body   | Block body
@@ -311,15 +325,14 @@ export default class BlockSerializationContext {
     }
 
     /**
-     * Deserializes the meta cluster and returns its information, along with methods for
+     * Deserializes the head block and returns its information, along with methods for
      * directly manipulating the addresses stored internally.
      * @param blockBuffer Source block to deserialize
      * @param blockAddress Address of the block (needed for XTS decryption)
      * @param aesKey XTS decryption key
-     * @returns 
      */
     public deserializeHeadBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): 
-        T.XEav<THeadBlock & TIndexBlockReadMeta & TCommonReadMeta, 'L0_DS_HEAD'|'L0_DS_HEAD_CORRUPT'> {
+        T.XEav<THeadBlock & TCommonReadMeta & TIndexBlockManage, 'L0_DS_HEAD'|'L0_DS_HEAD_CORRUPT'> {
         try {
             
             const src = Memory.wrap(blockBuffer)
@@ -340,7 +353,7 @@ export default class BlockSerializationContext {
 
             if (addresses > this.HEAD_ADDRESS_SPACE) return IBFSError.eav('L0_DS_HEAD_CORRUPT', null, null, blockBuffer)            
 
-            const block: THeadBlock & TCommonReadMeta & TIndexBlockReadMeta = {
+            const block: THeadBlock & TCommonReadMeta & TIndexBlockManage = {
                 blockType,
                 crc32sum,
                 next,
@@ -389,7 +402,7 @@ export default class BlockSerializationContext {
         0     | 1B   | Int8   | Block type (LINK)
         1     | 4B   | Int32  | CRC checksum
         5     | 8B   | Int64  | Next block address
-        13    | 4B   | Int32  | Size of usable block data
+        13    | 4B   | Int32  | Number of addresses stored
         17-31 | ---- | ------ | ------------------ Reserved -------------------
         32    | N    | Body   | Block body
 
@@ -431,8 +444,15 @@ export default class BlockSerializationContext {
         }
     }
 
+    /**
+     * Deserializes the link block and returns its information, along with methods for
+     * directly manipulating the addresses stored internally.
+     * @param blockBuffer Source block to deserialize
+     * @param blockAddress Address of the block (needed for XTS decryption)
+     * @param aesKey XTS decryption key
+     */
     public deserializeLinkBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): 
-        T.XEav<TLinkBlock & TIndexBlockReadMeta & TCommonReadMeta, 'L0_DS_LINK'|'L0_DS_LINK_CORRUPT'> {
+        T.XEav<TLinkBlock & TCommonReadMeta & TIndexBlockManage, 'L0_DS_LINK'|'L0_DS_LINK_CORRUPT'> {
         try {
 
             const src = Memory.wrap(blockBuffer)
@@ -448,7 +468,9 @@ export default class BlockSerializationContext {
             const crc32Computed = zlib.crc32(body)
             const crc32Mismatch = crc32Computed !== crc32sum
 
-            const block: TLinkBlock & TIndexBlockReadMeta & TCommonReadMeta = {
+            if (addresses > this.LINK_ADDRESS_SPACE) return IBFSError.eav('L0_DS_LINK_CORRUPT', null, null, blockBuffer)            
+
+            const block: TLinkBlock & TCommonReadMeta & TIndexBlockManage= {
                 blockType,
                 crc32sum,
                 next,
@@ -481,6 +503,102 @@ export default class BlockSerializationContext {
         }
         catch (error) {
             return IBFSError.eav('L0_DS_LINK', null, error as Error, blockBuffer)
+        }
+    }
+
+    // Data block -------------------------------------------------------------
+
+
+    /**
+     * Serializes a link block and returns a buffer that can be written to the disk.
+     *
+        Index | Size | Type   | Description
+        ------|------|--------|------------------------------------------------
+        0     | 1B   | Int8   | Block type (LINK)
+        1     | 4B   | Int32  | CRC checksum
+        5     | 8B   | Int64  | Next block address
+        13    | 4B   | Int32  | Size of usable block data
+        17-31 | ---- | ------ | ------------------ Reserved -------------------
+        32    | N    | Body   | Block body
+     */
+    public serializeDataBlock(blockData: TDataBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_DATA'|'L0_SR_LINK_SEGFAULT'> {
+        try {
+
+            if (blockData.data.length > this.DATA_CONTENT_SIZE) return IBFSError.eav('L0_SR_LINK_SEGFAULT', null, null, blockData)
+
+            const hSize = BlockSerializationContext.DATA_BLOCK_HEADER_SIZE
+            const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)
+            const src   = Memory.wrap(blockData.data)
+
+            dist.initialize(0, hSize)
+
+            dist.writeInt8(BlockSerializationContext.BLOCK_TYPES.DATA)
+            dist.writeInt32(0) // Placeholder
+            dist.writeInt32(blockData.data.length)
+
+            dist.bytesWritten = hSize
+            dist.bytesRead    = hSize
+
+            const copied = src.copyTo(dist, this.DATA_CONTENT_SIZE)
+            dist.initialize(hSize + copied, dist.length) // 0-fill leftover uninitialized memory
+
+            const body = dist.read(this.DATA_CONTENT_SIZE)
+            const crc = zlib.crc32(body)
+            this.aes.encrypt(body, blockData.aesKey, blockData.address)
+
+            dist.writeInt32(crc, 1) // Content checksum
+
+            return [null, dist.buffer]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_SR_DATA', null, error as Error, blockData)
+        }        
+    }
+
+    /**
+     * Deserializes the data block and returns ints information.
+     * @param blockBuffer 
+     * @param blockAddress 
+     * @param aesKey 
+     */
+    public deserializeDataBlock(blockBuffer: Buffer, blockAddress: number, aesKey: Buffer): 
+        T.XEav<TDataBlock & TDataBlockReadMeta & TCommonReadMeta, 'L0_DS_DATA'> {
+        try {
+
+            const src = Memory.wrap(blockBuffer)
+
+            const blockType = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
+            const crc32sum  = src.readInt32()
+            let   bodySize  = src.readInt32()
+
+            src.bytesRead = BlockSerializationContext.DATA_BLOCK_HEADER_SIZE
+
+            const body = this.aes.decrypt(src.readRemaining(), aesKey, blockAddress)
+            const crc32Computed = zlib.crc32(body)
+            const crc32Mismatch = crc32Computed !== crc32sum
+
+            const block: TDataBlock & TDataBlockReadMeta & TCommonReadMeta = {
+                blockType,
+                crc32sum,
+                crc32Computed,
+                crc32Mismatch,
+                body,
+                get data() { 
+                    return body.subarray(0, bodySize) 
+                },
+                set data(value) {
+                    bodySize = value.length
+                    value.copy(body, 0)
+                    body.fill(0, bodySize, body.length-1)
+                }
+            }
+
+            return [null, block]
+
+        }
+        catch (error) {
+            return IBFSError.eav('L0_DS_DATA', null, error as Error, blockBuffer)
         }
     }
 
