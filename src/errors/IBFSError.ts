@@ -77,7 +77,6 @@ const errorCodes = {
     L0_SR_DATA:                 'Unable to serialize a data block.',
     L0_SR_DATA_SEGFAULT:        'Provided body data is too large to fit within a data block.',
     L0_DS_DATA:                 'Unable to deserialize a data block.',
-    L0_
 
 
     // Queuing
