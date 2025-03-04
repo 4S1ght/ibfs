@@ -122,7 +122,7 @@ export default class BlockAESContext {
         try {
             if (cipher && !key) throw new IBFSError(
                 'L0_AES_NOKEY', 
-                `Volume created in ${cipher} mode requires an AES key that was ` +
+                `Volume created with ${cipher} encryption requires an AES key that was ` +
                 `not provided or is of a wrong type (${typeof key}).`
             )
             const ciphers = {
