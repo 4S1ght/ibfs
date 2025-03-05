@@ -56,6 +56,10 @@ export default class Volume {
 
     private constructor() {}
 
+    /**
+     * Creates a new empty IBFS volume containing just the root block and metadata
+     * that are used for further initialization and mounting.
+     */
     public static async createEmptyVolume(options: TVolumeInit): T.XEavSA<'L0_VI_FAIL'> {
 
         let file: fs.FileHandle
@@ -148,7 +152,6 @@ export default class Volume {
 
             // Metadata blocks --------------------------------------------------------------------
 
-
             const [metaError, metaCluster] = BlockSerializationContext.serializeMetaCluster({
                 blockSize: options.blockSize,
                 metadata: { 
@@ -170,6 +173,54 @@ export default class Volume {
             if (file!) await file.close()
         }
         
+    }
+
+    /**
+     * Opens the IBFS volume.
+     * Does basic integrity checks, sets up the queuing and serialization contexts and opens
+     * an internal file handle for managing volume data.
+     * @param path absolute to the .ibfs file
+     * @param integrity 
+     * @returns 
+     */
+    public static async open(path: string, integrity = true): T.XEavA<Volume, 'L0_VO_CANT_OPEN'|'L0_VO_ROOTFAULT'|'L0_VO_MODE_INCOMPATIBLE'|'L0_VO_SIZE_MISMATCH'> {
+        
+        const self = new this()
+
+        try {
+            
+            self.handle = await fs.open(path, 'r+')
+
+            const rsData = Buffer.allocUnsafe(1024)
+            await self.handle.read({ position: 0, length: 1024, buffer: rsData })
+            const [rootError, root] = BlockSerializationContext.deserializeRootBlock(rsData)
+
+            if (rootError)                    return IBFSError.eav('L0_VO_ROOTFAULT', null, rootError, { path })
+            if (root.compatibility === false) return IBFSError.eav('L0_VO_MODE_INCOMPATIBLE', null, null, { path })
+
+            if (integrity) {
+                const expectedVolumeSize = root.blockCount * BlockSerializationContext.BLOCK_SIZES[root.blockSize]
+                const { size } = await self.handle.stat()
+                if (size !== expectedVolumeSize) return IBFSError.eav('L0_VO_SIZE_MISMATCH', null, null, { size, expectedVolumeSize, diff: Math.abs(size - expectedVolumeSize) })
+            }
+
+            self.bs = new BlockSerializationContext({
+                blockSize: root.blockSize,
+                cipher: root.aesCipher,
+                iv: root.aesIV
+            })
+
+            self.queue = new BlockIOQueue()
+            self.isOpen = true
+            self.root = root
+
+            return [null, self]
+
+        } 
+        catch (error) {
+            if (self.handle) await self.handle.close()
+            return IBFSError.eav('L0_VO_CANT_OPEN', null, error as Error, { path })
+        }
     }
 
 }

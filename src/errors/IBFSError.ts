@@ -88,6 +88,11 @@ const errorCodes = {
 
     L0_VI_FAIL:                 'Unable to initialize a new volume.',
 
+    L0_VO_CANT_OPEN:            'Unable to open the volume.',
+    L0_VO_ROOTFAULT:            'The root block required for volume initialization is corrupted.',
+    L0_VO_MODE_INCOMPATIBLE:    `The volume can't be opened because it was originally created using a different encryption mode that does not use tweak emulation and is incompatible with NodeJS crypto implementations.`,
+    L0_VO_SIZE_MISMATCH:        'The physical size of the volume does not match the one configured in its metadata.',
+
     // Queuing ---------------------------------------------------------------------------------------------------------
 
     L0_IO_TIMED_OUT:            'I/O operation timed out. It was registered and probably has been/will be performed, but did not fit within the maximum time window.',
