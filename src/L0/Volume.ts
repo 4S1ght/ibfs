@@ -9,7 +9,7 @@ import { WriteStream }  from 'node:fs'
 
 import BlockSerializationContext, { TRootBlock } from './BlockSerialization.js'
 import BlockAESContext from './BlockAES.js'
-import BlockIOQueue from './BlockIOQueue.js'
+import BlockIOQueue, { TTemporaryLock } from './BlockIOQueue.js'
 import IBFSError from '../errors/IBFSError.js'
 import ssc from '../misc/safeShallowCopy.js'
 import getPackage from '../misc/package.js'
@@ -52,7 +52,7 @@ export default class Volume {
 
     public declare isOpen:  boolean
 
-    // Factory ------------------------------------------------------------------------------------
+    // Factory ---------------------------------------------------------------------------------------------------------
 
     private constructor() {}
 
@@ -220,6 +220,50 @@ export default class Volume {
         catch (error) {
             if (self.handle) await self.handle.close()
             return IBFSError.eav('L0_VO_CANT_OPEN', null, error as Error, { path })
+        }
+    }
+
+    /**
+     * Closes the volume and all the internal handles.  
+     * Fails if there is ongoing I/O in order to preserve data integrity.
+     * @returns 
+     */
+    public async close(): T.XEavSA<'L0_VC_FAIL'|'L0_VC_QUEUE_BUSY'> {
+        try {
+            if (this.queue.busy) return new IBFSError('L0_VC_QUEUE_BUSY', null, null)
+            await this.handle.close()
+            this.isOpen = false
+        } 
+        catch (error) {
+            return new IBFSError('L0_VC_FAIL', null, error as Error)
+        }
+    }
+
+    // Internal methods ------------------------------------------------------------------------------------------------
+
+    public async read(position: number, length: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'|'L0_IO_TIMED_OUT'> {
+        let lock: TTemporaryLock
+        try {
+            lock = await this.queue.acquireTemporaryLock()
+            const buffer = Buffer.allocUnsafe(length)
+            await this.handle.read({ position, length, buffer })
+            const relError = lock.release()
+            return relError ? [relError, null] : [null, buffer]
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_READ_ERROR', null, error as Error, { position, length })
+        }
+    }
+
+    public async write(position: number, data: Buffer): T.XEavSA<'L0_IO_WRITE_ERROR'|'L0_IO_TIMED_OUT'> {
+        let lock: TTemporaryLock
+        try {
+            lock = await this.queue.acquireTemporaryLock()
+            await this.handle.write(data, 0, data.length, position)
+            return lock.release()
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_WRITE_ERROR', null, error as Error, { position })
         }
     }
 

@@ -93,8 +93,18 @@ const errorCodes = {
     L0_VO_MODE_INCOMPATIBLE:    `The volume can't be opened because it was originally created using a different encryption mode that does not use tweak emulation and is incompatible with NodeJS crypto implementations.`,
     L0_VO_SIZE_MISMATCH:        'The physical size of the volume does not match the one configured in its metadata.',
 
+    // Volume lifecycle ------------------------------------------------------------------------------------------------
+
+    L0_VC_FAIL:                 'Unable to close the volume gracefully.',
+    L0_VC_QUEUE_BUSY:           'The volume can not be closed because it is still performing I/O operations.',
+
     // Queuing ---------------------------------------------------------------------------------------------------------
 
     L0_IO_TIMED_OUT:            'I/O operation timed out. It was registered and probably has been/will be performed, but did not fit within the maximum time window.',
+
+    // Volume I/O Errors -----------------------------------------------------------------------------------------------
+    
+    L0_IO_READ_ERROR:           'Unable to read data from the volume.',
+    L0_IO_WRITE_ERROR:          'Unable to write data to the volume.',
 
 }
