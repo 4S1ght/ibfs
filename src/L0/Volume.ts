@@ -52,7 +52,7 @@ export default class Volume {
 
     public declare isOpen:  boolean
 
-    // Factory ---------------------------------------------------------------------------------------------------------
+    // Lifecycle -------------------------------------------------------------------------------------------------------
 
     private constructor() {}
 
@@ -241,21 +241,21 @@ export default class Volume {
 
     // Internal methods ------------------------------------------------------------------------------------------------
 
-    public async read(position: number, length: number): T.XEavA<Buffer, 'L0_IO_READ_ERROR'|'L0_IO_TIMED_OUT'> {
+    public async read(position: number, length: number): T.XEavA<Buffer, 'L0_IO_READ'|'L0_IO_TIMED_OUT'> {
         let lock: TTemporaryLock
         try {
             lock = await this.queue.acquireTemporaryLock()
             const buffer = Buffer.allocUnsafe(length)
             await this.handle.read({ position, length, buffer })
-            const relError = lock.release()
-            return relError ? [relError, null] : [null, buffer]
+            const releaseError = lock.release()
+            return releaseError ? [releaseError, null] : [null, buffer]
         } 
         catch (error) {
-            return IBFSError.eav('L0_IO_READ_ERROR', null, error as Error, { position, length })
+            return IBFSError.eav('L0_IO_READ', null, error as Error, { position, length })
         }
     }
 
-    public async write(position: number, data: Buffer): T.XEavSA<'L0_IO_WRITE_ERROR'|'L0_IO_TIMED_OUT'> {
+    public async write(position: number, data: Buffer): T.XEavSA<'L0_IO_WRITE'|'L0_IO_TIMED_OUT'> {
         let lock: TTemporaryLock
         try {
             lock = await this.queue.acquireTemporaryLock()
@@ -263,8 +263,46 @@ export default class Volume {
             return lock.release()
         } 
         catch (error) {
-            return new IBFSError('L0_IO_WRITE_ERROR', null, error as Error, { position })
+            return new IBFSError('L0_IO_WRITE', null, error as Error, { position })
         }
     }
+
+    public async readBlock(address: number): T.XEavA<Buffer, 'L0_IO_BLOCK_READ'|'L0_IO_TIMED_OUT'> {
+        let lock: TTemporaryLock
+        try {
+            lock = await this.queue.acquireTemporaryLock()
+            const buffer = Buffer.allocUnsafe(this.bs.BLOCK_SIZE)
+            await this.handle.read({
+                position: this.bs.BLOCK_SIZE * address,
+                length: this.bs.BLOCK_SIZE,
+                buffer
+            })
+            const releaseError = lock.release()
+            return releaseError ? [releaseError, null] : [null, buffer]
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_BLOCK_READ', null, error as Error, { address })
+        }
+    }
+
+    public async writeBlock(address: number, block: Buffer): T.XEavSA<'L0_IO_BLOCK_WRITE'|'L0_IO_TIMED_OUT'> {
+        let lock: TTemporaryLock
+        try {
+            lock = await this.queue.acquireTemporaryLock()
+            await this.handle.write(
+                /* data */          block, 
+                /* data start */    0, 
+                /* data length */   block.length, 
+                /* File position */ this.bs.BLOCK_SIZE * address
+            )
+            return lock.release()
+        } 
+        catch (error) {
+            if (lock!.expired == false) lock!.release()
+            return new IBFSError('L0_IO_BLOCK_WRITE', null, error as Error, { address })
+        }
+    }
+
+
 
 }

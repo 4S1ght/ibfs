@@ -104,7 +104,13 @@ const errorCodes = {
 
     // Volume I/O Errors -----------------------------------------------------------------------------------------------
     
-    L0_IO_READ_ERROR:           'Unable to read data from the volume.',
-    L0_IO_WRITE_ERROR:          'Unable to write data to the volume.',
+    // Random IO
+    L0_IO_READ:                 'Unable to read data from the volume.',
+    L0_IO_WRITE:                'Unable to write data to the volume.',
+
+    // Block IO
+    L0_IO_BLOCK_READ:           'Unable to read a block from the volume.',
+    L0_IO_BLOCK_WRITE:          'Unable to write a block to the volume.',
+
 
 }
