@@ -7,7 +7,7 @@ import path             from 'node:path'
 import crypto           from 'node:crypto'
 import { WriteStream }  from 'node:fs'
 
-import BlockSerializationContext, { TRootBlock } from './BlockSerialization.js'
+import BlockSerializationContext, { TCommonReadMeta, TCommonWriteMeta, TDataBlock, TDataBlockReadMeta, THeadBlock, TIndexBlockManage, TLinkBlock, TMetaCluster, TRootBlock } from './BlockSerialization.js'
 import BlockAESContext from './BlockAES.js'
 import BlockIOQueue, { TTemporaryLock } from './BlockIOQueue.js'
 import IBFSError from '../errors/IBFSError.js'
@@ -16,7 +16,6 @@ import getPackage from '../misc/package.js'
 import * as C from '../Constants.js'
 
 // Types ===============================================================================================================
-
 
 export interface TVolumeInit {
 
@@ -40,6 +39,11 @@ export interface TVolumeInit {
     }
 
 }
+
+type THeadBlockRead = THeadBlock & TIndexBlockManage  & TCommonReadMeta
+type TLinkBlockRead = TLinkBlock & TIndexBlockManage  & TCommonReadMeta
+type TDataBlockRead = TDataBlock & TDataBlockReadMeta & TCommonReadMeta
+
 
 // Exports =============================================================================================================
 
@@ -303,6 +307,169 @@ export default class Volume {
         }
     }
 
+    // API methods -----------------------------------------------------------------------------------------------------
+
+    public async overwriteRootBlock(): T.XEavSA<'L0_IO_ROOT_OVERWRITE'> {
+        try {
+            
+            const [srError, buffer] = BlockSerializationContext.serializeRootBlock(this.root)
+            if (srError) return new IBFSError('L0_IO_ROOT_OVERWRITE', null, srError)
+
+            const writeError = await this.writeBlock(0, buffer)
+            if (writeError) return new IBFSError('L0_IO_ROOT_OVERWRITE', null, writeError)
+
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_ROOT_OVERWRITE', null, error as Error)
+        }
+    }
+
+    public async readMetaBlocks(): T.XEavA<TMetaCluster['metadata'], 'L0_IO_META_READ'> {
+        try {
+
+            const clusterSize = this.bs.BLOCK_SIZE * Math.ceil(C.KB_64 / this.bs.BLOCK_SIZE)
+            const clusterPosition = 1 * this.bs.BLOCK_SIZE
+
+            const [readError, buffer] = await this.read(clusterPosition, clusterSize)
+            if (readError) return IBFSError.eav('L0_IO_META_READ', null, readError)
+
+            const [dsError, cluster] = BlockSerializationContext.deserializeMetaCluster(buffer)
+            if (dsError) return IBFSError.eav('L0_IO_META_READ', null, dsError)
+
+            return [null, cluster]
+            
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_META_READ', null, error as Error)    
+        }
+    }
+
+    public async writeMetaBlocks(cluster: TMetaCluster): T.XEavSA<'L0_IO_META_WRITE'> {
+        try {
+        
+            const [srError, buffer] = BlockSerializationContext.serializeMetaCluster({
+                metadata: cluster.metadata,
+                blockSize: this.root.blockSize
+            })
+            if (srError) return new IBFSError('L0_IO_META_WRITE', null, srError)
+
+            const clusterPosition = 1 * this.bs.BLOCK_SIZE
+            const writeError = await this.write(clusterPosition, buffer)
+            if (writeError) return new IBFSError('L0_IO_META_WRITE', null, writeError)
+
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_META_WRITE', null, error as Error)
+        }
+    }
+
+    public async readHeadBlock(address: number, aesKey: Buffer, integrity = true): 
+        T.XEavA<THeadBlockRead, 'L0_IO_HEADBLOCK_READ'|'L0_IO_HEADBLOCK_READ_INTEGRITY'> {
+        try {
+                
+            const [readError, buffer] = await this.readBlock(address)
+            if (readError) return IBFSError.eav('L0_IO_HEADBLOCK_READ', null, readError, { address })
+
+            const [dsError, block] = this.bs.deserializeHeadBlock(buffer, address, aesKey)
+            if (dsError) return IBFSError.eav('L0_IO_HEADBLOCK_READ', null, dsError, { address })
+
+            if (integrity && (block.crc32Mismatch || block.blockType !== 'HEAD'))
+                return IBFSError.eav('L0_IO_HEADBLOCK_READ_INTEGRITY', null, null, { address })
+
+            return [null, block]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_HEADBLOCK_READ', null, error as Error, { address })    
+        }
+    }
+
+    public async writeHeadBlock(block: THeadBlock & TCommonWriteMeta): T.XEavSA<'L0_IO_HEADBLOCK_WRITE'> {
+        try {
+
+            const [srError, buffer] = this.bs.serializeHeadBlock(block)
+            if (srError) return new IBFSError('L0_IO_HEADBLOCK_WRITE', null, srError, ssc(block, ['aesKey']))
+
+            const writeError = await this.writeBlock(block.address, buffer)
+            if (writeError) return new IBFSError('L0_IO_HEADBLOCK_WRITE', null, writeError, ssc(block, ['aesKey']))
+            
+        }
+         catch (error) {
+            return new IBFSError('L0_IO_HEADBLOCK_WRITE', null, error as Error)
+        }
+    }
+
+    public async readLinkBlock(address: number, aesKey: Buffer, integrity = true): 
+        T.XEavA<TLinkBlockRead, 'L0_IO_LINKBLOCK_READ'|'L0_IO_LINKBLOCK_READ_INTEGRITY'> {
+        try {
+            
+            const [readError, buffer] = await this.readBlock(address)
+            if (readError) return IBFSError.eav('L0_IO_LINKBLOCK_READ', null, readError, { address })
+
+            const [dsError, block] = this.bs.deserializeLinkBlock(buffer, address, aesKey)
+            if (dsError) return IBFSError.eav('L0_IO_LINKBLOCK_READ', null, dsError, { address })
+
+            if (integrity && (block.crc32Mismatch || block.blockType !== 'LINK'))
+                return IBFSError.eav('L0_IO_LINKBLOCK_READ_INTEGRITY', null, null, { address })
+
+            return [null, block]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L0_IO_LINKBLOCK_READ', null, error as Error, { address })    
+        }
+    }
+
+    public async writeLinkBlock(block: TLinkBlock & TCommonWriteMeta): T.XEavSA<'L0_IO_LINKBLOCK_WRITE'> {
+        try {
+            
+            const [srError, buffer] = this.bs.serializeLinkBlock(block)
+            if (srError) return new IBFSError('L0_IO_LINKBLOCK_WRITE', null, srError, ssc(block, ['aesKey']))
+
+            const writeError = await this.writeBlock(block.address, buffer)
+            if (writeError) return new IBFSError('L0_IO_LINKBLOCK_WRITE', null, writeError, ssc(block, ['aesKey']))
+                
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_LINKBLOCK_WRITE', null, error as Error)
+        }
+    }
+
+    public async readDataBlock(address: number, aesKey: Buffer, integrity = true): 
+        T.XEavA<TDataBlockRead, 'L0_IO_DATABLOCK_READ'|'L0_IO_DATABLOCK_READ_INTEGRITY'> {
+        try {
+            
+            const [readError, buffer] = await this.readBlock(address)
+            if (readError) return IBFSError.eav('L0_IO_DATABLOCK_READ', null, readError, { address })
+
+            const [dsError, block] = this.bs.deserializeDataBlock(buffer, address, aesKey)
+            if (dsError) return IBFSError.eav('L0_IO_DATABLOCK_READ', null, dsError, { address })
+
+            if (integrity && (block.crc32Mismatch || block.blockType !== 'DATA'))
+                return IBFSError.eav('L0_IO_DATABLOCK_READ_INTEGRITY', null, null, { address })
+
+            return [null, block]
+
+        }
+         catch (error) {
+            return IBFSError.eav('L0_IO_DATABLOCK_READ', null, error as Error, { address })    
+        }
+    }
+
+    public async writeDataBlock(block: TDataBlock & TCommonWriteMeta): T.XEavSA<'L0_IO_DATABLOCK_WRITE'> {
+        try {
+            
+            const [srError, buffer] = this.bs.serializeDataBlock(block)
+            if (srError) return new IBFSError('L0_IO_DATABLOCK_WRITE', null, srError, ssc(block, ['aesKey']))
+
+            const writeError = await this.writeBlock(block.address, buffer)
+            if (writeError) return new IBFSError('L0_IO_DATABLOCK_WRITE', null, writeError, ssc(block, ['aesKey']))
+                
+        } 
+        catch (error) {
+            return new IBFSError('L0_IO_DATABLOCK_WRITE', null, error as Error)
+        }
+    }
 
 
 }

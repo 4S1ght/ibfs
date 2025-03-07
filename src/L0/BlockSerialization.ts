@@ -470,7 +470,7 @@ export default class BlockSerializationContext {
 
             if (addresses > this.LINK_ADDRESS_SPACE) return IBFSError.eav('L0_DS_LINK_CORRUPT', null, null, blockBuffer)            
 
-            const block: TLinkBlock & TCommonReadMeta & TIndexBlockManage= {
+            const block: TLinkBlock & TCommonReadMeta & TIndexBlockManage = {
                 blockType,
                 crc32sum,
                 next,
