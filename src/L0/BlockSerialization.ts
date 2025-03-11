@@ -66,22 +66,38 @@ export interface TDataBlock {
     /** Block body data                                  */ data:           Buffer
 }
 export interface TDataBlockReadMeta {
-    /** Entire block body (used for append writes) to 
-     * avoid buffer concatenation.                       */ body:           Buffer
+    /** 
+     * Used to append data to the remaining free space in the block.Used to prevent buffer concatenation.
+     * @returns `true` if `data` can not fit within the remaining free space.
+     */ 
+    append: (data: Buffer) => boolean
+    /**
+     * Number of bytes stored inside the body.
+     */
+    length: number
 }
 
 // Index block metadata ------------------------------------------------------------------------------------------------
 
 export interface TIndexBlockManage {
-    /** Appends an address to the block's part of the 
-     * file allocation list. Returns `true` when the 
-     * block body is full.                               */ append: (address: number) => boolean
-
-    /** Pops an address off the end of the block's part 
-     * of the file allocation list. Returns `undefined` 
-     * if the block is empty.                            */ pop: () => number | undefined
-
-    /** Gets a specific address by its index.            */ get: (index: number) => number
+    /**
+     * Appends an address to the end of the block's internal storage.
+     * @returns `true` if there is no more space left.
+     */
+    append: (address: number) => boolean
+    /** 
+     * Pops an address from the end of the block's internal storage.
+     * @returns `undefined` if the block is empty.
+     */ 
+    pop: () => number | undefined
+    /** 
+     * Gets a specific address by its index.
+     */ 
+    get: (index: number) => number
+    /**
+     * Number of addresses stored inside the body.
+     */
+    length: number
 }
 
 // Common block I/O metadata -------------------------------------------------------------------------------------------
@@ -362,7 +378,12 @@ export default class BlockSerializationContext {
                 resourceType,
                 crc32Computed,
                 crc32Mismatch,
-                get data() { return body.subarray(0, addresses*8) },
+                get data() { 
+                    return body.subarray(0, addresses*8) 
+                },
+                get length() { 
+                    return addresses 
+                },
                 get: (index: number) => {
                     return Number(body.readBigUint64LE(index*8))
                 },
@@ -476,7 +497,12 @@ export default class BlockSerializationContext {
                 next,
                 crc32Computed,
                 crc32Mismatch,
-                get data() { return body.subarray(0, addresses*8) },
+                get data() { 
+                    return body.subarray(0, addresses*8) 
+                },
+                get length() {
+                    return addresses
+                },
                 get: (index: number) => {
                     return Number(body.readBigUint64LE(index*8))
                 },
@@ -583,7 +609,6 @@ export default class BlockSerializationContext {
                 crc32sum,
                 crc32Computed,
                 crc32Mismatch,
-                body,
                 get data() { 
                     return body.subarray(0, bodySize) 
                 },
@@ -591,6 +616,14 @@ export default class BlockSerializationContext {
                     bodySize = value.length
                     value.copy(body, 0)
                     body.fill(0, bodySize, body.length-1)
+                },
+                get length() { 
+                    return bodySize 
+                },
+                append: (data: Buffer) => {
+                    if (bodySize + data.length > this.DATA_CONTENT_SIZE) return true
+                    bodySize += data.copy(body, bodySize)
+                    return false
                 }
             }
 

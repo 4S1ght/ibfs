@@ -1,7 +1,7 @@
 // Block IO Queue
 
 import type * as T from "../../types.js"
-import IBFSError from "../errors/IBFSError.js'
+import IBFSError from "../errors/IBFSError.js"
 
 // Types ==========================================================================================
 
