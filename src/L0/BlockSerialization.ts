@@ -68,7 +68,7 @@ export interface TDataBlock {
 export interface TDataBlockReadMeta {
     /** 
      * Used to append data to the remaining free space in the block.Used to prevent buffer concatenation.
-     * @returns `true` if `data` can not fit within the remaining free space.
+     * @returns `true` if data was successfully appended and `false` if the block is too full to fit it.
      */ 
     append: (data: Buffer) => boolean
     /**
@@ -82,7 +82,7 @@ export interface TDataBlockReadMeta {
 export interface TIndexBlockManage {
     /**
      * Appends an address to the end of the block's internal storage.
-     * @returns `true` if there is no more space left.
+     * @returns `true` if address was successfully appended and `false` if the block is full.
      */
     append: (address: number) => boolean
     /** 
@@ -93,7 +93,7 @@ export interface TIndexBlockManage {
     /** 
      * Gets a specific address by its index.
      */ 
-    get: (index: number) => number
+    get: (index: number) => number | undefined
     /**
      * Number of addresses stored inside the body.
      */
@@ -385,16 +385,18 @@ export default class BlockSerializationContext {
                     return addresses 
                 },
                 get: (index: number) => {
-                    return Number(body.readBigUint64LE(index*8))
+                    return index < addresses 
+                        ? Number(body.readBigUint64LE(index*8))
+                        : undefined
                 },
                 append: (address: number): boolean => {
                     if (addresses < this.HEAD_ADDRESS_SPACE) {
                         body.writeBigUint64LE(BigInt(address), addresses*8)
                         src.writeInt32(addresses, 25)
                         addresses++
-                        return false
+                        return true
                     }
-                    return true
+                    return false
                 },
                 pop: () => {
                     if (addresses > 0) {
@@ -504,16 +506,18 @@ export default class BlockSerializationContext {
                     return addresses
                 },
                 get: (index: number) => {
-                    return Number(body.readBigUint64LE(index*8))
+                    return index < addresses 
+                        ? Number(body.readBigUint64LE(index*8))
+                        : undefined
                 },
                 append: (address: number): boolean => {
                     if (addresses < this.LINK_ADDRESS_SPACE) {
                         body.writeBigUint64LE(BigInt(address), addresses*8)
                         src.writeInt32(addresses, 25)
                         addresses++
-                        return false
+                        return true
                     }
-                    return true
+                    return false
                 },
                 pop: () => {
                     if (addresses > 0) {
@@ -592,6 +596,7 @@ export default class BlockSerializationContext {
         T.XEav<TDataBlock & TDataBlockReadMeta & TCommonReadMeta, 'L0_DS_DATA'> {
         try {
 
+            const self = this
             const src = Memory.wrap(blockBuffer)
 
             const blockType = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
@@ -613,6 +618,7 @@ export default class BlockSerializationContext {
                     return body.subarray(0, bodySize) 
                 },
                 set data(value) {
+                    if (value.length > self.DATA_CONTENT_SIZE) throw new RangeError('Data too large')
                     bodySize = value.length
                     value.copy(body, 0)
                     body.fill(0, bodySize, body.length-1)
@@ -621,9 +627,9 @@ export default class BlockSerializationContext {
                     return bodySize 
                 },
                 append: (data: Buffer) => {
-                    if (bodySize + data.length > this.DATA_CONTENT_SIZE) return true
+                    if (bodySize + data.length > this.DATA_CONTENT_SIZE) return false
                     bodySize += data.copy(body, bodySize)
-                    return false
+                    return true
                 }
             }
 
