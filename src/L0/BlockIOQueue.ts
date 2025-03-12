@@ -12,7 +12,7 @@ export interface TTemporaryLock {
     /** Releases the lock and triggers the next I/O operation (unless expired). */
     release: () => T.XEavS<"L0_IO_TIMED_OUT">
     /** Returns `true` if the lock has expired. */
-    readonly expired: boolean
+    readonly stale: boolean
 }
 
 export interface TLockOptions {
@@ -56,7 +56,7 @@ export default class BlockIOQueue {
                 const hasExpired = () => Date.now() - grantedAt > (options?.timeout || 3000)
 
                 grant({
-                    get expired() { return hasExpired() },
+                    get stale() { return hasExpired() },
                     release: () => {
                         if (hasExpired()) return new IBFSError('L0_IO_TIMED_OUT')
                         clearTimeout(timeout)

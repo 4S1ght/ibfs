@@ -14,6 +14,7 @@ import IBFSError from '../errors/IBFSError.js'
 import ssc from '../misc/safeShallowCopy.js'
 import getPackage from '../misc/package.js'
 import * as C from '../Constants.js'
+import retry from '../misc/retry.js'
 
 // Types ===============================================================================================================
 
@@ -250,11 +251,12 @@ export default class Volume {
         try {
             lock = await this.queue.acquireTemporaryLock()
             const buffer = Buffer.allocUnsafe(length)
-            await this.handle.read({ position, length, buffer })
+            await retry<any>(() => !lock.stale && this.handle.read({ position, length, buffer }))
             const releaseError = lock.release()
             return releaseError ? [releaseError, null] : [null, buffer]
         } 
         catch (error) {
+            if (lock!.stale == false) lock!.release()
             return IBFSError.eav('L0_IO_READ', null, error as Error, { position, length })
         }
     }
@@ -263,10 +265,11 @@ export default class Volume {
         let lock: TTemporaryLock
         try {
             lock = await this.queue.acquireTemporaryLock()
-            await this.handle.write(data, 0, data.length, position)
+            await retry<any>(() => !lock.stale && this.handle.write(data, 0, data.length, position))
             return lock.release()
         } 
         catch (error) {
+            if (lock!.stale == false) lock!.release()
             return new IBFSError('L0_IO_WRITE', null, error as Error, { position })
         }
     }
@@ -276,15 +279,16 @@ export default class Volume {
         try {
             lock = await this.queue.acquireTemporaryLock()
             const buffer = Buffer.allocUnsafe(this.bs.BLOCK_SIZE)
-            await this.handle.read({
+            await retry<any>(() => !lock.stale && this.handle.read({
                 position: this.bs.BLOCK_SIZE * address,
                 length: this.bs.BLOCK_SIZE,
                 buffer
-            })
+            }))
             const releaseError = lock.release()
             return releaseError ? [releaseError, null] : [null, buffer]
         } 
         catch (error) {
+            if (lock!.stale == false) lock!.release()
             return IBFSError.eav('L0_IO_BLOCK_READ', null, error as Error, { address })
         }
     }
@@ -293,16 +297,16 @@ export default class Volume {
         let lock: TTemporaryLock
         try {
             lock = await this.queue.acquireTemporaryLock()
-            await this.handle.write(
+            await retry<any>(() => !lock.stale && this.handle.write(
                 /* data */          block, 
                 /* data start */    0, 
                 /* data length */   block.length, 
                 /* File position */ this.bs.BLOCK_SIZE * address
-            )
+            ))
             return lock.release()
         } 
         catch (error) {
-            if (lock!.expired == false) lock!.release()
+            if (lock!.stale == false) lock!.release()
             return new IBFSError('L0_IO_BLOCK_WRITE', null, error as Error, { address })
         }
     }
