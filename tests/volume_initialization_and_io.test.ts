@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll } from "vitest"
 import Volume from '../src/L0/Volume'
 import { useEmptyVolume, getVolumePath } from './defaults/volume'
 import BlockAESContext from "../src/L0/BlockAES"
-import { TCommonWriteMeta, THeadBlock, TLinkBlock } from "../src/L0/BlockSerialization"
+import { TCommonWriteMeta, TDataBlock, THeadBlock, TLinkBlock } from "../src/L0/BlockSerialization"
 
 describe('Volume initialization and IO', async () => {
 
@@ -74,7 +74,6 @@ describe('Volume initialization and IO', async () => {
 
     test('Writing & reading a link block', async () => {
 
-        const now = Math.floor(Date.now() / 1000)
         const data = Buffer.from(BigUint64Array.of(1n, 2n, 3n, 4n, 5n).buffer)
 
         const blocKData: TLinkBlock & TCommonWriteMeta = {
@@ -93,6 +92,25 @@ describe('Volume initialization and IO', async () => {
         expect(block?.data)         .toStrictEqual(data)
         expect(block?.next)         .toBe(blocKData.next)
 
+    })
+
+    test('Writing & reading a data block', async () => {
+
+        const data = Buffer.from(BigUint64Array.of(1n, 2n, 3n, 4n, 5n).buffer)
+
+        const blockData: TDataBlock & TCommonWriteMeta = {
+            data: data,
+            aesKey: key,
+            address: 100,
+        }
+
+        const writeError = await vol.writeDataBlock(blockData)
+        if (writeError) return expect(writeError).toBeUndefined()
+
+        const [readError, block] = await vol.readDataBlock(100, key)
+
+        expect(readError)           .toBeNull()
+        expect(block?.data)         .toStrictEqual(data)
     })
 
 })
