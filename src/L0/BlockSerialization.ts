@@ -25,7 +25,7 @@ export interface TBlockSerializeConfig {
 export interface TRootBlock {
     /** Specification version (major)                    */ specMajor:      number
     /** Specification version (minor)                    */ specMinor:      number
-    /** Root block address                               */ root:           number
+    /** Root block address                               */ fsRoot:         number
     /** AES cipher used                                  */ aesCipher:      TAESCipher
     /** AES initialization vector                        */ aesIV:          Buffer
     /** 0-filled buffer encrypted with the original key  */ aesKeyCheck:    Buffer
@@ -193,7 +193,7 @@ export default class BlockSerializationContext {
 
             block.writeInt16(blockData.specMajor)
             block.writeInt16(blockData.specMinor)
-            block.writeInt64(blockData.root)
+            block.writeInt64(blockData.fsRoot)
             block.writeInt8({ 'none': 0, 'aes-128-xts': 1, 'aes-256-xts': 2 }[blockData.aesCipher])
             block.write(blockData.aesIV)
             block.write(blockData.aesKeyCheck)
@@ -220,7 +220,7 @@ export default class BlockSerializationContext {
 
             data.specMajor      = block.readInt16()
             data.specMinor      = block.readInt16()
-            data.root           = block.readInt64()
+            data.fsRoot         = block.readInt64()
             data.aesCipher      = (['none', 'aes-128-xts', 'aes-256-xts'] as const)[block.readInt8()]
             data.aesIV          = block.read(16)
             data.aesKeyCheck    = block.read(16)

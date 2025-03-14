@@ -21,7 +21,7 @@ describe('Block serialization & deserialization', () => {
         const data: TRootBlock = {
             specMajor: 0,
             specMinor: 0,
-            root: 0,
+            fsRoot: 0,
             aesCipher: "none",
             aesIV: crypto.randomBytes(16),
             aesKeyCheck: crypto.randomBytes(16),
@@ -40,7 +40,7 @@ describe('Block serialization & deserialization', () => {
 
         expect(deserialized.specMajor)       .toBe(data.specMajor)
         expect(deserialized.specMinor)       .toBe(data.specMinor)
-        expect(deserialized.root)            .toBe(data.root)
+        expect(deserialized.fsRoot)          .toBe(data.fsRoot)
         expect(deserialized.aesCipher)       .toBe(data.aesCipher)
         expect(deserialized.aesIV)           .toStrictEqual(data.aesIV)
         expect(deserialized.aesKeyCheck)     .toStrictEqual(data.aesKeyCheck)

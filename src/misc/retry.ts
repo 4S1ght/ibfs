@@ -12,7 +12,7 @@ export default async function retry<T>(fn: () => Promise<T> | T, retries = 3): P
 
     while (attempt < retries) {
         try {
-            result = await fn()
+            return await fn()
         } 
         catch (error) {
             attempt++

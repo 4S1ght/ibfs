@@ -26,7 +26,7 @@ export interface TVolumeInit {
     /** AES cipher used for encryption.            */ aesCipher:    TRootBlock['aesCipher']
     /** AES key used for encryption.               */ aesKey:       Buffer
     
-    /** Configures an update handler called every N bytes written to monitor progress. */
+    /** Configures an update handler called every `N` bytes written in order to monitor progress. */
     update?: {
         /** Specifies every how many bytes to call an update. @default 5_000_000 */
         frequency?: number
@@ -77,7 +77,7 @@ export default class Volume {
             // that will be used by the filesystem.
 
             const highWaterMark = (options.init && options.init.highWaterMarkBlocks || 16) * options.blockSize
-            file = await fs.open(options.fileLocation, 'r+')
+            file = await fs.open(options.fileLocation, 'wx')
             ws = file.createWriteStream({ highWaterMark })
 
             const updateFrequency = options.update && options.update.frequency || 5_000_000 // Bytes
@@ -143,7 +143,7 @@ export default class Volume {
             const [rootError, rootBlock] = BlockSerializationContext.serializeRootBlock({
                 specMajor: C.SPEC_MAJOR,
                 specMinor: C.SPEC_MINOR,
-                root: 0,
+                fsRoot: 0,
                 compatibility: true,
                 blockSize: options.blockSize,
                 blockCount: options.blockCount,

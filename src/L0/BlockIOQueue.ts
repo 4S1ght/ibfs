@@ -11,7 +11,7 @@ type TLockCallback = (next: () => void) => void
 export interface TTemporaryLock {
     /** Releases the lock and triggers the next I/O operation (unless expired). */
     release: () => T.XEavS<"L0_IO_TIMED_OUT">
-    /** Returns `true` if the lock has expired. */
+    /** Is set to `true` if the lock has expired and `false` otherwise. */
     readonly stale: boolean
 }
 
@@ -24,9 +24,6 @@ export interface TLockOptions {
 }
 
 // Exports ========================================================================================
-
-// TODO = Refactor the IO queue back to use a callback API in order to allow for
-// automatic retries.
 
 /**
  * An IO queuing class responsible for managing the order of read & write operations.  
