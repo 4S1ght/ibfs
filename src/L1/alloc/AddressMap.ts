@@ -1,4 +1,4 @@
-// AdMap (Address Map) is the address space represented by a bitmap
+// AddressMap is the address space represented by a bitmap
 // used to keep track of block allocation of the entire volume.
 
 import { Buffer } from "node:buffer"
@@ -6,21 +6,21 @@ import IBFSError from "../../errors/IBFSError.js"
 
 // Types ==========================================================================================
 
-export interface TAdMapInit {
+export interface TAddressMapInit {
     /** The size if the internal address bitmap                       */ size:   number
     /** The offset used to take N first blocks out of the alloc pool. */ offset: number
 }
 
 // Exports ========================================================================================
 
-export default class AdMap {
+export default class AddressMap {
 
     public readonly size: number
     public readonly offset: number
 
     private readonly bitmap: Buffer
 
-    constructor(init: TAdMapInit) {
+    constructor(init: TAddressMapInit) {
         this.size = init.size
         this.offset = init.offset
         this.bitmap = Buffer.alloc(Math.ceil((this.size - this.offset) / 8))
@@ -34,7 +34,7 @@ export default class AdMap {
         const offsetAddress = address - this.offset
         if (offsetAddress < 0 || offsetAddress >= this.size) {
             throw new IBFSError(
-                'L1_ALLOC_ADDRESS_OUT_OF_RANGE', 
+                'L1_AM_ADDRESS_OUT_OF_RANGE', 
                 `Address ${address} is out of range.`, 
                 null, 
                 { size: this.size, offset: this.offset }

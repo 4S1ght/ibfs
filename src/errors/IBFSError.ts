@@ -134,5 +134,16 @@ const errorCodes = {
     L0_IO_DATABLOCK_READ_INTEGRITY: 'The data block failed integrity checks.',
     L0_IO_DATABLOCK_WRITE:          'Unable to write a data block.',
 
+    // Level 1 =========================================================================================================
 
+    // Address space
+    L1_AM_ADDRESS_OUT_OF_RANGE:     'The provided address is out of range allowed by the current address space',
+    L1_AS_ADDRESS_EXHAUST:          'The address space has been exhausted and no further space allocation is possible.',
+
+    // File trace maps
+    L1_FTM_OPEN:                   'Unable to open the file trace map.',
+    L1_FTM_OPEN_CIRC:              'The file trace map contains a circular address pointer and can not be opened.',
+
+    L1_FTM_APPEND:                 'Unable to append a new address to the file trace map.',
+    L1_FTM_POP:                    'Unable to pop addresses from the file trace map.',
 }

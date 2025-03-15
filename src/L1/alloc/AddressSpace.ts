@@ -1,22 +1,21 @@
-// AdStack (Address Stack) is responsible for providing a caching
-// Layer on top of the underlying address bitmap. It keeps a small
-// cache of full-size JS number addresses for fast allocation and
-// replenishes it as needed.
+// AddressSpace is responsible for providing a caching
+// Layer on top of the underlying address bitmap that keeps track
+// of resource allocation inside the volume.
 
 // Imports ========================================================================================
 
 import IBFSError from "../../errors/IBFSError.js"
-import AdMap, { TAdMapInit } from "./AdMap.js"
+import AddressMap, { TAddressMapInit } from "./AddressMap.js"
 
 // Types ==========================================================================================
 
-export interface TAdStackInit extends TAdMapInit {
+export interface TAddressSpaceInit extends TAddressMapInit {
     /** The number of addresses cached at a time. */ cacheSize: number
 }
 
 // Exports ========================================================================================
 
-export default class AdStack extends AdMap {
+export default class AddressSpace extends AddressMap {
 
     private readonly cache: Array<number | undefined>
     private cacheHealth = -1
@@ -24,11 +23,11 @@ export default class AdStack extends AdMap {
     private replRegions: number
     private replCycle: Generator<number>
 
-    constructor(init: TAdStackInit) {
+    constructor(init: TAddressSpaceInit) {
         super(init)
         this.cache = new Array(init.cacheSize).fill(undefined)
         this.replRegions = Math.ceil(init.size / init.cacheSize)
-        this.replCycle = AdStack.createCycle(this.replRegions)
+        this.replCycle = AddressSpace.createCycle(this.replRegions)
     }
 
     /**
@@ -66,7 +65,7 @@ export default class AdStack extends AdMap {
     private fastReplenish(retry = 0): void {
 
         // Throw after full cycle of retries to signify address exhaustion
-        if (retry === this.replRegions) throw new IBFSError('L1_ALLOC_ADDRESS_EXHAUSTION')
+        if (retry === this.replRegions) throw new IBFSError('L1_AS_ADDRESS_EXHAUST')
 
         const region = this.replCycle.next().value
         const start = region * this.cache.length
@@ -77,7 +76,7 @@ export default class AdStack extends AdMap {
             const address = i + this.offset
             if (this.isTaken(address)) continue
 
-            // Marks address as allocated to effectively "moves it out"
+            // Mark address as allocated to effectively "move it out"
             // from the bitmap to the cache
             this.markAllocated(address)
             this.cacheHealth++
@@ -117,13 +116,13 @@ export default class AdStack extends AdMap {
         }
 
         // Throw after full cycle of retries to signify address exhaustion
-        if (this.cacheHealth === -1) throw new IBFSError('L1_ALLOC_ADDRESS_EXHAUSTION')
+        if (this.cacheHealth === -1) throw new IBFSError('L1_AS_ADDRESS_EXHAUST')
 
     }
 
     /**
-     * Cycles through regions of the internal bitmap in order
-     * to separate it for faster reads.
+     * Cycles through the bitmap in a sliding-window approach
+     * for every time addresses are replenished into the stack array.
      */
     private static *createCycle(range: number): Generator<number> {
         let current = 0
