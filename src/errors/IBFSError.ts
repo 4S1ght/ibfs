@@ -47,94 +47,114 @@ export type IBFSErrorMetadata = { [key: string]: any }
 
 const errorCodes = {
 
-    // Scheme: LEVEL_SCOPE_ERROR_CODE_...
+    // Scheme: LEVEL_SCOPE_ERRORCODE_...
 
-    // Level 1 ----------------------------------------------------------------
+    // Level 0 =========================================================================================================
 
     // Cryptography
-    L0_AES_NOKEY                    : "AES key was not provided byt required by the encryption settings.",
-    L0_AES_KEYDIGEST                : "Failed to digest the provided AES key.",
+    L0_AES_NOKEY:                   'AES encryption key was not provided.',
+    L0_AES_KEYDIGEST:               'Unable to SHA-digest the AES encryption key.',
 
-    // De/serialization
-    L0_SR_ROOTERR                   : "An error occurred while serializing the root block.",
-    L0_DS_ROOTERR                   : "An error occurred while deserializing the root block.",
-    L0_SR_METAERR                   : "An error occurred while serializing the metadata cluster.",
-    L0_DS_METAERR                   : "An error occurred while deserializing the metadata cluster.",
-    L0_SR_HEADERR                   : "An error occurred while serializing a head block.",
-    L0_DS_HEADERR                   : "An error occurred while deserializing a head block.",
-    L0_SR_LINKERR                   : "An error occurred while serializing a link block.",
-    L0_DS_LINKERR                   : "An error occurred while deserializing a link block",
-    L0_SR_DATAERR                   : "An error occurred while serializing a data block.",
-    L0_DS_DATAERR                   : "An error occurred while deserializing a data block.",
+    // Block serialization ---------------------------------------------------------------------------------------------
 
-    // Volume creation/initialization
-    L0_VI_FAILURE                   : "An error occurred while initializing the volume.",
+    // Root block 
+    L0_SR_ROOT:                     'Unable to serialize the root block.',
+    L0_DS_ROOT:                     'Unable to deserialize the root block.',
 
-    // Volume closing
-    L0_VC_FAILURE                   : "An error occurred while closing the volume.",
+    // Volume metadata
+    L0_SR_META:                     'Unable to serialize the metadata cluster.',
+    L0_DS_META:                     'Unable to deserialize the metadata cluster.',
 
-    // Volume mounting      
-    L0_VO_UNKNOWN                   : "An unknown error occurred while mounting the volume.",
-    L0_VO_ROOTFAULT                 : "The root sector of the volume is corrupted.",
-    L0_VO_MODE_INCOMPATIBLE         : "Can't mount the volume because it was created with a different encryption mode. NodeJS does not natively expose APIs for manipulating encryption tweak values and needs to emulate them. This volume was not set up for and can not be decrypted using this runtime.",
-    L0_VO_SIZE_MISMATCH             : "The size of the volume image does not match the size expected according to volume metadata. This is likely a sign of image corruption.",
+    // Head blocks
+    L0_SR_HEAD:                     'Unable to serialize a head block.',
+    L0_SR_HEAD_SEGFAULT:            'Provided body data is too large to fit within a head block.',
+    L0_SR_HEAD_ADDR_REMAINDER:      'Provided link block body length is not a multiple of 8 (required for BigInt addresses).',
+    L0_DS_HEAD:                     'Unable to deserialize a head block.',
+    L0_DS_HEAD_CORRUPT:             'The head block is corrupted, `addressCount` meta-tag does not reflect a proper block address count.',
 
-    // I/O      
-    L0_IO_TIMED_OUT                 : "An I/O operation timed out. It was registered and probably performed, but did not fit within the time window.",
+    // Link blocks
+    L0_SR_LINK:                     'Unable to serialize a link block.',
+    L0_SR_LINK_SEGFAULT:            'Provided body data is too large to fit within a link block.',
+    L0_SR_LINK_ADDR_REMAINDER:      'Provided link block body length is not a multiple of 8 (required for BigInt addresses).',
+    L0_DS_LINK:                     'Unable to deserialize a link block.',
+    L0_DS_LINK_CORRUPT:             'The link block is corrupted, `addressCount` meta-tag does not reflect a proper block address count.',
+
+    // Data blocks
+    L0_SR_DATA:                     'Unable to serialize a data block.',
+    L0_SR_DATA_SEGFAULT:            'Provided body data is too large to fit within a data block.',
+    L0_DS_DATA:                     'Unable to deserialize a data block.',
+
+    // Volume initialization & opening ---------------------------------------------------------------------------------
+
+    L0_VI_FAIL:                     'Unable to initialize a new volume.',
+
+    L0_VO_CANT_OPEN:                'Unable to open the volume.',
+    L0_VO_ROOTFAULT:                'The root block required for volume initialization is corrupted.',
+    L0_VO_MODE_INCOMPATIBLE:        `The volume can't be opened because it was originally created using a different encryption mode that does not use tweak emulation and is incompatible with NodeJS crypto implementations.`,
+    L0_VO_SIZE_MISMATCH:            'The physical size of the volume does not match the one configured in its metadata.',
+
+    // Volume lifecycle ------------------------------------------------------------------------------------------------
+
+    L0_VC_FAIL:                     'Unable to close the volume gracefully.',
+    L0_VC_QUEUE_BUSY:               'The volume can not be closed because it is still performing I/O operations.',
+
+    // Queuing ---------------------------------------------------------------------------------------------------------
+
+    L0_IO_TIMED_OUT:                'I/O operation timed out. It was registered and probably has been/will be performed, but did not fit within the maximum time window.',
+
+    // Volume I/O Errors -----------------------------------------------------------------------------------------------
     
-    L0_IO_READ_ERROR                : "An error occurred while reading from the volume.",
-    L0_IO_WRITE_ERROR               : "An error occurred while writing to the volume.",
+    // Random IO
+    L0_IO_READ:                     'Unable to read data from the volume.',
+    L0_IO_WRITE:                    'Unable to write data to the volume.',
 
-    L0_IO_ROOT_WRITE_ERROR          : "An error occurred while writing a head block.",
-    L0_IO_ROOT_SR_ERROR             : "An error occurred while serializing a head block.",
+    // Block IO
+    L0_IO_BLOCK_READ:               'Unable to read a block from the volume.',
+    L0_IO_BLOCK_WRITE:              'Unable to write a block to the volume.',
 
-    L0_IO_META_READ_ERROR           : "An error occurred while reading a metadata cluster.",
-    L0_IO_META_DS_ERROR             : "An error occurred while deserializing a metadata cluster.",
-    L0_IO_META_WRITE_ERROR          : "An error occurred while writing a metadata cluster.",
-    L0_IO_META_SR_ERROR             : "An error occurred while serializing a metadata cluster.",
+    // Root block IO
+    L0_IO_ROOT_OVERWRITE:           'Unable to overwrite the root block.',
 
-    L0_IO_HEAD_READ_ERROR           : "An error occurred while reading a head block.",
-    L0_IO_HEAD_READ_INTEGRITY_ERROR : "Detected an integrity mismatch while reading a head block - This probably indicates corruption.",
-    L0_IO_HEAD_READ_UNKNOWN_ERROR   : "An unknown error occurred while reading a head block.",
-    L0_IO_HEAD_DS_ERROR             : "An error occurred while deserializing a head block.",
-    L0_IO_HEAD_WRITE_ERROR          : "An error occurred while writing a head block.",
-    L0_IO_HEAD_WRITE_UNKNOWN_ERROR  : "An unknown error occurred while writing a head block.",
-    L0_IO_HEAD_SR_ERROR             : "An error occurred while serializing a head block.",
+    // Metadata
+    L0_IO_META_READ:                'Unable to read the metadata cluster.',
+    L0_IO_META_WRITE:               'Unable to write the metadata cluster.',
 
-    L0_IO_LINK_READ_ERROR           : "An error occurred while reading a link block.",
-    L0_IO_LINK_READ_INTEGRITY_ERROR : "Detected an integrity mismatch while reading a link block - This probably indicates corruption.",
-    L0_IO_LINK_READ_UNKNOWN_ERROR   : "An unknown error occurred while reading a link block.",
-    L0_IO_LINK_DS_ERROR             : "An error occurred while deserializing a link block.",
-    L0_IO_LINK_WRITE_ERROR          : "An error occurred while writing a link block.",
-    L0_IO_LINK_WRITE_UNKNOWN_ERROR  : "An unknown error occurred while writing a link block.",
-    L0_IO_LINK_SR_ERROR             : "An error occurred while serializing a link block.",
+    // Head block
+    L0_IO_HEADBLOCK_READ:           'Unable to read a head block.',
+    L0_IO_HEADBLOCK_READ_INTEGRITY: 'The head block failed integrity checks.',
+    L0_IO_HEADBLOCK_WRITE:          'Unable to write a head block.',
 
-    L0_IO_DATA_READ_ERROR           : "An error occurred while reading a data block.",
-    L0_IO_DATA_READ_INTEGRITY_ERROR : "Detected an integrity mismatch while reading a data block - This probably indicates corruption.",
-    L0_IO_DATA_READ_UNKNOWN_ERROR   : "An unknown error occurred while reading a data block.",
-    L0_IO_DATA_DS_ERROR             : "An error occurred while deserializing a data block.",
-    L0_IO_DATA_WRITE_ERROR          : "An error occurred while writing a data block.",
-    L0_IO_DATA_WRITE_UNKNOWN_ERROR  : "An unknown error occurred while writing a data block.",
-    L0_IO_DATA_SR_ERROR             : "An error occurred while serializing a data block.",
+    // Link block
+    L0_IO_LINKBLOCK_READ:           'Unable to read a link block.',
+    L0_IO_LINKBLOCK_READ_INTEGRITY: 'The link block failed integrity checks.',
+    L0_IO_LINKBLOCK_WRITE:          'Unable to write a link block.',
+
+    // Data block
+    L0_IO_DATABLOCK_READ:           'Unable to read a data block.',
+    L0_IO_DATABLOCK_READ_INTEGRITY: 'The data block failed integrity checks.',
+    L0_IO_DATABLOCK_WRITE:          'Unable to write a data block.',
+
+    // Level 1 =========================================================================================================
+
+    // Address space
+    L1_AM_ADDRESS_OUT_OF_RANGE:     'The provided address is out of range allowed by the current address space',
+    L1_AS_ADDRESS_EXHAUST:          'The address space has been exhausted and no further space allocation is possible.',
+
+    // File trace maps
+    L1_FTM_OPEN:                    'Unable to open the file trace map.',
+    L1_FTM_OPEN_CIRC:               'The file trace map contains a circular address pointer and can not be opened.',
+
+    L1_FTM_APPEND:                  'Unable to append a new address to the file trace map.',
+    L1_FTM_POP:                     'Unable to pop addresses from the file trace map.',
+
+    // Directory serialization
+    L1_DIR_INIT:                    'Unable to initialize the directory serialization context.',
     
-    // Level 2 ----------------------------------------------------------------
+    L1_DIR_SR:                      'Unable to serialize a directory.',
+    L1_DIR_DS:                      'Unable to deserialize a directory.',
 
-    L1_DIR_INIT                     : "An error occurred while initializing directory buffers context.",
-    L1_DIR_SR                       : "An error occurred while serializing a directory entry.",
-    L1_DIR_DS                       : "An error occurred while deserializing a directory entry.",
-
-    L1_FS_CREATE_ROOT               : "An error occurred while creating the filesystem root.",
-
-    L1_FS_OPEN                      : "An error occurred while opening the filesystem.",
-
-    L1_ALLOC_ADDRESS_EXHAUSTION     : "All available block addresses have been exhausted. Either expand the volume or free some space.",
-    L1_ALLOC_ADDRESS_OUT_OF_RANGE   : "The block address is out of range.",
-
-    L1_FAL_OPEN                     : "Failed to open a file allocation list.",
-    L1_FAL_OPEN_CIRC                : `Could not open the entire file allocation list due to a circular "next" address.`,
-
-    L1_FAL_APPEND                   : "Failed to append address(es) to the file allocation list.",
-    L1_FAL_POP                      : "Failed to pop address(es) from the file allocation list.",
-
+    // Filesystem
+    L1_FS_CREATE:                   'Unable to create the filesystem.',
+    L1_FS_OPEN:                     'Unable to open the filesystem.',
 
 }

@@ -14,16 +14,21 @@ const __dirname = dirname(import.meta.url)
 
 export interface TDirectory {
     permissions: {
-        [user_id: string]: 0 | 1 | 2 | 3 // 0 = denied, 1 = read, 2 = read/write, 3 = read/write/exec
+        // 0 = restricted, 
+        // 1 = read, 
+        // 2 = read/write, 
+        // 3 = read/write/exec
+        [user_id: string]: 0 | 1 | 2 | 3 
     },
     children: {
-        [file_or_directory_name: string]: number // number - address of the resource
+        // number - address of the resource
+        [file_or_directory_name: string]: number 
     }
 }
 
 // Exports ========================================================================================
 
-export default class DirectoryBuffersContext {
+export default class DirectorySerializationContext {
 
     private static dirProto = path.join(__dirname, '../../schemas/Directories.proto')
 
@@ -32,10 +37,10 @@ export default class DirectoryBuffersContext {
 
     private constructor() {}
 
-    public static async create(): T.XEavA<DirectoryBuffersContext, "L1_DIR_INIT"> {
+    public static async createContext(): T.XEavA<DirectorySerializationContext, "L1_DIR_INIT"> {
         try {
             const self = new this()
-            self.root = await pb.load(DirectoryBuffersContext.dirProto)
+            self.root = await pb.load(DirectorySerializationContext.dirProto)
             self.dirProto = self.root.lookupType('dir.Directory')
             return [null, self]
         } 

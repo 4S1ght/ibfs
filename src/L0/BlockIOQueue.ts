@@ -11,8 +11,8 @@ type TLockCallback = (next: () => void) => void
 export interface TTemporaryLock {
     /** Releases the lock and triggers the next I/O operation (unless expired). */
     release: () => T.XEavS<"L0_IO_TIMED_OUT">
-    /** Returns `true` if the lock has expired. */
-    readonly expired: boolean
+    /** Is set to `true` if the lock has expired and `false` otherwise. */
+    readonly stale: boolean
 }
 
 export interface TLockOptions {
@@ -41,7 +41,7 @@ export interface TLockOptions {
 export default class BlockIOQueue {
     
     private queue: TLockCallback[] = []
-    private ongoing = false
+    public  busy = false
 
     public acquireTemporaryLock(options?: TLockOptions) {
         return new Promise<TTemporaryLock>(grant => {
@@ -53,7 +53,7 @@ export default class BlockIOQueue {
                 const hasExpired = () => Date.now() - grantedAt > (options?.timeout || 3000)
 
                 grant({
-                    get expired() { return hasExpired() },
+                    get stale() { return hasExpired() },
                     release: () => {
                         if (hasExpired()) return new IBFSError('L0_IO_TIMED_OUT')
                         clearTimeout(timeout)
@@ -73,15 +73,16 @@ export default class BlockIOQueue {
      */
     private async cycle() {
 
-        if (this.ongoing) return
-        this.ongoing = true
+        if (this.busy) return
+        this.busy = true
 
         let i = 0
 
         // A more complicated while loop is used here instead of passing
         // a "next" callback to the release handler due to max callstack errors
-        // being thrown when two or more long-running I/O are done in parallel
-        // not leaving time for the queue to clear and turn idle.
+        // being thrown when a very long-running I/O operation is maintained.
+        // This approach does not push onto the stack and is therefore safer
+        // against long-running threads.
         while (i < this.queue.length) {
             await new Promise<void>($continue => {
                 const thisTurnHandler = this.queue[i]!
@@ -90,7 +91,7 @@ export default class BlockIOQueue {
             i++
         }
 
-        this.ongoing = false
+        this.busy = false
         this.queue = []
 
     }
