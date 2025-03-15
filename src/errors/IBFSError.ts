@@ -141,9 +141,20 @@ const errorCodes = {
     L1_AS_ADDRESS_EXHAUST:          'The address space has been exhausted and no further space allocation is possible.',
 
     // File trace maps
-    L1_FTM_OPEN:                   'Unable to open the file trace map.',
-    L1_FTM_OPEN_CIRC:              'The file trace map contains a circular address pointer and can not be opened.',
+    L1_FTM_OPEN:                    'Unable to open the file trace map.',
+    L1_FTM_OPEN_CIRC:               'The file trace map contains a circular address pointer and can not be opened.',
 
-    L1_FTM_APPEND:                 'Unable to append a new address to the file trace map.',
-    L1_FTM_POP:                    'Unable to pop addresses from the file trace map.',
+    L1_FTM_APPEND:                  'Unable to append a new address to the file trace map.',
+    L1_FTM_POP:                     'Unable to pop addresses from the file trace map.',
+
+    // Directory serialization
+    L1_DIR_INIT:                    'Unable to initialize the directory serialization context.',
+    
+    L1_DIR_SR:                      'Unable to serialize a directory.',
+    L1_DIR_DS:                      'Unable to deserialize a directory.',
+
+    // Filesystem
+    L1_FS_CREATE:                   'Unable to create the filesystem.',
+    L1_FS_OPEN:                     'Unable to open the filesystem.',
+
 }
