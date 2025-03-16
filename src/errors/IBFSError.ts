@@ -157,4 +157,7 @@ const errorCodes = {
     L1_FS_CREATE:                   'Unable to create the filesystem.',
     L1_FS_OPEN:                     'Unable to open the filesystem.',
 
+    // Filesystem I/O
+    L1_FS_OPEN_FTM:                 'Unable to open the file trace map.',
+
 }

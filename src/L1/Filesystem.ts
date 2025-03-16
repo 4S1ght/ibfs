@@ -11,6 +11,7 @@ import BlockSerializationContext from '../L0/BlockSerialization.js'
 import IBFSError from '../errors/IBFSError.js'
 import Time from '../misc/time.js'
 import ssc from '../misc/safeShallowCopy.js'
+import FileTraceMap from './file/FileTraceMap.js'
 
 // Types ===============================================================================================================
 
@@ -20,7 +21,7 @@ export interface TFSInit extends TVolumeInit {
 
 // Exports =============================================================================================================
 
-export default class FilesystemContext {
+export default class Filesystem {
 
     public declare volume: Volume
     public declare dsc:    DirectorySerializationContext
@@ -29,7 +30,7 @@ export default class FilesystemContext {
 
     // Factory ------------------------------------------------------
 
-    public static async createFilesystemRoot(init: TFSInit): T.XEavSA<'L1_FS_CREATE'> {
+    public static async createEmptyFilesystem(init: TFSInit): T.XEavSA<'L1_FS_CREATE'> {
         
         let volume: Volume
         
@@ -48,7 +49,7 @@ export default class FilesystemContext {
             // Override root sector --------------------------------------
 
             const physicalBlockSize = BlockSerializationContext.BLOCK_SIZES[init.blockSize]
-            const metaSectors = physicalBlockSize * Math.ceil(C.KB_64 / physicalBlockSize)
+            const metaSectors = Math.ceil(C.KB_64 / physicalBlockSize)
             const rootDirectoryHeadAddress = 1 + metaSectors + 0 // root + meta
             const rootDirectoryDataAddress = 1 + metaSectors + 1 // root + meta + root directory head
 
@@ -105,22 +106,46 @@ export default class FilesystemContext {
 
     // Lifecycle -------------------------------------------------------------------------------------------------------
 
-    public static async open(image: string): T.XEavSA<'L1_FS_OPEN'> {
+    public static async open(image: string): T.XEavA<Filesystem, 'L1_FS_OPEN'> {
         try {
 
             const self = new this()
             
             const [openError, volume] = await Volume.open(image)
-            if (openError) return new IBFSError('L1_FS_OPEN', null, openError, { image })
+            if (openError) return IBFSError.eav('L1_FS_OPEN', null, openError, { image })
             self.volume = volume
 
             const [dscError, dsc] = await DirectorySerializationContext.createContext()
-            if (dscError) return new IBFSError('L1_FS_OPEN', null, dscError, { image })
+            if (dscError) return IBFSError.eav('L1_FS_OPEN', null, dscError, { image })
             self.dsc = dsc
+
+            return [null, self]
 
         } 
         catch (error) {
-            return new IBFSError('L1_FS_OPEN', null, error as Error, { image })
+            return IBFSError.eav('L1_FS_OPEN', null, error as Error, { image })
+        }
+    }
+
+    // Methods ---------------------------------------------------------------------------------------------------------
+
+    public async openFTM(address: number, aesKey: Buffer, integrity = true): T.XEavA<FileTraceMap, 'L1_FS_OPEN_FTM'> {
+        try {
+            
+            const [ftmError, ftm] = await FileTraceMap.open({
+                containingFilesystem: this,
+                headAddress: address,
+                aesKey,
+                integrity
+            })
+            
+            return ftmError 
+                ?IBFSError.eav('L1_FS_OPEN_FTM', null, ftmError, { address, integrity })
+                : [null, ftm]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FS_OPEN_FTM', null, error as Error)
         }
     }
 

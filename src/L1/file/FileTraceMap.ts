@@ -5,17 +5,17 @@ import ssc                          from '../../misc/safeShallowCopy.js'
 
 import IBFSError                    from '../../errors/IBFSError.js'
 import FilesystemContext            from '../Filesystem.js'
-import { THeadBlock, TLinkBlock }   from '../../L0/BlockSerialization.js'
+import { THeadBlockRead, TLinkBlockRead } from '../../L0/Volume.js'
 
 // Types ==============================================================================================================
 
 // Types ==============================================================================================================
 
 export interface TFTMOpenOptions {
-    /** Reference to the containing filesystem. */ fsRef:        FilesystemContext
-    /** Address of FTM's head block.            */ headAddress:  number
-    /** AES encryption key.                     */ aesKey:       Buffer
-    /** Enables/disables integrity checks.      */ integrity?:   boolean
+    /** Reference to the containing filesystem. */ containingFilesystem:    FilesystemContext
+    /** Address of FTM's head block.            */ headAddress:             number
+    /** AES encryption key.                     */ aesKey:                  Buffer
+    /** Enables/disables integrity checks.      */ integrity?:              boolean
 }
 
 // Exports ============================================================================================================
@@ -24,17 +24,17 @@ export default class FileTraceMap {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** Reference to the containing filesystem. */ private declare fsRef:           FilesystemContext
-    /** Address of FTM's head block.            */ private declare startingAddress: number
-    /** AES encryption key.                     */ private declare aesKey:          Buffer
+    /** Reference to the containing filesystem. */ private declare containingFilesystem:    FilesystemContext
+    /** Address of FTM's head block.            */ private declare startingAddress:         number
+    /** AES encryption key.                     */ private declare aesKey:                  Buffer
 
-    // Factory -----------------------------------------------------------------------------
+    // Factory ---------------------------------------------------------------------------------------------------------
 
     /** 
      * Stores the deserialized index blocks belonging to the trace map.  
      * First position always stores the head block which is followed by `N` link blocks.
      */ 
-    public declare addressBlocks: [THeadBlock, ...TLinkBlock[]]
+    public declare addressBlocks: [THeadBlockRead, ...TLinkBlockRead[]]
 
     /**
      * Opens the file trace map.
@@ -47,13 +47,13 @@ export default class FileTraceMap {
             
             const self = new this()
 
-            self.fsRef           = options.fsRef
-            self.startingAddress = options.headAddress
-            self.aesKey          = options.aesKey
+            self.containingFilesystem   = options.containingFilesystem
+            self.startingAddress        = options.headAddress
+            self.aesKey                 = options.aesKey
 
             // Load head block ----------------------------
 
-            const [headError, head] = await self.fsRef.volume.readHeadBlock(self.startingAddress, self.aesKey)
+            const [headError, head] = await self.containingFilesystem.volume.readHeadBlock(self.startingAddress, self.aesKey)
             if (headError) return IBFSError.eav('L1_FTM_OPEN', null, headError, ssc(options, ['aesKey']))
             self.addressBlocks = [head]
 
@@ -70,7 +70,7 @@ export default class FileTraceMap {
                     null, { addressesVisited: visited, circularAddress: nextAddress }
                 )
 
-                const [linkError, link] = await self.fsRef.volume.readLinkBlock(nextAddress, self.aesKey)
+                const [linkError, link] = await self.containingFilesystem.volume.readLinkBlock(nextAddress, self.aesKey)
                 if (linkError) {
                     return IBFSError.eav(
                         'L1_FTM_OPEN',
@@ -128,6 +128,18 @@ export default class FileTraceMap {
         catch (error) {
             return IBFSError.eav('L1_FTM_POP', null, error as Error)
         }
+    }
+
+    /**
+     * Resolves the physical address of the data block corresponding to the given index.  
+     * The index refers to the Nth address stored in the file trace map.  
+     * Eg. if the FTM contains two data block addresses, such as `123` and `456`,
+     * then index `0` will return `123` and index `1` will return `456` while all subsequent
+     * indexes will always return undefined to signify the end of the list.
+     * @param address 
+     */
+    public async get(index: number): number | undefined {
+
     }
 
 }

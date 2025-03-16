@@ -41,9 +41,9 @@ export interface TVolumeInit {
 
 }
 
-type THeadBlockRead = THeadBlock & TIndexBlockManage  & TCommonReadMeta
-type TLinkBlockRead = TLinkBlock & TIndexBlockManage  & TCommonReadMeta
-type TDataBlockRead = TDataBlock & TDataBlockReadMeta & TCommonReadMeta
+export type THeadBlockRead = THeadBlock & TIndexBlockManage  & TCommonReadMeta
+export type TLinkBlockRead = TLinkBlock & TIndexBlockManage  & TCommonReadMeta
+export type TDataBlockRead = TDataBlock & TDataBlockReadMeta & TCommonReadMeta
 
 
 // Exports =============================================================================================================
