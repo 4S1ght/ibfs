@@ -23,47 +23,52 @@ export interface TBlockSerializeConfig {
 // Blocks --------------------------------------------------------------------------------------------------------------
 
 export interface TRootBlock {
-    /** Specification version (major)                    */ specMajor:      number
-    /** Specification version (minor)                    */ specMinor:      number
-    /** Root block address                               */ fsRoot:         number
-    /** AES cipher used                                  */ aesCipher:      TAESCipher
-    /** AES initialization vector                        */ aesIV:          Buffer
-    /** 0-filled buffer encrypted with the original key  */ aesKeyCheck:    Buffer
-    /** Crypto tweak emulation compatibility mode        */ compatibility:  boolean
-    /** Block size (levels 1-15)                         */ blockSize:      keyof typeof BlockSerializationContext.BLOCK_SIZES
-    /** Number of blocks in the volume                   */ blockCount:     number
+    /** Specification version (major)                    */ specMajor:              number
+    /** Specification version (minor)                    */ specMinor:              number
+    /** Root block address                               */ fsRoot:                 number
+    /** AES cipher used                                  */ aesCipher:              TAESCipher
+    /** AES initialization vector                        */ aesIV:                  Buffer
+    /** 0-filled buffer encrypted with the original key  */ aesKeyCheck:            Buffer
+    /** Crypto tweak emulation compatibility mode        */ compatibility:          boolean
+    /** Block size (levels 1-15)                         */ blockSize:              keyof typeof BlockSerializationContext.BLOCK_SIZES
+    /** Number of blocks in the volume                   */ blockCount:             number
 }
 
 // Metadata blocks -----------------------------------------------------------------------------------------------------
 
 export interface TMetaCluster {
-    /** JSON-formatted volume metadata                   */ metadata:       { [scope: string]: Record<string, number|string|boolean|null> }
+    /** JSON-formatted volume metadata                   */ metadata:               { ibfs: TMetaClusterProps }
 }
 export interface TMetadataWriteMeta {
-    /** Block size (levels 1-15)                         */ blockSize:      keyof typeof BlockSerializationContext.BLOCK_SIZES
+    /** Block size (levels 1-15)                         */ blockSize:              keyof typeof BlockSerializationContext.BLOCK_SIZES
+}
+
+interface TMetaClusterProps {
+    /** Version of the driver used to crate the volume   */ originalDriverVersion:  string
+    /** Size of the address space cache                  */ adSpaceCacheSize:       number | undefined
 }
 
 // Head blocks ---------------------------------------------------------------------------------------------------------
 
 export interface THeadBlock {
-    /** Timestamp when the block was created             */ created:        number
-    /** Timestamp when the block was last modified       */ modified:       number
-    /** Resource type (used for recovery)                */ resourceType:   'FILE' | 'DIR'
-    /** Next block address (0: final block)              */ next:           number
-    /** Block body data                                  */ data:           Buffer
+    /** Timestamp when the block was created             */ created:                number
+    /** Timestamp when the block was last modified       */ modified:               number
+    /** Resource type (used for recovery)                */ resourceType:           'FILE' | 'DIR'
+    /** Next block address (0: final block)              */ next:                   number
+    /** Block body data                                  */ data:                   Buffer
 }
 
 // Link blocks ---------------------------------------------------------------------------------------------------------
 
 export interface TLinkBlock {
-    /** Next block's address (0: final block)            */ next:           number
-    /** block body data                                  */ data:           Buffer
+    /** Next block's address (0: final block)            */ next:                   number
+    /** block body data                                  */ data:                   Buffer
 }
 
 // Data blocks ---------------------------------------------------------------------------------------------------------
 
 export interface TDataBlock {
-    /** Block body data                                  */ data:           Buffer
+    /** Block body data                                  */ data:                   Buffer
 }
 export interface TDataBlockReadMeta {
     /** 
@@ -182,7 +187,7 @@ export default class BlockSerializationContext {
         12    | 1B   | Int8   | AES cipher used (0: none, 1: 128Bit, 2: 256Bit)
         13    | 16B  | Buffer | AES IV
         29    | 16B  | Buffer | AES key check
-        45    | 1B   | Int8   | Compatibility mode (0: off, 1: on)
+        45    | 1B   | Int8   | AES compatibility mode (0: off, 1: on)
         46    | 1B   | Int8   | Block size
         47    | 8B   | Int64  | Block count
      */

@@ -2,9 +2,9 @@
 
 import type * as T from '../../types.js'
 
-import fs from 'node:fs'
+import fs   from 'node:fs'
 import path from 'node:path'
-import pb from 'protobufjs'
+import pb   from 'protobufjs'
 
 import IBFSError from '../errors/IBFSError.js'
 import { dirname } from "../misc/relatives.js"

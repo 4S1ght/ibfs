@@ -1,17 +1,18 @@
 // Imports =============================================================================================================
 
-import type * as T from '../../types.js'
-import * as C from '../Constants.js'
+import type * as T                      from '../../types.js'
+import * as C                           from '../Constants.js'
 
-import Memory from '../L0/Memory.js'
-import Volume, { TVolumeInit } from '../L0/Volume.js'
-import DirectorySerializationContext from './DirectorySerializationContext.js'
-import BlockSerializationContext from '../L0/BlockSerialization.js'
+import Memory                           from '../L0/Memory.js'
+import Volume, { TVolumeInit }          from '../L0/Volume.js'
+import DirectorySerializationContext    from './DirectorySerializationContext.js'
+import BlockSerializationContext        from '../L0/BlockSerialization.js'
 
-import IBFSError from '../errors/IBFSError.js'
-import Time from '../misc/time.js'
-import ssc from '../misc/safeShallowCopy.js'
-import FileTraceMap from './file/FileTraceMap.js'
+import IBFSError                        from '../errors/IBFSError.js'
+import Time                             from '../misc/time.js'
+import ssc                              from '../misc/safeShallowCopy.js'
+import FileTraceMap                     from './file/FileTraceMap.js'
+import AddressSpace from './alloc/AddressSpace.js'
 
 // Types ===============================================================================================================
 
@@ -23,8 +24,9 @@ export interface TFSInit extends TVolumeInit {
 
 export default class Filesystem {
 
-    public declare volume: Volume
-    public declare dsc:    DirectorySerializationContext
+    public declare volume:  Volume
+    public declare dsc:     DirectorySerializationContext
+    public declare adSpace: AddressSpace
 
     private constructor() {}
 
@@ -118,6 +120,12 @@ export default class Filesystem {
             const [dscError, dsc] = await DirectorySerializationContext.createContext()
             if (dscError) return IBFSError.eav('L1_FS_OPEN', null, dscError, { image })
             self.dsc = dsc
+
+            self.adSpace = new AddressSpace({
+                size: self.volume.root.blockCount,
+                offset: Math.ceil(C.KB_64 / self.volume.bs.BLOCK_SIZE),
+                cacheSize: self.volume.meta.ibfs.adSpaceCacheSize || C.DEFAULT_ADDRESS_MAP_CACHE_SIZE
+            })
 
             return [null, self]
 

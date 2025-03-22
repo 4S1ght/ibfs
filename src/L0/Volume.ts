@@ -7,7 +7,18 @@ import path             from 'node:path'
 import crypto           from 'node:crypto'
 import { WriteStream }  from 'node:fs'
 
-import BlockSerializationContext, { TCommonReadMeta, TCommonWriteMeta, TDataBlock, TDataBlockReadMeta, THeadBlock, TIndexBlockManage, TLinkBlock, TMetaCluster, TRootBlock } from './BlockSerialization.js'
+import BlockSerializationContext, {
+    TCommonReadMeta,
+    TCommonWriteMeta,
+    TDataBlock,
+    TDataBlockReadMeta,
+    THeadBlock,
+    TIndexBlockManage,
+    TLinkBlock,
+    TMetaCluster,
+    TRootBlock,
+} from './BlockSerialization.js'
+
 import BlockAESContext from './BlockAES.js'
 import BlockIOQueue, { TTemporaryLock } from './BlockIOQueue.js'
 import IBFSError from '../errors/IBFSError.js'
@@ -54,6 +65,7 @@ export default class Volume {
     public  declare bs:     BlockSerializationContext
     private declare queue:  BlockIOQueue
     public  declare root:   TRootBlock
+    public  declare meta:   TMetaCluster['metadata']
 
     public declare isOpen:  boolean
 
@@ -161,7 +173,8 @@ export default class Volume {
                 blockSize: options.blockSize,
                 metadata: { 
                     ibfs: {
-                        driverVersion: pack.versionString
+                        originalDriverVersion: pack.versionString,
+                        adSpaceCacheSize: undefined
                     } 
                 }
             })
@@ -188,7 +201,8 @@ export default class Volume {
      * @param integrity 
      * @returns 
      */
-    public static async open(path: string, integrity = true): T.XEavA<Volume, 'L0_VO_CANT_OPEN'|'L0_VO_ROOTFAULT'|'L0_VO_MODE_INCOMPATIBLE'|'L0_VO_SIZE_MISMATCH'> {
+    public static async open(path: string, integrity = true): 
+        T.XEavA<Volume, 'L0_VO_CANT_OPEN'|'L0_VO_ROOTFAULT'|'L0_VO_MODE_INCOMPATIBLE'|'L0_VO_SIZE_MISMATCH'> {
         
         const self = new this()
 
@@ -218,6 +232,10 @@ export default class Volume {
             self.queue = new BlockIOQueue()
             self.isOpen = true
             self.root = root
+
+            const [metaError, meta] = await self.readMetaBlocks()
+            if (metaError) return IBFSError.eav('L0_VO_CANT_OPEN', null, metaError, { path })
+            self.meta = meta
 
             return [null, self]
 

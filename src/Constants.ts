@@ -18,3 +18,5 @@ export const VOLUME_EXT_NAME = '.ibfs'
 
 export const SPEC_MAJOR = 2
 export const SPEC_MINOR = 0
+
+export const DEFAULT_ADDRESS_MAP_CACHE_SIZE = 2048
