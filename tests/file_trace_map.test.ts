@@ -29,10 +29,10 @@ describe('FTM initialization and IO', () => {
         const [error, ftm] = await fs.openFTM(fs.volume.root.fsRoot, aesKey)
         
         expect(error).toBeNull()
-        expect(ftm?.addressBlocks[0].length).toBe(1)
-        expect(ftm?.addressBlocks[0].get(0)).toBe(66)
-        expect(ftm?.addressBlocks[0].get(1)).toBe(undefined)
-        expect(ftm?.addressBlocks[0].next).toBe(0)
+        expect(ftm?.indexBlocks[0].block.length).toBe(1)
+        expect(ftm?.indexBlocks[0].block.get(0)).toBe(66)
+        expect(ftm?.indexBlocks[0].block.get(1)).toBe(undefined)
+        expect(ftm?.indexBlocks[0].block.next).toBe(0)
         
     })
 

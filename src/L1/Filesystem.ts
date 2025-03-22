@@ -127,6 +127,9 @@ export default class Filesystem {
                 cacheSize: self.volume.meta.ibfs.adSpaceCacheSize || C.DEFAULT_ADDRESS_MAP_CACHE_SIZE
             })
 
+            // TODO: Scan the volume to initialize the address space
+            // or load the address space from a cached file.
+
             return [null, self]
 
         } 

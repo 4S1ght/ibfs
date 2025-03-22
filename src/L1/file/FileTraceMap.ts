@@ -13,10 +13,15 @@ import { KB_1 } from '../../Constants.js'
 // Types ==============================================================================================================
 
 export interface TFTMOpenOptions {
-    /** Reference to the containing filesystem. */ containingFilesystem:    FilesystemContext
-    /** Address of FTM's head block.            */ headAddress:             number
-    /** AES encryption key.                     */ aesKey:                  Buffer
-    /** Enables/disables integrity checks.      */ integrity?:              boolean
+    /** Reference to the containing filesystem. */ containingFilesystem:                    FilesystemContext
+    /** Address of FTM's head block.            */ headAddress:                             number
+    /** AES encryption key.                     */ aesKey:                                  Buffer
+    /** Enables/disables integrity checks.      */ integrity?:                              boolean
+}
+
+interface TIndexBlock<Block> {
+    /** Whether block's changes are uncommitted */ hasUnsavedChanges:                       boolean
+    /** Stores the block reference.             */ block:                                   Block
 }
 
 // Exports ============================================================================================================
@@ -35,7 +40,7 @@ export default class FileTraceMap {
      * Stores the deserialized index blocks belonging to the trace map.  
      * First position always stores the head block which is followed by `N` link blocks.
      */ 
-    public declare indexBlocks: [THeadBlockRead, ...TLinkBlockRead[]]
+    public declare indexBlocks: [TIndexBlock<THeadBlockRead>, ...TIndexBlock<TLinkBlockRead>[]]
 
     /**
      * Opens the file trace map.
@@ -54,14 +59,14 @@ export default class FileTraceMap {
 
             // Load head block ----------------------------
 
-            const [headError, head] = await self.containingFilesystem.volume.readHeadBlock(self.startingAddress, self.aesKey)
+            const [headError, head] = await self.containingFilesystem.volume.readHeadBlock(self.startingAddress, self.aesKey, options.integrity)
             if (headError) return IBFSError.eav('L1_FTM_OPEN', null, headError, ssc(options, ['aesKey']))
-            self.indexBlocks = [head]
+            self.indexBlocks = [{ block: head, hasUnsavedChanges: false }]
 
             // Load link blocks  -------------------------
 
             const visited = new Set<number>()
-            let nextAddress = self.indexBlocks[0].next
+            let nextAddress = self.indexBlocks[0].block.next
             
             while (nextAddress !== 0) {
 
@@ -71,7 +76,7 @@ export default class FileTraceMap {
                     null, { addressesVisited: visited, circularAddress: nextAddress }
                 )
 
-                const [linkError, link] = await self.containingFilesystem.volume.readLinkBlock(nextAddress, self.aesKey)
+                const [linkError, link] = await self.containingFilesystem.volume.readLinkBlock(nextAddress, self.aesKey, options.integrity)
                 if (linkError) {
                     return IBFSError.eav(
                         'L1_FTM_OPEN',
@@ -81,7 +86,7 @@ export default class FileTraceMap {
                     )
                 }
 
-                self.indexBlocks.push(link)
+                self.indexBlocks.push({ block: link, hasUnsavedChanges: false })
                 visited.add(nextAddress)
                 nextAddress = link.next
                 
@@ -108,7 +113,6 @@ export default class FileTraceMap {
     public async append(address: number): T.XEavSA<"L1_FTM_APPEND"> {
         try {
 
-            // First check if the current latest index block has free space.
             await this.allocateNewIndexIfNecessary()
 
         } 
@@ -142,39 +146,44 @@ export default class FileTraceMap {
      * Eg. if the FTM contains two data block addresses, such as `123` and `456`,
      * then index `0` will return `123` and index `1` will return `456` while all subsequent
      * indexes will always return undefined to signify the end of the list.
-     * @param address 
+     * @param index 
      */
-    // public async get(index: number): number | undefined {
+    public async get(index: number) {
 
-    // }
+    }
 
 
-    // TODO: Refactor this entirely.
-    private async allocateNewIndexIfNecessary() {
+    /**
+     * Allocates a new link block if it's necessary for further FTM appends.
+     * 
+     */
+    private async allocateNewIndexIfNecessary(): T.XEavSA<"L1_FTM_ALLOC"> {
+        if (this.shouldAllocateNew()) {
 
-        const latestIndex = this.indexBlocks[this.indexBlocks.length - 1]!
+            const newBlockAddress = this.containingFilesystem.adSpace.alloc()
+
+            // FIXME: Avoid unnecessary read in the future by working in memory.
+            // (Requires a new standalone serialization context method)
+            const writeError        = await this.containingFilesystem.volume.writeLinkBlock({ next: 0, data: Buffer.alloc(0), aesKey: this.aesKey, address: newBlockAddress})
+            const [readError, link] = await this.containingFilesystem.volume.readLinkBlock(newBlockAddress, this.aesKey)
+
+            if (writeError || readError) this.containingFilesystem.adSpace.free(newBlockAddress)
+            if (writeError) return new IBFSError('L1_FTM_ALLOC', null, writeError, { newBlockAddress })
+            if (readError)  return new IBFSError('L1_FTM_ALLOC', null, readError,  { newBlockAddress })
+            
+            this.indexBlocks[this.indexBlocks.length - 1]!.block.next = newBlockAddress
+            this.indexBlocks.push({ block: link, hasUnsavedChanges: false })
+
+        }
+    }
+
+    private shouldAllocateNew(): boolean {
+
         const addressSpace = this.indexBlocks.length === 1
             ? this.containingFilesystem.volume.bs.HEAD_ADDRESS_SPACE
             : this.containingFilesystem.volume.bs.LINK_ADDRESS_SPACE
-
-        if (latestIndex.length === addressSpace) {
-
-            const newBlockAddress = this.containingFilesystem.adSpace.alloc()
-            const linkWriteError = await this.containingFilesystem.volume.writeLinkBlock({
-                next: 0,
-                data: Buffer.alloc(0),
-                aesKey: this.aesKey,
-                address: newBlockAddress
-            })
-            if (linkWriteError) {
-                this.containingFilesystem.adSpace.free(newBlockAddress)
-                throw linkWriteError
-            }
-
-            this.indexBlocks[this.indexBlocks.length - 1]!.next = newBlockAddress
-            this.indexBlocks.push()
-
-        }
+    
+        return this.indexBlocks[this.indexBlocks.length - 1]!.block.length === addressSpace
 
     }
 
