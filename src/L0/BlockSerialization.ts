@@ -103,6 +103,10 @@ export interface TIndexBlockManage {
      * Number of addresses stored inside the body.
      */
     length: number
+    /**
+     * `true` if the block is full
+     */
+    isFull: boolean
 }
 
 // Common block I/O metadata -------------------------------------------------------------------------------------------
@@ -356,6 +360,7 @@ export default class BlockSerializationContext {
         T.XEav<THeadBlock & TCommonReadMeta & TIndexBlockManage, 'L0_DS_HEAD'|'L0_DS_HEAD_CORRUPT'> {
         try {
             
+            const self = this
             const src = Memory.wrap(blockBuffer)
  
             const blockType     = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
@@ -388,6 +393,9 @@ export default class BlockSerializationContext {
                 },
                 get length() { 
                     return addresses 
+                },
+                get isFull() {
+                    return addresses === self.HEAD_ADDRESS_SPACE
                 },
                 get: (index: number) => {
                     return index < addresses 
@@ -483,6 +491,7 @@ export default class BlockSerializationContext {
         T.XEav<TLinkBlock & TCommonReadMeta & TIndexBlockManage, 'L0_DS_LINK'|'L0_DS_LINK_CORRUPT'> {
         try {
 
+            const self = this
             const src = Memory.wrap(blockBuffer)
 
             const blockType     = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
@@ -509,6 +518,9 @@ export default class BlockSerializationContext {
                 },
                 get length() {
                     return addresses
+                },
+                get isFull() {
+                    return addresses === self.LINK_ADDRESS_SPACE
                 },
                 get: (index: number) => {
                     return index < addresses 
