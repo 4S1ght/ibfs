@@ -6,6 +6,7 @@ import ssc                          from '../../misc/safeShallowCopy.js'
 import IBFSError                    from '../../errors/IBFSError.js'
 import FilesystemContext            from '../Filesystem.js'
 import { THeadBlockRead, TLinkBlockRead } from '../../L0/Volume.js'
+import { write } from 'fs'
 
 // Types ==============================================================================================================
 
@@ -32,6 +33,11 @@ export default class FileTraceMap {
     /** Reference to the containing filesystem. */ private declare containingFilesystem:    FilesystemContext
     /** Address of FTM's head block.            */ private declare startingAddress:         number
     /** AES encryption key.                     */ private declare aesKey:                  Buffer
+
+    // State -----------------------------------------------------------------------------------------------------------
+
+    /** This value is true whenever an unrecoverable write error has occurred in the file trace map. */
+    public corrupted = false
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
@@ -99,64 +105,92 @@ export default class FileTraceMap {
         }
     }
 
+    // Allocation ------------------------------------------------------------------------------------------------------
+
     /**
      * Appends an address to the end of the file trace map and allocates new link blocks
-     * as needed.
-     * 
-     * Note that this should be done `AFTER` the related data blocks have been written to the disk
-     * in order to prevent null pointers. These addresses do not have to be appended after every new block 
-     * is written, but MUST saved be before the file is closed in order to retain changes.
-     *
+     * as needed. The `addresses` are processed, split across respective index blocks and
+     * immediately written to the disk after each `append` call. This is an I/O intensive
+     * operation and should be batched to limit unnecessary disk IO and slowdowns.
      * @param address 
      */
-    public async append(addresses: number[]): T.XEavSA<"L1_FTM_APPEND"> {
+    public async append(addresses: number[], iteration = 0): T.XEavSA<"L1_FTM_APPEND"> {
         try {
 
             const startingBlock = this._lastBlock()
-            let i = 0
 
             for (let i = 0; i < addresses.length; i++) {
                 const address = addresses[i]!
 
+                // Append address if there's space for it
                 if (startingBlock.isFull === false) {
                     startingBlock.append(address)
                 }
+                // Allocate a new link block and re-call append
+                // with the remaining subset of addresses
                 else {
-                    // Allocate a new link block
-                    const newLinkAddress    = this.containingFilesystem.adSpace.alloc()
-                    const writeError        = await this.containingFilesystem.volume.writeLinkBlock({ next: 0, data: Buffer.alloc(0), aesKey: this.aesKey, address: newLinkAddress})
-                    const [readError, link] = await this.containingFilesystem.volume.readLinkBlock(newLinkAddress, this.aesKey)
-
-                    if (writeError || readError) this.containingFilesystem.adSpace.free(newLinkAddress)
-                    if (writeError) return new IBFSError('L1_FTM_APPEND', null, writeError, { newLinkAddress })
-                    if (readError)  return new IBFSError('L1_FTM_APPEND', null, readError,  { newLinkAddress })
-
-                    // Update previous index block
-                    startingBlock.next = newLinkAddress
-                    const updateError = startingBlock.blockType === 'HEAD'
-                        ? await this.containingFilesystem.volume.writeHeadBlock({
-                            ...startingBlock as THeadBlockRead,
-                            aesKey: this.aesKey,
-                            address: this.startingAddress
-                        })
-                        : await this.containingFilesystem.volume.writeLinkBlock({
-                            ...startingBlock as TLinkBlockRead,
-                            aesKey: this.aesKey,
-                            address: newLinkAddress
-                        })
-
-                    if (updateError) return new IBFSError('L1_FTM_APPEND', null, updateError)
-                    
-                    
+                    const allocError = await this.allocNewLink()
+                    if (allocError) return new IBFSError('L1_FTM_APPEND', null, allocError, { iteration })
+                    await this.append(addresses.slice(i), iteration++)
                 }
-                
+
             }
 
         } 
         catch (error) {
-            return new IBFSError('L1_FTM_APPEND', null, error as Error)    
+            return new IBFSError('L1_FTM_APPEND', null, error as Error, { iteration })    
         }
     }
+
+    /**
+     * Allocates a new link block and links the previous block to it.
+     */
+    private async allocNewLink(): T.XEavSA<'L1_FTM_LINK_ALLOC'> {
+        try {
+
+            const startingBlock         = this._lastBlock()
+            const newBlockAddress       = this.containingFilesystem.adSpace.alloc()
+
+            // FIXME: Create the link block in memory to avoid unnecessary read.
+            // This requires a standalone block serialization method
+            const writeError            = await this.containingFilesystem.volume.writeLinkBlock({ next: 0, data: Buffer.alloc(0), aesKey: this.aesKey, address: newBlockAddress})
+            const [readError, newBlock] = await this.containingFilesystem.volume.readLinkBlock(newBlockAddress, this.aesKey)
+            
+            if (writeError || readError) this.containingFilesystem.adSpace.free(newBlockAddress)
+            if (writeError) return new IBFSError('L1_FTM_LINK_ALLOC', null, writeError)
+            if (readError)  return new IBFSError('L1_FTM_LINK_ALLOC', null, readError)
+
+            startingBlock.next = newBlockAddress
+
+            const updateError = startingBlock.blockType === 'HEAD'
+                ? await this.containingFilesystem.volume.writeHeadBlock({
+                    ...startingBlock as THeadBlockRead,
+                    aesKey: this.aesKey,
+                    address: this.startingAddress
+                })
+                : await this.containingFilesystem.volume.writeLinkBlock({
+                    ...startingBlock as TLinkBlockRead,
+                    aesKey: this.aesKey,
+                    address: this._secondLastBlock()!.next
+                })
+                
+            if (updateError) {
+                // If this ever happens, it means a part of an existing FTM got corrupted.
+                this.containingFilesystem.adSpace.free(newBlockAddress)
+                this.corrupted = true
+                return new IBFSError('L1_FTM_LINK_ALLOC', null, updateError)
+            }
+
+            this.indexBlocks.push(newBlock)
+
+        } 
+        catch (error) {
+            // Not reclaiming the new block address here is intentional.
+            // It's better to leak than overwrite user data - especially as 
+            // leaks can be easily mitigated with a forced volume re-scan.
+            return new IBFSError('L1_FTM_LINK_ALLOC', null, error as Error)
+        }
+    } 
 
     // private async $progressIfNeeded(): T.XEavSA<"L1_FTM_ALLOC"> {
     //     try {
@@ -213,5 +247,8 @@ export default class FileTraceMap {
 
     /** Returns the last block in the FTM */
     private _lastBlock = () => this.indexBlocks[this.indexBlocks.length - 1]!
+
+    /** Returns the second last block in the FTM (if there is any) */
+    private _secondLastBlock = () => this.indexBlocks[this.indexBlocks.length - 2]
 
 }
