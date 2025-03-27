@@ -1,4 +1,4 @@
-// Imports ============================================================================================================
+// Imports =============================================================================================================
 
 import type * as T                  from '../../../types.js'
 import ssc                          from '../../misc/safeShallowCopy.js'
@@ -6,11 +6,10 @@ import ssc                          from '../../misc/safeShallowCopy.js'
 import IBFSError                    from '../../errors/IBFSError.js'
 import FilesystemContext            from '../Filesystem.js'
 import { THeadBlockRead, TLinkBlockRead } from '../../L0/Volume.js'
-import { write } from 'fs'
 
-// Types ==============================================================================================================
+// Types ===============================================================================================================
 
-// Types ==============================================================================================================
+// Types ===============================================================================================================
 
 export interface TFTMOpenOptions {
     /** Reference to the containing filesystem. */ containingFilesystem:                    FilesystemContext
@@ -24,7 +23,7 @@ interface TIndexBlockStore<Block> {
     /** Stores the block reference.             */ block:                                   Block
 }
 
-// Exports ============================================================================================================
+// Exports =============================================================================================================
 
 export default class FileTraceMap {
 
@@ -37,13 +36,15 @@ export default class FileTraceMap {
     // State -----------------------------------------------------------------------------------------------------------
 
     /** This value is true whenever an unrecoverable write error has occurred in the file trace map. */
-    public corrupted = false
+    public error: IBFSError | undefined
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
     /** 
      * Stores the deserialized index blocks belonging to the trace map.  
-     * First position always stores the head block which is followed by `N` link blocks.
+     * First position always stores the head block which is then followed by `N` link blocks.
+     * 
+     * TODO: Refactor the list to store block addresses alongside the blocks.
      */ 
     public declare indexBlocks: [THeadBlockRead, ...TLinkBlockRead[]]
 
@@ -129,9 +130,9 @@ export default class FileTraceMap {
                 // Allocate a new link block and re-call append
                 // with the remaining subset of addresses
                 else {
-                    const allocError = await this.allocNewLink()
-                    if (allocError) return new IBFSError('L1_FTM_APPEND', null, allocError, { iteration })
-                    await this.append(addresses.slice(i), iteration++)
+                    const growError = await this.growIndex()
+                    if (growError) return new IBFSError('L1_FTM_APPEND', null, growError, { iteration })
+                    return await this.append(addresses.slice(i), iteration++)
                 }
 
             }
@@ -145,7 +146,7 @@ export default class FileTraceMap {
     /**
      * Allocates a new link block and links the previous block to it.
      */
-    private async allocNewLink(): T.XEavSA<'L1_FTM_LINK_ALLOC'> {
+    private async growIndex(): T.XEavSA<'L1_FTM_LINK_GROW'> {
         try {
 
             const startingBlock         = this._lastBlock()
@@ -157,8 +158,8 @@ export default class FileTraceMap {
             const [readError, newBlock] = await this.containingFilesystem.volume.readLinkBlock(newBlockAddress, this.aesKey)
             
             if (writeError || readError) this.containingFilesystem.adSpace.free(newBlockAddress)
-            if (writeError) return new IBFSError('L1_FTM_LINK_ALLOC', null, writeError)
-            if (readError)  return new IBFSError('L1_FTM_LINK_ALLOC', null, readError)
+            if (writeError) return new IBFSError('L1_FTM_LINK_GROW', null, writeError)
+            if (readError)  return new IBFSError('L1_FTM_LINK_GROW', null, readError)
 
             startingBlock.next = newBlockAddress
 
@@ -177,10 +178,10 @@ export default class FileTraceMap {
             if (updateError) {
                 // If this ever happens, it means a part of an existing FTM got corrupted.
                 this.containingFilesystem.adSpace.free(newBlockAddress)
-                this.corrupted = true
-                return new IBFSError('L1_FTM_LINK_ALLOC', null, updateError)
+                this.error = updateError
+                return new IBFSError('L1_FTM_LINK_GROW', null, updateError)
             }
-
+            
             this.indexBlocks.push(newBlock)
 
         } 
@@ -188,60 +189,61 @@ export default class FileTraceMap {
             // Not reclaiming the new block address here is intentional.
             // It's better to leak than overwrite user data - especially as 
             // leaks can be easily mitigated with a forced volume re-scan.
-            return new IBFSError('L1_FTM_LINK_ALLOC', null, error as Error)
+            return new IBFSError('L1_FTM_LINK_GROW', null, error as Error)
         }
     } 
 
-    // private async $progressIfNeeded(): T.XEavSA<"L1_FTM_ALLOC"> {
-    //     try {
-    //         if (true) {
+    // Deallocation ----------------------------------------------------------------------------------------------------
 
-    //             // Allocate a new index block ------------------------------------------------------------------------------
-    
-    //             const newBlockAddress = this.containingFilesystem.adSpace.alloc()
-    
-    //             // FIXME: Avoid unnecessary read in the future by working in memory.
-    //             // (Requires a new standalone serialization context method)
-    //             const writeError        = await this.containingFilesystem.volume.writeLinkBlock({ next: 0, data: Buffer.alloc(0), aesKey: this.aesKey, address: newBlockAddress})
-    //             const [readError, link] = await this.containingFilesystem.volume.readLinkBlock(newBlockAddress, this.aesKey)
-    
-    //             if (writeError || readError) this.containingFilesystem.adSpace.free(newBlockAddress)
-    //             if (writeError) return new IBFSError('L1_FTM_ALLOC', null, writeError, { newBlockAddress })
-    //             if (readError)  return new IBFSError('L1_FTM_ALLOC', null, readError,  { newBlockAddress })
-                
-    //             // Update previous index block
-    //             const previousIndex = this.indexBlocks[this.indexBlocks.length - 1]!
-    //             previousIndex.block.next = newBlockAddress
-    
-    //             // Append new one
-    //             this.indexBlocks.push({ block: link, hasUnsavedChanges: false })
-    
-    //             // Save the state of the previous block --------------------------------------------------------------------
-    
-    //             if (previousIndex && previousIndex.hasUnsavedChanges) {
+    public async pop(amount: number, iteration = 0): T.XEavA<number[], 'L1_FTM_POP'|'L1_FTM_POP_OUT_OF_RANGE'> {
+        try {
 
-    //                 const secondPreviousIndex = this.indexBlocks[this.indexBlocks.length - 2]!
-    //                 secondPreviousIndex.block.next = newBlockAddress
-    
-    //                 const writeError = await this.containingFilesystem.volume.writeLinkBlock({
-    //                     address: secondPreviousIndex ? secondPreviousIndex.block.next : this.startingAddress,
-    //                     next: newBlockAddress,
-    //                     data: previousIndex.block.data,
-    //                     aesKey: this.aesKey,
-    //                 })
-    //                 if (writeError) {
-    //                     this.containingFilesystem.adSpace.free(newBlockAddress)
-    //                     return new IBFSError('L1_FTM_ALLOC', 'Could not update prepending index block after new index allocation.', writeError, { newBlockAddress })
-    //                 }
-                    
-    //             }
-    
-    //         }
-    //     } 
-    //     catch (error) {
-    //         return new IBFSError('L1_FTM_ALLOC', null, error as Error)
-    //     }
-    // }
+            if (amount > this.length) return IBFSError.eav('L1_FTM_POP_OUT_OF_RANGE', null, null, { amount, iteration })
+
+            const lastBlock = this._lastBlock()
+            const addresses: number[] = []
+
+            for (let i = amount; i > 0; i--) {
+                if (lastBlock.length > 0) {
+                    addresses.push(lastBlock.pop()!)
+                }
+                else {
+                    const shrinkError = await this.shrinkIndex()
+                    if (shrinkError) return IBFSError.eav('L1_FTM_POP', null, shrinkError, { iteration })
+
+                    const [popError, popped] = await this.pop(i, iteration++)
+                    if (popError) return IBFSError.eav('L1_FTM_POP', null, popError, { iteration })
+                    addresses.push(...popped)
+                    break
+                }
+            }
+
+            return [null, addresses]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FTM_POP', null, error as Error, { iteration })    
+        }
+    }
+
+    // Unfinished
+    private async shrinkIndex(): T.XEavSA<'L1_FTM_LINK_SHRINK'> {
+        try {
+
+            const secondLastBlock = this._secondLastBlock()
+            const thirdLastBlock  = this._thirdLastBlock()
+
+            const secondLastBlockAddress = thirdLastBlock ? thirdLastBlock.next : this.indexBlocks[0].next
+
+            // Make sure we're not popping off a HEAD block
+            if (this._lastBlock().blockType === 'LINK') {
+            }
+
+        }
+         catch (error) {
+            return new IBFSError('L1_FTM_LINK_SHRINK', null, error as Error)
+        }
+    }
 
     // Helpers ---------------------------------------------------------------------------------------------------------
 
@@ -250,5 +252,17 @@ export default class FileTraceMap {
 
     /** Returns the second last block in the FTM (if there is any) */
     private _secondLastBlock = () => this.indexBlocks[this.indexBlocks.length - 2]
+
+    /** Returns the third last block in the FTM (if there is any) */
+    private _thirdLastBlock = () => this.indexBlocks[this.indexBlocks.length - 3]
+
+    /** The length derived from all the addresses stored inside the index blocks. */
+    public get length() {
+        const headSpace = this.containingFilesystem.volume.bs.HEAD_ADDRESS_SPACE
+        const linkSpace = this.containingFilesystem.volume.bs.LINK_ADDRESS_SPACE
+        if (this.indexBlocks.length === 1) return             this._lastBlock().length
+        if (this.indexBlocks.length === 2) return headSpace + this._lastBlock().length
+        return headSpace + linkSpace * (this.indexBlocks.length-2) + this._lastBlock().length
+    }
 
 }

@@ -146,7 +146,9 @@ const errorCodes = {
 
     L1_FTM_APPEND:                  'Unable to append a new address to the file trace map.',
     L1_FTM_POP:                     'Unable to pop addresses from the file trace map.',
-    L1_FTM_LINK_ALLOC:              'Unable to allocate a new link block to the end of the FTM.',
+    L1_FTM_POP_OUT_OF_RANGE:        'Unable to pop the requested number of addresses because the FTM is too small.',
+    L1_FTM_LINK_GROW:               'Unable to grow the FTM, possibly due to a failed link block write',
+    L1_FTM_LINK_SHRINK:             'Unable to shrink the FTM.',
 
     // Directory serialization
     L1_DIR_INIT:                    'Unable to initialize the directory serialization context.',
