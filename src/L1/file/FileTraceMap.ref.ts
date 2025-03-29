@@ -204,7 +204,7 @@ export default class FileBlockMap {
         if (this.items.length === 2) return headSpace + this.items[1]!.block.length
 
         const fullLinkBlockCount = this.items.length - 2
-        return headSpace * linkSpace*fullLinkBlockCount + this.items.at(-1)!.block.length
+        return headSpace + linkSpace*fullLinkBlockCount + this.items.at(-1)!.block.length
     
     }
 
