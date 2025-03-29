@@ -140,15 +140,15 @@ const errorCodes = {
     L1_AM_ADDRESS_OUT_OF_RANGE:     'The provided address is out of range allowed by the current address space',
     L1_AS_ADDRESS_EXHAUST:          'The address space has been exhausted and no further space allocation is possible.',
 
-    // File trace maps
-    L1_FTM_OPEN:                    'Unable to open the file trace map.',
-    L1_FTM_OPEN_CIRC:               'The file trace map contains a circular address pointer and can not be opened.',
+    // File block maps
+    L1_FBM_OPEN:                    'Unable to open the file block map.',
+    L1_FBM_OPEN_CIRC:               'The file block map contains a circular address pointer and can not be opened.',
 
-    L1_FTM_APPEND:                  'Unable to append a new address to the file trace map.',
-    L1_FTM_POP:                     'Unable to pop addresses from the file trace map.',
-    L1_FTM_POP_OUT_OF_RANGE:        'Unable to pop the requested number of addresses because the FTM is too small.',
-    L1_FTM_LINK_GROW:               'Unable to grow the FTM, possibly due to a failed link block write',
-    L1_FTM_LINK_SHRINK:             'Unable to shrink the FTM.',
+    L1_FBM_APPEND:                  'Unable to append a new address to the file block map.',
+    L1_FBM_POP:                     'Unable to pop addresses from the file block map.',
+    L1_FBM_POP_OUT_OF_RANGE:        'Unable to pop the requested number of addresses because the FBM is too small.',
+    L1_FBM_GROW:                    'Unable to grow the FBM, possibly due to a failed link block write',
+    L1_FBM_SHRINK:                  'Unable to shrink the FBM.',
 
     // Directory serialization
     L1_DIR_INIT:                    'Unable to initialize the directory serialization context.',
@@ -161,6 +161,6 @@ const errorCodes = {
     L1_FS_OPEN:                     'Unable to open the filesystem.',
 
     // Filesystem I/O
-    L1_FS_OPEN_FTM:                 'Unable to open the file trace map.',
+    L1_FS_OPEN_FBM:                 'Unable to open the file block map.',
 
 }
