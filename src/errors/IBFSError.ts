@@ -145,8 +145,9 @@ const errorCodes = {
     L1_FBM_OPEN_CIRC:               'The file block map contains a circular address pointer and can not be opened.',
 
     L1_FBM_APPEND:                  'Unable to append a new address to the file block map.',
-    L1_FBM_POP:                     'Unable to pop addresses from the file block map.',
-    L1_FBM_POP_OUT_OF_RANGE:        'Unable to pop the requested number of addresses because the FBM is too small.',
+    L1_FBM_TRUNC:                   'Unable to truncate the file block map.',
+    L1_FBM_TRUNC_OUTRANGE:          'The provided truncation count is out of range.',
+
     L1_FBM_GROW:                    'Unable to grow the FBM, possibly due to a failed link block write',
     L1_FBM_SHRINK:                  'Unable to shrink the FBM.',
 

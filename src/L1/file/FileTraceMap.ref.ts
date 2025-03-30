@@ -193,6 +193,114 @@ export default class FileBlockMap {
         }
     }
 
+    // Deallocation ----------------------------------------------------------------------------------------------------
+
+    /**
+     * Truncates `N` addresses from the end of the file and returns them to the address space.
+     */
+    public async trunc(count: number, iteration = 0): T.XEavSA<"L1_FBM_TRUNC"|"L1_FBM_TRUNC_OUTRANGE"> {
+        try {
+
+            if (count > this.length) return new IBFSError('L1_FBM_TRUNC_OUTRANGE', null, null, { count, iteration })
+
+            const lastBlock = this.items.at(-1)!
+
+            for (let i = count; i > 0; i--) {
+                if (lastBlock.block.length > 0) {
+                    this.containingFilesystem.adSpace.free(lastBlock.block.pop()!)
+                }
+                else {
+                    const shrinkError = await this.shrink()
+                    if (shrinkError) return new IBFSError('L1_FBM_TRUNC', null, shrinkError, { count, iteration })
+                    
+                    const truncError = await this.trunc(i, iteration++)
+                    if (truncError) return new IBFSError('L1_FBM_TRUNC', null, truncError, { count, iteration })
+
+                    break
+                }
+            }
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_FBM_TRUNC', null, error as Error, { count })    
+        }
+    }
+
+    /**
+     * Pops a block off the FBM linked-list and frees its address.  
+     * Returns an error if last block isn't empty or a head block.
+     */
+    private async shrink(): T.XEavSA<"L1_FBM_SHRINK"> {
+        try {
+
+            const lastBlock = this.items.at(-1)!
+
+            if (lastBlock.block.blockType === 'HEAD') return new IBFSError('L1_FBM_SHRINK', 'Can not shrink the FBM by a head block.', null, { lastBlock })
+            if (lastBlock.block.length > 0)           return new IBFSError('L1_FBM_SHRINK', 'Can not shrink the FBM by a non-empty block.', null, { lastBlock })
+
+            // Update prepending block's "next" field
+            const prependingBlock = this.items.at(-2)!
+
+            const updateError = prependingBlock.block.blockType === 'HEAD'
+                ? await this.containingFilesystem.volume.writeHeadBlock({
+                    ...prependingBlock.block as THeadBlockRead,
+                    next: 0,
+                    aesKey: this.aesKey,
+                    address: prependingBlock.address
+                })
+                : await this.containingFilesystem.volume.writeLinkBlock({
+                    ...prependingBlock.block as TLinkBlockRead,
+                    next: 0,
+                    aesKey: this.aesKey,
+                    address: prependingBlock.address
+                })
+            
+            if (updateError) {
+                this.error = updateError
+                return new IBFSError('L1_FBM_SHRINK', null, updateError, { lastBlock })
+            }
+            else {
+                this.items.pop()
+                this.containingFilesystem.adSpace.free(lastBlock.address)
+            }
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_FBM_SHRINK', null, error as Error)    
+        }
+    }
+
+    // Getters ---------------------------------------------------------------------------------------------------------
+
+    /**
+     * Treats the FBM as an array and resolves the index to a data block address.
+     * 
+     * For example: If the FBM contains 2 addresses - `123` and `345`, index `0` 
+     * resolves to `123` and index `1` resolves to `345`.
+     * 
+     * This indexing continues for the entire length of the FBM. If the address 
+     * doesn't belong to the first block, it will be resolved from the next one, 
+     * whichever it belongs to.
+     */
+    public get(index: number) {
+
+        const HEAD_SPACE = this.containingFilesystem.volume.bs.HEAD_ADDRESS_SPACE
+        const LINK_SPACE = this.containingFilesystem.volume.bs.LINK_ADDRESS_SPACE
+
+        if (index < HEAD_SPACE) return this.items[0].block.get(index)
+
+        const linkIndex   = index - HEAD_SPACE
+        const blockNumber = Math.floor(linkIndex / LINK_SPACE) + 1
+        const blockOffset = linkIndex % LINK_SPACE
+
+        // Out of bounds indices return undefined (to mimic arrays)
+        if (blockNumber >= this.items.length) return undefined
+
+        // Resolve
+        return this.items[blockNumber]!.block.get(blockOffset)
+
+    }
+
     // Helpers & Misc --------------------------------------------------------------------------------------------------
     
     public get length() {
