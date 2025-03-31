@@ -206,6 +206,9 @@ export default class FileBlockMap {
             const lastBlock = this.items.at(-1)!
 
             for (let i = count; i > 0; i--) {
+
+                if (count === 0) break
+
                 if (lastBlock.block.length > 0) {
                     this.containingFilesystem.adSpace.free(lastBlock.block.pop()!)
                 }
@@ -218,6 +221,7 @@ export default class FileBlockMap {
 
                     break
                 }
+
             }
             
         } 
@@ -301,11 +305,9 @@ export default class FileBlockMap {
 
     }
 
-
-
     /**
      * Yields all the addresses stored inside the FBM including the index blocks.  
-     * Addresses are returned in order of:
+     * Addresses are returned in order of:      
      * ```text
      * 1. FBM starting head block address
      * 2. Head block's stored addresses
@@ -313,12 +315,11 @@ export default class FileBlockMap {
      * 4. Link block's stored addresses   │
      * 5. Finished or another link block ─┘
      * ```
-     * 
      * This method is intended primarily for mapping out allocated addresses onto
      * a bitmap. Constructing a contiguous array just for this purpose would be
      * highly inefficient both computationally and memory-wise.
      */
-    public *allAddresses() {
+    public *allAddresses(): Generator<number> {
 
         yield this.startingAddress
 
@@ -330,7 +331,7 @@ export default class FileBlockMap {
 
             // Cycle addresses
             for (let j = 0; j < store.block.length; j++) {
-                yield store.block.get(j)
+                yield store.block.get(j)!
             }
         }
 
