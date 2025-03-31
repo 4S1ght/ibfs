@@ -6,6 +6,8 @@ import ssc                          from '../../misc/safeShallowCopy.js'
 import IBFSError                    from '../../errors/IBFSError.js'
 import FilesystemContext            from '../Filesystem.js'
 import { THeadBlockRead, TLinkBlockRead } from '../../L0/Volume.js'
+import { THeadBlock } from '../../L0/BlockSerialization.js'
+import { write } from 'fs'
 
 // Types ===============================================================================================================
 
@@ -25,6 +27,15 @@ type TFBMArray = [
        TIndexBlockStore<THeadBlockRead>,
     ...TIndexBlockStore<TLinkBlockRead>[]
 ]
+
+type TChangeMetadata = Partial<
+    Pick<
+        THeadBlock,
+        | 'created'
+        | 'modified'
+        | 'resourceType'
+    >
+>
 
 // Exports =============================================================================================================
 
@@ -335,6 +346,52 @@ export default class FileBlockMap {
             }
         }
 
+    }
+
+    // Setters ---------------------------------------------------------------------------------------------------------
+    /**
+     * Updates the metadata in the file's root block.
+     * @param metadata 
+     * @returns 
+     */
+    public async setMetadata(metadata: TChangeMetadata): T.XEavSA<"L1_FBM_SETMETA"> {
+
+        const root = this.items[0].block
+        let originalMeta: TChangeMetadata = {}
+
+        // @ts-ignore
+        const rollback = () => Object.entries(originalMeta).forEach(([key, value]) => root[key] = value)
+
+        try {
+            // If somebody wants to make this type-safe, please do.
+            // I'm not going to bother.
+            for (const $key in metadata) {
+                const key = $key as keyof TChangeMetadata
+                if (Object.prototype.hasOwnProperty.call(metadata, key)) {
+                    if (metadata[key] === undefined) continue
+                    // @ts-ignore
+                    originalMeta[key] = root[key]
+                    // @ts-ignore
+                    root[key] = metadata[key]
+                }
+            }
+
+            const writeError = await this.containingFilesystem.volume.writeHeadBlock({
+                ...root as THeadBlockRead,
+                aesKey: this.aesKey,
+                address: this.startingAddress
+            })
+            if (writeError) {
+                // @ts-ignore
+                rollback()
+                return new IBFSError('L1_FBM_SETMETA', null, writeError, { metadata })
+            }
+
+        } 
+        catch (error) {
+            rollback()
+            return new IBFSError('L1_FBM_SETMETA', null, error as Error)
+        }
     }
 
     // Helpers & Misc --------------------------------------------------------------------------------------------------
