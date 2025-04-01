@@ -1,13 +1,12 @@
 // Imports =============================================================================================================
 
-import type * as T                  from '../../../types.js'
-import ssc                          from '../../misc/safeShallowCopy.js'
+import type * as T                          from '../../../types.js'
+import ssc                                  from '../../misc/safeShallowCopy.js'
 
-import IBFSError                    from '../../errors/IBFSError.js'
-import FilesystemContext            from '../Filesystem.js'
-import { THeadBlockRead, TLinkBlockRead } from '../../L0/Volume.js'
-import { THeadBlock } from '../../L0/BlockSerialization.js'
-import { write } from 'fs'
+import IBFSError                            from '../../errors/IBFSError.js'
+import FilesystemContext                    from '../Filesystem.js'
+import { THeadBlockRead, TLinkBlockRead }   from '../../L0/Volume.js'
+import { THeadBlock }                       from '../../L0/BlockSerialization.js'
 
 // Types ===============================================================================================================
 
@@ -59,6 +58,8 @@ export default class FileBlockMap {
     public error: IBFSError | undefined
 
     // Factory ---------------------------------------------------------------------------------------------------------
+
+    private constructor() {}
 
     /**
      * Opens the file block map.
@@ -193,6 +194,12 @@ export default class FileBlockMap {
                 this.containingFilesystem.adSpace.free(newBlockAddress)
                 this.error = updateError
                 return new IBFSError('L1_FBM_GROW', null, updateError)
+            }
+            else {
+                this.items.push({
+                    block: newBlock,
+                    address: newBlockAddress
+                })
             }
             
         } 
@@ -362,9 +369,9 @@ export default class FileBlockMap {
         // @ts-ignore
         const rollback = () => Object.entries(originalMeta).forEach(([key, value]) => root[key] = value)
 
+        // If somebody wants to make this type-safe, please do.
+        // I'm not going to bother.
         try {
-            // If somebody wants to make this type-safe, please do.
-            // I'm not going to bother.
             for (const $key in metadata) {
                 const key = $key as keyof TChangeMetadata
                 if (Object.prototype.hasOwnProperty.call(metadata, key)) {
@@ -396,6 +403,9 @@ export default class FileBlockMap {
 
     // Helpers & Misc --------------------------------------------------------------------------------------------------
     
+    /**
+     * Returns the number of data block addresses stored in the FBM.
+     */
     public get length() {
 
         const headSpace = this.containingFilesystem.volume.bs.HEAD_ADDRESS_SPACE

@@ -11,8 +11,8 @@ import BlockSerializationContext        from '../L0/BlockSerialization.js'
 import IBFSError                        from '../errors/IBFSError.js'
 import Time                             from '../misc/time.js'
 import ssc                              from '../misc/safeShallowCopy.js'
-import FileTraceMap                     from './file/FileTraceMap.js'
-import AddressSpace from './alloc/AddressSpace.js'
+import FileBlockMap                     from './file/FileBlockMap.js'
+import AddressSpace                     from './alloc/AddressSpace.js'
 
 // Types ===============================================================================================================
 
@@ -140,10 +140,10 @@ export default class Filesystem {
 
     // Methods ---------------------------------------------------------------------------------------------------------
 
-    public async openFTM(address: number, aesKey: Buffer, integrity = true): T.XEavA<FileTraceMap, 'L1_FS_OPEN_FTM'> {
+    public async openFTM(address: number, aesKey: Buffer, integrity = true): T.XEavA<FileBlockMap, 'L1_FS_OPEN_FBM'> {
         try {
             
-            const [ftmError, ftm] = await FileTraceMap.open({
+            const [ftmError, ftm] = await FileBlockMap.open({
                 containingFilesystem: this,
                 headAddress: address,
                 aesKey,
@@ -151,12 +151,12 @@ export default class Filesystem {
             })
             
             return ftmError 
-                ?IBFSError.eav('L1_FS_OPEN_FTM', null, ftmError, { address, integrity })
+                ? IBFSError.eav('L1_FS_OPEN_FBM', null, ftmError, { address, integrity })
                 : [null, ftm]
 
         } 
         catch (error) {
-            return IBFSError.eav('L1_FS_OPEN_FTM', null, error as Error)
+            return IBFSError.eav('L1_FS_OPEN_FBM', null, error as Error)
         }
     }
 

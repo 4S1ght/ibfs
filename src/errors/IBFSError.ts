@@ -143,15 +143,15 @@ const errorCodes = {
     // File block maps
     L1_FBM_OPEN:                    'Failed to open the file block map.',
     L1_FBM_OPEN_CIRC:               'The file block map contains a circular address pointer and can not be opened.',
-
     L1_FBM_APPEND:                  'Failed to append a new address to the file block map.',
     L1_FBM_TRUNC:                   'Failed to truncate the file block map.',
     L1_FBM_TRUNC_OUTRANGE:          'The provided truncation count is out of range.',
-
     L1_FBM_GROW:                    'Failed to grow the FBM, possibly due to a failed link block write',
     L1_FBM_SHRINK:                  'Failed to shrink the FBM.',
-
     L1_FBM_SETMETA:                 'Failed to update the FBM metadata.',
+
+    // File descriptors
+    L1_FD_OPEN:                     'Failed to open a file descriptor.',
 
     // Directory serialization
     L1_DIR_INIT:                    'Failed to initialize the directory serialization context.',
