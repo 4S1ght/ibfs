@@ -30,7 +30,6 @@
   },
   "homepage": "https://github.com/4S1ght/ibfs#readme",
   "devDependencies": {
-    "@types/ini": "^4.1.1",
     "@types/node": "^22.12.0",
     "typescript": "5.7.3",
     "vitest": "^3.0.4"

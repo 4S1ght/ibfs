@@ -152,6 +152,7 @@ const errorCodes = {
 
     // File descriptors
     L1_FD_OPEN:                     'Failed to open a file descriptor.',
+    L1_FD_READ:                     'Failed to read contents of a of this descriptor',
 
     // Directory serialization
     L1_DIR_INIT:                    'Failed to initialize the directory serialization context.',
@@ -165,5 +166,6 @@ const errorCodes = {
 
     // Filesystem I/O
     L1_FS_OPEN_FBM:                 'Failed to open the file block map.',
+    L1_FS_OPEN_FILE:                'Failed to open a file.',
 
 }

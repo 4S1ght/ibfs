@@ -13,7 +13,6 @@ import { THeadBlock }                       from '../../L0/BlockSerialization.js
 export interface TFBMOpenOptions {
     /** Reference to the containing filesystem. */ containingFilesystem:                    FilesystemContext
     /** Address of FBM's head block.            */ headAddress:                             number
-    /** AES encryption key.                     */ aesKey:                                  Buffer
     /** Enables/disables integrity checks.      */ integrity?:                              boolean
 }
 
@@ -42,9 +41,8 @@ export default class FileBlockMap {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** Reference to the containing filesystem. */ private declare containingFilesystem:    FilesystemContext
-    /** Address of FBM's head block.            */ private declare startingAddress:         number
-    /** AES encryption key.                     */ private declare aesKey:                  Buffer
+    /** Reference to the containing filesystem. */ public declare containingFilesystem:    FilesystemContext
+    /** Address of FBM's head block.            */ public declare startingAddress:         number
 
     // State -----------------------------------------------------------------------------------------------------------
 
@@ -52,7 +50,7 @@ export default class FileBlockMap {
      * Stores the deserialized index blocks belonging to the trace map.  
      * First position always stores the head block which is then followed by `N` link blocks.
      */
-    private declare items: TFBMArray
+    public declare items: TFBMArray
 
     /** This value is true whenever an unrecoverable write error has occurred in the file trace map. */
     public error: IBFSError | undefined
@@ -74,12 +72,11 @@ export default class FileBlockMap {
 
             self.containingFilesystem   = options.containingFilesystem
             self.startingAddress        = options.headAddress
-            self.aesKey                 = options.aesKey
 
             // Load head block ----------------------------
 
-            const [headError, head] = await self.containingFilesystem.volume.readHeadBlock(self.startingAddress, self.aesKey, options.integrity)
-            if (headError) return IBFSError.eav('L1_FBM_OPEN', null, headError, ssc(options, ['aesKey']))
+            const [headError, head] = await self.containingFilesystem.volume.readHeadBlock(self.startingAddress, self.containingFilesystem.aesKey, options.integrity)
+            if (headError) return IBFSError.eav('L1_FBM_OPEN', null, headError, ssc(options, ['containingFilesystem']))
             
             self.items = [{ 
                 block: head, 
@@ -99,7 +96,7 @@ export default class FileBlockMap {
                     null, { addressesVisited: visited, circularAddress: currentAddress }
                 )
 
-                const [linkError, link] = await self.containingFilesystem.volume.readLinkBlock(currentAddress, self.aesKey, options.integrity)
+                const [linkError, link] = await self.containingFilesystem.volume.readLinkBlock(currentAddress, self.containingFilesystem.aesKey, options.integrity)
                 if (linkError) {
                     return IBFSError.eav(
                         'L1_FBM_OPEN',
@@ -122,7 +119,7 @@ export default class FileBlockMap {
 
         } 
         catch (error) {
-            return IBFSError.eav('L1_FBM_OPEN', null, error as Error)
+            return IBFSError.eav('L1_FBM_OPEN', null, error as Error, ssc(options, ['containingFilesystem']))
         }
     }
 
@@ -168,8 +165,16 @@ export default class FileBlockMap {
 
             // FIXME: Create the link block in memory to avoid unnecessary read.
             // This requires a standalone block serialization method
-            const writeError            = await this.containingFilesystem.volume.writeLinkBlock({ next: 0, data: Buffer.alloc(0), aesKey: this.aesKey, address: newBlockAddress})
-            const [readError, newBlock] = await this.containingFilesystem.volume.readLinkBlock(newBlockAddress, this.aesKey)
+            const writeError = await this.containingFilesystem.volume.writeLinkBlock({ 
+                next: 0, 
+                data: Buffer.alloc(0), 
+                aesKey: this.containingFilesystem.aesKey, 
+                address: newBlockAddress
+            })
+            const [readError, newBlock] = await this.containingFilesystem.volume.readLinkBlock(
+                newBlockAddress, 
+                this.containingFilesystem.aesKey
+            )
             
             if (writeError || readError) this.containingFilesystem.adSpace.free(newBlockAddress)
             if (writeError) return new IBFSError('L1_FBM_GROW', null, writeError)
@@ -180,12 +185,12 @@ export default class FileBlockMap {
             const updateError = startingBlock.block.blockType === 'HEAD'
                 ? await this.containingFilesystem.volume.writeHeadBlock({
                     ...startingBlock.block as THeadBlockRead,
-                    aesKey: this.aesKey,
+                    aesKey: this.containingFilesystem.aesKey,
                     address: startingBlock.address
                 })
                 : await this.containingFilesystem.volume.writeLinkBlock({
                     ...startingBlock.block as TLinkBlockRead,
-                    aesKey: this.aesKey,
+                    aesKey: this.containingFilesystem.aesKey,
                     address: startingBlock.address
                 })
 
@@ -267,13 +272,13 @@ export default class FileBlockMap {
                 ? await this.containingFilesystem.volume.writeHeadBlock({
                     ...prependingBlock.block as THeadBlockRead,
                     next: 0,
-                    aesKey: this.aesKey,
+                    aesKey: this.containingFilesystem.aesKey,
                     address: prependingBlock.address
                 })
                 : await this.containingFilesystem.volume.writeLinkBlock({
                     ...prependingBlock.block as TLinkBlockRead,
                     next: 0,
-                    aesKey: this.aesKey,
+                    aesKey: this.containingFilesystem.aesKey,
                     address: prependingBlock.address
                 })
             
@@ -355,6 +360,32 @@ export default class FileBlockMap {
 
     }
 
+    /**
+     * Yields all the data addresses stored inside the FBM, 
+     * The addresses returned retain the order they were stored,
+     * so this method can be used for file reads.
+     * 
+     * **NOTE:** This method tolerates some cases of FBM corruption
+     * in which index blocks in the middle of the FBM linked-list
+     * are not filled entirely.
+     */
+    public *dataAddresses(): Generator<number> {
+
+        for (let i = 0; i < this.items.length; i++) {
+
+            const block = this.items[i]!.block
+            
+            for (let j = 0; j < block.length; j++) {
+
+                const address = block.get(j)!
+                if (address) yield address
+                else continue
+
+            }
+        }
+
+    }
+
     // Setters ---------------------------------------------------------------------------------------------------------
     /**
      * Updates the metadata in the file's root block.
@@ -385,7 +416,7 @@ export default class FileBlockMap {
 
             const writeError = await this.containingFilesystem.volume.writeHeadBlock({
                 ...root as THeadBlockRead,
-                aesKey: this.aesKey,
+                aesKey: this.containingFilesystem.aesKey,
                 address: this.startingAddress
             })
             if (writeError) {
@@ -404,7 +435,7 @@ export default class FileBlockMap {
     // Helpers & Misc --------------------------------------------------------------------------------------------------
     
     /**
-     * Returns the number of data block addresses stored in the FBM.
+     * Returns number if data blocks in the file.
      */
     public get length() {
 
@@ -417,6 +448,11 @@ export default class FileBlockMap {
         const fullLinkBlockCount = this.items.length - 2
         return headSpace + linkSpace*fullLinkBlockCount + this.items.at(-1)!.block.length
     
+    }
+
+    /** File's root block */
+    public get root() {
+        return this.items[0].block
     }
 
 }

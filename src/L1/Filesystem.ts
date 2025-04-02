@@ -13,6 +13,7 @@ import Time                             from '../misc/time.js'
 import ssc                              from '../misc/safeShallowCopy.js'
 import FileBlockMap                     from './file/FileBlockMap.js'
 import AddressSpace                     from './alloc/AddressSpace.js'
+import FileDescriptor from './file/FileDescriptor.js'
 
 // Types ===============================================================================================================
 
@@ -27,6 +28,7 @@ export default class Filesystem {
     public declare volume:  Volume
     public declare dsc:     DirectorySerializationContext
     public declare adSpace: AddressSpace
+    public declare aesKey:  Buffer
 
     private constructor() {}
 
@@ -108,10 +110,11 @@ export default class Filesystem {
 
     // Lifecycle -------------------------------------------------------------------------------------------------------
 
-    public static async open(image: string): T.XEavA<Filesystem, 'L1_FS_OPEN'> {
+    public static async open(image: string, aesKey: Buffer): T.XEavA<Filesystem, 'L1_FS_OPEN'> {
         try {
 
             const self = new this()
+            self.aesKey = aesKey
             
             const [openError, volume] = await Volume.open(image)
             if (openError) return IBFSError.eav('L1_FS_OPEN', null, openError, { image })
@@ -140,23 +143,21 @@ export default class Filesystem {
 
     // Methods ---------------------------------------------------------------------------------------------------------
 
-    public async openFTM(address: number, aesKey: Buffer, integrity = true): T.XEavA<FileBlockMap, 'L1_FS_OPEN_FBM'> {
+    public async open(fileAddress: number, integrity = true): T.XEavA<FileDescriptor, 'L1_FS_OPEN_FILE'> {
         try {
             
-            const [ftmError, ftm] = await FileBlockMap.open({
+            const [openError, descriptor] = await FileDescriptor.open({
                 containingFilesystem: this,
-                headAddress: address,
-                aesKey,
-                integrity
+                headAddress: fileAddress
             })
-            
-            return ftmError 
-                ? IBFSError.eav('L1_FS_OPEN_FBM', null, ftmError, { address, integrity })
-                : [null, ftm]
+
+            return openError 
+                ? IBFSError.eav('L1_FS_OPEN_FILE', null, openError, { fileAddress, integrity })
+                : [null, descriptor]
 
         } 
         catch (error) {
-            return IBFSError.eav('L1_FS_OPEN_FBM', null, error as Error)
+            return IBFSError.eav('L1_FS_OPEN_FILE', null, error as Error)
         }
     }
 

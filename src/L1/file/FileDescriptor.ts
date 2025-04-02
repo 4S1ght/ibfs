@@ -7,6 +7,7 @@ import Filesystem from '../Filesystem.js'
 import FileBlockMap, { TFBMOpenOptions } from './FileBlockMap.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
+import Memory from '../../L0/Memory.js'
 
 // Types ===============================================================================================================
 
@@ -23,7 +24,7 @@ export default class FileDescriptor {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** File's top-level block map. */ private declare fbm: FileBlockMap
+    /** File's top-level block map. */ public readonly declare fbm: FileBlockMap
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
@@ -34,7 +35,7 @@ export default class FileDescriptor {
      * @param options 
      * @returns FileDescriptor
      */
-    public static async openFileDescriptor(options: TFDOpenOptions): T.XEavA<FileDescriptor, 'L1_FD_OPEN'> {
+    public static async open(options: TFDOpenOptions): T.XEavA<FileDescriptor, 'L1_FD_OPEN'> {
         try {
 
             const self = new this()
@@ -48,8 +49,8 @@ export default class FileDescriptor {
             // Load FBM ---------------------------
 
             const [fbmError, fbm] = await FileBlockMap.open(options)
-            if (fbmError) return IBFSError.eav('L1_FD_OPEN', null, fbmError, ssc(options, ['aesKey']))
-            self.fbm = fbm
+            if (fbmError) return IBFSError.eav('L1_FD_OPEN', null, fbmError, ssc(options, ['containingFilesystem']));
+            (self as any).fbm = fbm
 
             return [null, self]
             
@@ -59,10 +60,47 @@ export default class FileDescriptor {
         }
     }
 
-    // Methods ---------------------------------------------------------------------------------------------------------
+    // Lifecycle -------------------------------------------------------------------------------------------------------
 
-    public async close() {}
+    public async close() {
 
+        // Lift the lock ----------------------------
+        // TODO
 
+        // Remove reference from open files list ----
+    }
+
+    // I/O methods -----------------------------------------------------------------------------------------------------
+
+    public async readFull(integrity = true): T.XEavA<Buffer, 'L1_FD_READ'> {
+        try {
+
+            const bufferSize = this.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE * this.fbm.length
+            const buffer = Memory.alloc(bufferSize)
+            let length = 0
+
+            for (const address of this.fbm.dataAddresses()) {
+                const [readError, dataBlock] = await this.fbm.containingFilesystem.volume.readDataBlock(address, this.fbm.containingFilesystem.aesKey, integrity)
+                if (readError) return IBFSError.eav('L1_FD_READ', null, readError, { dataBlockAddress: address })
+
+                length = dataBlock.length
+                buffer.write(dataBlock.data)
+            }
+
+            return [null, buffer.read(length)]
+            
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FD_READ', null, error as Error)
+        }
+    }
+
+    public async writeFull() {}
+
+    public async append() {}
+
+    public async createReadStream() {}
+
+    public async createWriteStream() {}
 
 }
