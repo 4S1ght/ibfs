@@ -10,7 +10,7 @@ describe('FTM initialization and IO', () => {
 
     beforeAll(async () => {
         console.log(await useEmptyFilesystem({
-            filename: 'ftm_io',
+            filename: 'file_read',
             blockSize: 1,
             blockCount: 1000,
             aesCipher: "none",

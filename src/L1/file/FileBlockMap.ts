@@ -230,8 +230,6 @@ export default class FileBlockMap {
 
             for (let i = count; i > 0; i--) {
 
-                if (count === 0) break
-
                 if (lastBlock.block.length > 0) {
                     this.containingFilesystem.adSpace.free(lastBlock.block.pop()!)
                 }
@@ -255,7 +253,7 @@ export default class FileBlockMap {
 
     /**
      * Pops a block off the FBM linked-list and frees its address.  
-     * Returns an error if last block isn't empty or a head block.
+     * Returns an error if last block isn't empty or is a head block.
      */
     private async shrink(): T.XEavSA<"L1_FBM_SHRINK"> {
         try {
