@@ -12,13 +12,13 @@ describe('Volume initialization and IO', async () => {
     let vol: Volume
 
     beforeAll(async () => {
-        console.log(await useEmptyVolume({
+        await useEmptyVolume({
             filename: 'init_and_io',
             blockSize: 1,
             blockCount: 1000,
             aesCipher: "aes-256-xts",
             aesKey: key
-        }))
+        })
         const [volumeError, volume] = await Volume.open(getVolumePath('init_and_io'))
         if (volumeError) {
             console.log(volumeError)

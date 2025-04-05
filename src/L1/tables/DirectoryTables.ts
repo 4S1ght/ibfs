@@ -16,7 +16,7 @@ export interface TDirectoryTable {
 
 // Exports =============================================================================================================
 
-export default class DirectoryTables {
+export default class DirectoryTable {
 
     public static DIR_ITEM_COUNT    = 2
     public static DIR_NAME_LENGTH   = 2

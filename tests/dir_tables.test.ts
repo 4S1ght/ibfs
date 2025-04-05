@@ -1,6 +1,6 @@
 
 import { describe, test, expect, beforeAll } from "vitest"
-import DirectoryTables, { TDirectoryTable } from "../src/L0/DirectoryTables.js"
+import DirectoryTable, { TDirectoryTable } from "../src/L1/tables/DirectoryTables.js"
 
 describe('Directory tables', () => {
 
@@ -18,8 +18,8 @@ describe('Directory tables', () => {
             }
         }
     
-        const serialized = DirectoryTables.serializeDRTable(table)
-        const deserialized = DirectoryTables.deserializeDRTable(serialized)
+        const serialized = DirectoryTable.serializeDRTable(table)
+        const deserialized = DirectoryTable.deserializeDRTable(serialized)
     
         expect(deserialized).toStrictEqual(table)
         
