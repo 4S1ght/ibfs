@@ -16,7 +16,7 @@ describe('FTM initialization and IO', () => {
             aesCipher: "none",
             aesKey
         }))
-        const [fsError, filesystem] = await Filesystem.open(getFilesystemPath('ftm_io'), aesKey)
+        const [fsError, filesystem] = await Filesystem.open(getFilesystemPath('file_read'), aesKey)
         if (fsError) {
             console.log(fsError)
             return expect(fsError).toBeUndefined()
