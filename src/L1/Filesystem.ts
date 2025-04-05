@@ -5,15 +5,15 @@ import * as C                           from '../Constants.js'
 
 import Memory                           from '../L0/Memory.js'
 import Volume, { TVolumeInit }          from '../L0/Volume.js'
-import DirectorySerializationContext    from './DirectorySerializationContext.js'
 import BlockSerializationContext        from '../L0/BlockSerialization.js'
+import FileBlockMap                     from './file/FileBlockMap.js'
+import AddressSpace                     from './alloc/AddressSpace.js'
+import FileDescriptor                   from './file/FileDescriptor.js'
+import DirectoryTable                   from './tables/DirectoryTables.js'
 
 import IBFSError                        from '../errors/IBFSError.js'
 import Time                             from '../misc/time.js'
 import ssc                              from '../misc/safeShallowCopy.js'
-import FileBlockMap                     from './file/FileBlockMap.js'
-import AddressSpace                     from './alloc/AddressSpace.js'
-import FileDescriptor from './file/FileDescriptor.js'
 
 // Types ===============================================================================================================
 
@@ -26,7 +26,6 @@ export interface TFSInit extends TVolumeInit {
 export default class Filesystem {
 
     public declare volume:  Volume
-    public declare dsc:     DirectorySerializationContext
     public declare adSpace: AddressSpace
     public declare aesKey:  Buffer
 
@@ -62,19 +61,6 @@ export default class Filesystem {
             if (rbError) return new IBFSError('L1_FS_CREATE', null, rbError, ssc(init, ['aesKey']))
 
             // Create root directory -------------------------------------
-
-            const [dcError, dc] = await DirectorySerializationContext.createContext()
-            if (dcError) return new IBFSError('L1_FS_CREATE', null, dcError, ssc(init, ['aesKey']))
-
-            const [dirError, rootDir] = dc.serializeDirectory({
-                permissions: {
-                    user1: 3
-                },
-                children: {
-                    'hello.txt': 0
-                }
-            })
-            if (dirError) return new IBFSError('L1_FS_CREATE', null, dirError, ssc(init, ['aesKey']))
     
             const headError = await volume.writeHeadBlock({
                 created: Time.now(),
@@ -93,7 +79,9 @@ export default class Filesystem {
             const dataError = await volume.writeDataBlock({
                 address: rootDirectoryDataAddress,
                 aesKey: init.aesKey,
-                data: rootDir
+                data: DirectoryTable.serializeDRTable({
+                    ch: {}, usr: {}, md: {}
+                })
             })
 
             if (headError) return new IBFSError('L1_FS_CREATE', null, headError, ssc(init, ['aesKey']))
@@ -119,10 +107,6 @@ export default class Filesystem {
             const [openError, volume] = await Volume.open(image)
             if (openError) return IBFSError.eav('L1_FS_OPEN', null, openError, { image })
             self.volume = volume
-
-            const [dscError, dsc] = await DirectorySerializationContext.createContext()
-            if (dscError) return IBFSError.eav('L1_FS_OPEN', null, dscError, { image })
-            self.dsc = dsc
 
             self.adSpace = new AddressSpace({
                 size: self.volume.root.blockCount,

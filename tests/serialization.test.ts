@@ -55,7 +55,10 @@ describe('Block serialization & deserialization', () => {
         const data: TMetaCluster & TMetadataWriteMeta = {
             blockSize: 1,
             metadata: {
-                ibfs: { some: 'value' }
+                ibfs: {
+                    originalDriverVersion: '1.0.0',
+                    adSpaceCacheSize: 1024
+                }
             }
         }
 
