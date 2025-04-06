@@ -60,6 +60,13 @@ export default class FileDescriptor {
         }
     }
 
+    /** Returns the type of the file structure. */
+    public get type() { return this.fbm.root.resourceType }
+    /** The time the file was created. */
+    public get created() { return this.fbm.root.created }
+    /** The time the file was last modified. */
+    public get modified() { return this.fbm.root.modified }
+
     // Lifecycle -------------------------------------------------------------------------------------------------------
 
     public async close() {
