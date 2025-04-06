@@ -2,18 +2,20 @@
 // Layer on top of the underlying address bitmap that keeps track
 // of resource allocation inside the volume.
 
-// Imports ========================================================================================
+// Imports =============================================================================================================
+
+import fs from "node:fs/promises"
 
 import IBFSError from "../../errors/IBFSError.js"
 import AddressMap, { TAddressMapInit } from "./AddressMap.js"
 
-// Types ==========================================================================================
+// Types ===============================================================================================================
 
 export interface TAddressSpaceInit extends TAddressMapInit {
     /** The number of addresses cached at a time. */ cacheSize: number
 }
 
-// Exports ========================================================================================
+// Exports =============================================================================================================
 
 export default class AddressSpace extends AddressMap {
 
@@ -29,6 +31,8 @@ export default class AddressSpace extends AddressMap {
         this.replRegions = Math.ceil(init.size / init.cacheSize)
         this.replCycle = AddressSpace.createCycle(this.replRegions)
     }
+
+    // Primary API -----------------------------------------------------------------------------------------------------
 
     /**
      * Allocates an address.  
@@ -52,6 +56,8 @@ export default class AddressSpace extends AddressMap {
     public free(address: number): void {
         this.markFree(address)
     }
+
+    // Internals -------------------------------------------------------------------------------------------------------
 
     /**
      * Replenishes the cache using a quick replenish strategy.
@@ -131,5 +137,13 @@ export default class AddressSpace extends AddressMap {
             current = (current + 1) % range
         }
     }
+
+    // Caching ---------------------------------------------------------------------------------------------------------
+    // This section is used solely for loading and saving the address space bitmap to the disk
+    // To peed up subsequent startups.
+
+    public async loadBitmap(filePath: string) {}
+
+    public async saveBitmap(filePath: string) {}
 
 }
