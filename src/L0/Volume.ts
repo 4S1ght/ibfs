@@ -68,6 +68,7 @@ export default class Volume {
     public  declare meta:   TMetaCluster['metadata']
 
     public declare isOpen:  boolean
+    public declare host:    string
 
     // Lifecycle -------------------------------------------------------------------------------------------------------
 
@@ -209,6 +210,7 @@ export default class Volume {
         try {
             
             self.handle = await fs.open(path, 'r+')
+            self.host = path
 
             const rsData = Buffer.allocUnsafe(1024)
             await self.handle.read({ position: 0, length: 1024, buffer: rsData })

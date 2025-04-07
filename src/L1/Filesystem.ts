@@ -1,5 +1,6 @@
 // Imports =============================================================================================================
 
+import path                             from 'node:path'
 import type * as T                      from '../../types.js'
 import * as C                           from '../Constants.js'
 
@@ -116,6 +117,9 @@ export default class Filesystem {
 
             // TODO: Scan the volume to initialize the address space
             // or load the address space from a cached file.
+            const adSpaceError = await self.loadAddressSpace()
+            if (adSpaceError) return IBFSError.eav('L1_FS_OPEN', null, adSpaceError, { image })
+
 
             return [null, self]
 
@@ -124,6 +128,38 @@ export default class Filesystem {
             return IBFSError.eav('L1_FS_OPEN', null, error as Error, { image })
         }
     }
+
+    /**
+     * Loads the address space from disk into memory.  
+     * It is done either by scanning the volume and mapping out all allocated blocks
+     * or by by loading ab already composed bitmap residing next to the filesystem volume.
+     */
+    private async loadAddressSpace(): T.XEavSA<"L1_FS_ADSPACE_LOAD"> {
+        try {
+
+            const bmpName = this.volume.host.replace(C.VOLUME_EXT_NAME, C.ADSPACE_EXT_NAME)
+            const loadError = await this.adSpace.loadBitmap(bmpName)
+
+            // Address space loaded from cache
+            if (!loadError) return
+
+            // Cache file not found - scan the volume
+            if (loadError.code === 'L1_AS_BITMAP_LOAD_NOTFOUND') {
+
+            }
+
+            // Unknown error - Propagate
+            else {
+                return new IBFSError('L1_FS_ADSPACE_LOAD', null, loadError as Error)
+            }
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_FS_ADSPACE_LOAD', null, error as Error)
+        }
+    }
+
+    private async scanVolumeOccupancy(): T.XEavSA<"L1_FS_ADSPACE_SCAN"> {}
 
     // Methods ---------------------------------------------------------------------------------------------------------
 

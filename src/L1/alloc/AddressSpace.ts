@@ -4,6 +4,8 @@
 
 // Imports =============================================================================================================
 
+import * as T from "../../../types.js"
+
 import fs from "node:fs/promises"
 
 import IBFSError from "../../errors/IBFSError.js"
@@ -142,8 +144,22 @@ export default class AddressSpace extends AddressMap {
     // This section is used solely for loading and saving the address space bitmap to the disk
     // To peed up subsequent startups.
 
-    public async loadBitmap(filePath: string) {}
+    public async loadBitmap(filePath: string): T.XEavSA<"L1_AS_BITMAP_LOAD"|"L1_AS_BITMAP_LOAD_NOTFOUND"> {
+        try {
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_AS_BITMAP_LOAD', null, error as Error)
+        }
+    }
 
-    public async saveBitmap(filePath: string) {}
+    public async saveBitmap(filePath: string): T.XEavSA<"L1_AS_BITMAP_SAVE"> {
+        try {
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_AS_BITMAP_SAVE', null, error as Error)
+        }
+    }
 
 }

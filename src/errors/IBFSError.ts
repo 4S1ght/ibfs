@@ -139,6 +139,10 @@ const errorCodes = {
     // Address space
     L1_AM_ADDRESS_OUT_OF_RANGE:     'The provided address is out of range allowed by the current address space',
     L1_AS_ADDRESS_EXHAUST:          'The address space has been exhausted and no further space allocation is possible.',
+    L1_AS_BITMAP_LOAD:              'Failed to load the address space bitmap from the host filesystem.',
+    L1_AS_BITMAP_LOAD_NOTFOUND:     'The address space bitmap could not be found in the host filesystem.',
+    L1_AS_BITMAP_SAVE:              'Failed to save the address space bitmap to the host filesystem.',
+    L1_FS_ADSPACE_SCAN:             'Could not dynamically compose the address space map - Failed to scan the volume.',
 
     // File block maps
     L1_FBM_OPEN:                    'Failed to open the file block map.',
@@ -167,5 +171,6 @@ const errorCodes = {
     // Filesystem I/O
     L1_FS_OPEN_FBM:                 'Failed to open the file block map.',
     L1_FS_OPEN_FILE:                'Failed to open a file.',
+    L1_FS_ADSPACE_LOAD:             'Failed to load the address space.',
 
 }
