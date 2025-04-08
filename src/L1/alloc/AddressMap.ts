@@ -52,7 +52,7 @@ export default class AddressMap {
     }
 
     /** Marks an address as allocated. */
-    protected markAllocated(address: number) {
+    public markAllocated(address: number) {
         const offsetAddress = this.translateOffset(address)
         const byteIndex = Math.floor(offsetAddress / 8)
         const bitOffset = offsetAddress % 8

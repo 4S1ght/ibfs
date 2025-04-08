@@ -25,7 +25,7 @@ export interface TBlockSerializeConfig {
 export interface TRootBlock {
     /** Specification version (major)                    */ specMajor:              number
     /** Specification version (minor)                    */ specMinor:              number
-    /** Root block address                               */ fsRoot:                 number
+    /** Root directory address                           */ fsRoot:                 number
     /** AES cipher used                                  */ aesCipher:              TAESCipher
     /** AES initialization vector                        */ aesIV:                  Buffer
     /** 0-filled buffer encrypted with the original key  */ aesKeyCheck:            Buffer

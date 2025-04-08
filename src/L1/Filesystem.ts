@@ -132,7 +132,7 @@ export default class Filesystem {
     /**
      * Loads the address space from disk into memory.  
      * It is done either by scanning the volume and mapping out all allocated blocks
-     * or by by loading ab already composed bitmap residing next to the filesystem volume.
+     * or by by loading ab already composed bitmap residing next to the volume.
      */
     private async loadAddressSpace(): T.XEavSA<"L1_FS_ADSPACE_LOAD"> {
         try {
@@ -145,7 +145,8 @@ export default class Filesystem {
 
             // Cache file not found - scan the volume
             if (loadError.code === 'L1_AS_BITMAP_LOAD_NOTFOUND') {
-
+                const scanError = await this.scanForOccupancy()
+                if (scanError) return new IBFSError('L1_FS_ADSPACE_LOAD', null, scanError as Error)
             }
 
             // Unknown error - Propagate
@@ -159,7 +160,45 @@ export default class Filesystem {
         }
     }
 
-    private async scanVolumeOccupancy(): T.XEavSA<"L1_FS_ADSPACE_SCAN"> {}
+    /**
+     * Scans the filesystem's entire file tree and maps out all allocated blocks.
+     * This is a potentially heavy and long task and should only be done if the
+     * cache is missing.
+     */
+    private async scanForOccupancy(): T.XEavSA<"L1_FS_ADSPACE_SCAN"> {
+        try {
+            
+            const scan = async (address: number) => {
+
+                // Open file descriptor and scan it
+                const [openError, fd] = await this.open(address)
+                if (openError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, openError as Error)
+                for (const address of fd.fbm.allAddresses()) this.adSpace.markAllocated(address)
+
+                // Scan subdirectories & files
+                if (fd.type === 'DIR') {
+
+                    const [readError, data] = await fd.readFull()
+                    if (readError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, readError as Error)
+                    const dir = DirectoryTable.deserializeDRTable(data)
+                
+                    for (const filename in dir.ch) {
+                        if (Object.prototype.hasOwnProperty.call(dir.ch, filename)) {
+                            await scan(dir.ch[filename]!)
+                        }
+                    }
+
+                }
+
+            }
+
+            await scan(this.volume.root.fsRoot)
+
+        } 
+        catch (error) {
+            return new IBFSError('L1_FS_ADSPACE_SCAN', null, error as Error)
+        }
+    }
 
     // Methods ---------------------------------------------------------------------------------------------------------
 

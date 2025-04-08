@@ -4,12 +4,11 @@
 
 // Imports =============================================================================================================
 
-import * as T from "../../../types.js"
+import * as T                           from "../../../types.js"
+import fsExists                         from "../../misc/fsExists.js"
 
-import fs from "node:fs/promises"
-
-import IBFSError from "../../errors/IBFSError.js"
-import AddressMap, { TAddressMapInit } from "./AddressMap.js"
+import IBFSError                        from "../../errors/IBFSError.js"
+import AddressMap, { TAddressMapInit }  from "./AddressMap.js"
 
 // Types ===============================================================================================================
 
@@ -146,6 +145,12 @@ export default class AddressSpace extends AddressMap {
 
     public async loadBitmap(filePath: string): T.XEavSA<"L1_AS_BITMAP_LOAD"|"L1_AS_BITMAP_LOAD_NOTFOUND"> {
         try {
+
+            if (await fsExists(filePath) == false) {
+                return new IBFSError('L1_AS_BITMAP_LOAD_NOTFOUND', null, new Error('Cache file not found'))
+            }
+
+            
             
         } 
         catch (error) {
