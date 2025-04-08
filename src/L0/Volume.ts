@@ -19,13 +19,14 @@ import BlockSerializationContext, {
     TRootBlock,
 } from './BlockSerialization.js'
 
-import BlockAESContext from './BlockAES.js'
+import BlockAESContext                  from './BlockAES.js'
 import BlockIOQueue, { TTemporaryLock } from './BlockIOQueue.js'
-import IBFSError from '../errors/IBFSError.js'
-import ssc from '../misc/safeShallowCopy.js'
-import getPackage from '../misc/package.js'
-import * as C from '../Constants.js'
-import retry from '../misc/retry.js'
+import IBFSError                        from '../errors/IBFSError.js'
+
+import * as C                           from '../Constants.js'
+import ssc                              from '../misc/safeShallowCopy.js'
+import getPackage                       from '../misc/package.js'
+import retry                            from '../misc/retry.js'
 
 // Types ===============================================================================================================
 
@@ -163,6 +164,7 @@ export default class Volume {
                 aesCipher: options.aesCipher,
                 aesIV,
                 aesKeyCheck,
+                uuid: crypto.randomUUID()
             })
             if (rootError) throw rootError
 

@@ -27,7 +27,8 @@ describe('Block serialization & deserialization', () => {
             aesKeyCheck: crypto.randomBytes(16),
             compatibility: false,
             blockSize: 1,
-            blockCount: 0
+            blockCount: 0,
+            uuid: crypto.randomUUID()
         }
 
         const [srError, serialized] = BlockSerializationContext.serializeRootBlock(data)

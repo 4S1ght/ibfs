@@ -13,6 +13,7 @@ import * as C from "../Constants.js"
 // Serialization & memory
 import Memory from "./Memory.js"
 import BlockAESContext, { TAESCipher, TAESConfig } from "./BlockAES.js"
+import UUID from '../misc/uuid.js'
 
 // Types ===============================================================================================================
 
@@ -32,6 +33,7 @@ export interface TRootBlock {
     /** Crypto tweak emulation compatibility mode        */ compatibility:          boolean
     /** Block size (levels 1-15)                         */ blockSize:              keyof typeof BlockSerializationContext.BLOCK_SIZES
     /** Number of blocks in the volume                   */ blockCount:             number
+    /** Volume UUID                                      */ uuid:                   string
 }
 
 // Metadata blocks -----------------------------------------------------------------------------------------------------
@@ -209,6 +211,7 @@ export default class BlockSerializationContext {
             block.writeBool(blockData.compatibility)
             block.writeInt8(blockData.blockSize)
             block.writeInt64(blockData.blockCount)
+            block.write(UUID.fromString(blockData.uuid))
 
             return [null, block.buffer]
 
@@ -236,6 +239,7 @@ export default class BlockSerializationContext {
             data.compatibility  = block.readBool()
             data.blockSize      = block.readInt8() as keyof typeof BlockSerializationContext.BLOCK_SIZES
             data.blockCount     = block.readInt64()
+            data.uuid           = UUID.toString(block.read(16))
 
             return [null, data as TRootBlock]
 
