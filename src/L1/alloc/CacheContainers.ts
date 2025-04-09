@@ -10,12 +10,12 @@ import UUID         from '../../misc/uuid.js'
 
 // Types ===============================================================================================================
 
-export type TCCCipher = 'aes-128-gcm' | 'aes-256-gcm'
-export type TCCCipherOpt = TCCCipher | 'none'
+export type TGCMCipher = 'aes-128-gcm' | 'aes-256-gcm'
+export type TGCMCipherOpt = TGCMCipher | 'none'
 
 export interface TCreateCacheContainer {
     bitmap: Buffer
-    cipher: TCCCipherOpt
+    cipher: TGCMCipherOpt
     key: Buffer
     volumeUUID: string
 }
@@ -37,41 +37,28 @@ export default class CacheContainer {
         Index  | Size | Type   | Description
         -------|------|--------|-------------------------------------------------------
         0      | 16B  | UUID   | UUID of the associated volume
-        16     | 16B  | Buffer | AES IV
-        32     | 16B  | Buffer | Auth Tag
-        48     | 8B   | Number | Length of the address space bitmap (after decryption)
-        56-128 | ---- | ------ | --------------------- Reserved -----------------------
+        16     | 12B  | Buffer | AES IV
+        28     | 16B  | Buffer | Auth Tag
+        44     | 8B   | Number | Length of the address space bitmap (after decryption)
+        52-128 | ---- | ------ | --------------------- Reserved -----------------------
         129-N  | N    | Body   | Address space bitmap
     
      */
     public static serialize(options: TCreateCacheContainer) {
-        
-        const length = options.bitmap.length
-        const bodyPadding = 16 - (length % 16)
-        const bodySize = length + bodyPadding
-        const totalSize = 128 + bodySize
 
-        const mem = Memory.alloc(totalSize)
-        const iv = crypto.randomBytes(16)
+        const mem  = Memory.alloc(128 + options.bitmap.length)
+        const iv   = crypto.randomBytes(12)
         const uuid = UUID.fromString(options.volumeUUID)
-        let authTag = Buffer.alloc(16)
 
-        const encrypt = options.cipher === 'none' 
-            ? (data: Buffer) => data
-            : (data: Buffer) => {
-                const key = options.key.subarray(0, options.cipher === 'aes-128-gcm' ? 16 : 32)
-                const cipher = crypto.createCipheriv(options.cipher as TCCCipher, options.key, iv)
-                const pos = cipher.update(data).copy(data, 0)
-                            cipher.final().copy(data, pos)
-                authTag = cipher.getAuthTag()
-                return data
-            }
+        const key = options.key.subarray(0, options.cipher === 'aes-128-gcm' ? 16 : 32)
+        const { ciphertext, authTag } = this.encrypt(options.bitmap, key, iv, options.cipher)
 
         mem.write(uuid)
         mem.write(iv)
-        mem.write(authTag),
-        mem.writeInt64(length)
-        mem.write(encrypt(options.bitmap))
+        mem.write(authTag)
+        mem.writeInt64(options.bitmap.length)
+        mem.bytesWritten = 128
+        mem.write(ciphertext)
 
         return mem.buffer
 
@@ -81,30 +68,55 @@ export default class CacheContainer {
      * Decrypts and deserializes a cached address space bitmap from the disk.  
      * Reuses the the first o the AES/XTS encryption key used by the volume internally.
      */
-    public static deserialize(buf: Buffer, cipher: TCCCipherOpt, aesKey: Buffer) {
+    public static deserialize(buf: Buffer, cipher: TGCMCipherOpt, aesKey: Buffer) {
 
         const mem = Memory.wrap(buf)
 
-        const uuid       = mem.readString(16)
-        const iv         = mem.read(16)
+        const uuid       = UUID.toString(mem.read(16))
+        const iv         = mem.read(12)
         const authTag    = mem.read(16)
         const bodyLength = mem.readInt64()
+        mem.bytesRead    = 128
         const encrypted  = mem.readRemaining()
 
-        const decrypt = cipher === 'none' 
-            ? (data: Buffer) => data
-            : (data: Buffer) => {
-                const key = aesKey.subarray(0, cipher === 'aes-128-gcm' ? 16 : 32)
-                const decipher = crypto.createDecipheriv(cipher as TCCCipher, key, iv).setAuthTag(authTag)
-                const pos = decipher.update(data).copy(data, 0)
-                            decipher.final().copy(data, pos)
-                return data
-            }
+        const key = aesKey.subarray(0, cipher === 'aes-128-gcm' ? 16 : 32)
+        const decrypted = this.decrypt(encrypted, key, iv, authTag, cipher)
         
         return {
-            bitmap: decrypt(encrypted.subarray(0, bodyLength)),
+            bitmap: decrypted.subarray(bodyLength),
             volumeUUID: uuid
         }
+
+    }
+
+    private static encrypt(payload: Buffer, aesKey: Buffer, iv: Buffer, aesCipher: TGCMCipherOpt) {
+
+        if (aesCipher === 'none') return { ciphertext: payload, authTag: Buffer.alloc(16) }
+
+        const key = aesKey.subarray(0, aesCipher === 'aes-128-gcm' ? 16 : 32)
+        const cipher = crypto.createCipheriv(aesCipher as TGCMCipher, key, iv)
+        const ciphertext = Buffer.concat([
+            cipher.update(payload),
+            cipher.final()
+        ])
+        const authTag = cipher.getAuthTag()
+
+        return { ciphertext, authTag }
+
+    }
+
+    private static decrypt(ciphertext: Buffer, aesKey: Buffer, iv: Buffer, authTag: Buffer, aesCipher: TGCMCipherOpt) {
+
+        if (aesCipher === 'none') return ciphertext
+
+        const key = aesKey.subarray(0, aesCipher === 'aes-128-gcm' ? 16 : 32)
+        const decipher = crypto.createDecipheriv(aesCipher as TGCMCipher, key, iv)
+        decipher.setAuthTag(authTag)
+
+        return Buffer.concat([
+            decipher.update(ciphertext),
+            decipher.final()
+        ])
 
     }
 
