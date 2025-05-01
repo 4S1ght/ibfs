@@ -14,13 +14,13 @@ import { Readable } from 'node:stream'
 /** 
  * File descriptor open options.
 */
-export interface TFDOpenOptions extends TFBMOpenOptions {
+export interface TFHOpenOptions extends TFBMOpenOptions {
 
 }
 
 // Exports =============================================================================================================
 
-export default class FileDescriptor {
+export default class FileHandle {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
@@ -33,9 +33,9 @@ export default class FileDescriptor {
     /**
      * Opens an IBFS file descriptor.
      * @param options 
-     * @returns FileDescriptor
+     * @returns FileHandle
      */
-    public static async open(options: TFDOpenOptions): T.XEavA<FileDescriptor, 'L1_FD_OPEN'> {
+    public static async open(options: TFHOpenOptions): T.XEavA<FileHandle, 'L1_FD_OPEN'> {
         try {
 
             const self = new this()
@@ -133,24 +133,15 @@ export default class FileDescriptor {
 
                         // Skip prepending blocks
                         if (i < startBlock) { continue }
+                        let shouldDrain = false
 
                         const [readError, dataBlock] = await this.fbm.containingFilesystem.volume.readDataBlock(address, this.fbm.containingFilesystem.aesKey, integrity)
                         if (readError) return IBFSError.eav('L1_FG_READ_STREAM_BUFFER', null, readError, { dataBlockAddress: address })
 
-                        let shouldDrain = false
-
-                        // Push subset on first read
-                        if (firstRead) {
-                            const data = dataBlock.data.subarray(startOffset, bytesToRead)
-                            bytesToRead -= data.length
-                            firstRead = false
-                            shouldDrain = stream.push(data)
-                        }
-                        else {
-                            const data = dataBlock.data.subarray(0, bytesToRead)
-                            bytesToRead -= data.length
-                            shouldDrain = stream.push(data)
-                        }
+                        const data = dataBlock.data.subarray(firstRead ? startOffset : 0, bytesToRead)
+                        firstRead = false
+                        bytesToRead -= data.length
+                        shouldDrain = stream.push(data)
 
                         if (shouldDrain) await new Promise<void>(resolve => stream.once('drain', resolve))
                         if (bytesToRead <= 0 ) break

@@ -9,7 +9,7 @@ import Volume, { TVolumeInit }          from '../L0/Volume.js'
 import BlockSerializationContext        from '../L0/BlockSerialization.js'
 import FileBlockMap                     from './file/FileBlockMap.js'
 import AddressSpace                     from './alloc/AddressSpace.js'
-import FileDescriptor                   from './file/FileDescriptor.js'
+import FileHandle                       from './file/FileHandle.js'
 import DirectoryTable                   from './tables/DirectoryTables.js'
 
 import IBFSError                        from '../errors/IBFSError.js'
@@ -202,17 +202,17 @@ export default class Filesystem {
 
     // Methods ---------------------------------------------------------------------------------------------------------
 
-    public async open(fileAddress: number, integrity = true): T.XEavA<FileDescriptor, 'L1_FS_OPEN_FILE'> {
+    public async open(fileAddress: number, integrity = true): T.XEavA<FileHandle, 'L1_FS_OPEN_FILE'> {
         try {
             
-            const [openError, descriptor] = await FileDescriptor.open({
+            const [openError, handle] = await FileHandle.open({
                 containingFilesystem: this,
                 headAddress: fileAddress
             })
 
             return openError 
                 ? IBFSError.eav('L1_FS_OPEN_FILE', null, openError, { fileAddress, integrity })
-                : [null, descriptor]
+                : [null, handle]
 
         } 
         catch (error) {
