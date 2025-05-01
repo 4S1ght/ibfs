@@ -157,6 +157,9 @@ const errorCodes = {
     // File descriptors
     L1_FD_OPEN:                     'Failed to open a file descriptor.',
     L1_FD_READ:                     'Failed to read contents of a of this descriptor',
+    L1_FG_READ_STREAM:              'Failed to create a read stream for a file descriptor.',
+    L1_FG_READ_STREAM_BUFFER:       'An error occurred while buffering the read stream.',
+    L1_FG_READ_STREAM_OUTRANGE:     'The read stream is out of range or the range specified is invalid.',
 
     // Directory serialization
     L1_DIR_INIT:                    'Failed to initialize the directory serialization context.',

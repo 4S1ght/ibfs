@@ -366,29 +366,29 @@ export default class FileBlockMap {
      * **NOTE:** This method tolerates some cases of FBM corruption
      * in which index blocks in the middle of the FBM linked-list
      * are not filled entirely.
+     * 
+     * @yields [Block Index, Block Address]
      */
-    public *dataAddresses(): Generator<number> {
+    public *dataAddresses(): Generator<[number, number]> {
+
+        let index = 0
 
         for (let i = 0; i < this.items.length; i++) {
-
             const block = this.items[i]!.block
             
             for (let j = 0; j < block.length; j++) {
-
                 const address = block.get(j)!
-                if (address) yield address
+                if (address) yield [index++, address]
                 else continue
-
             }
         }
 
     }
 
     // Setters ---------------------------------------------------------------------------------------------------------
+
     /**
      * Updates the metadata in the file's root block.
-     * @param metadata 
-     * @returns 
      */
     public async setMetadata(metadata: TChangeMetadata): T.XEavSA<"L1_FBM_SETMETA"> {
 
@@ -418,7 +418,6 @@ export default class FileBlockMap {
                 address: this.startingAddress
             })
             if (writeError) {
-                // @ts-ignore
                 rollback()
                 return new IBFSError('L1_FBM_SETMETA', null, writeError, { metadata })
             }
@@ -433,7 +432,7 @@ export default class FileBlockMap {
     // Helpers & Misc --------------------------------------------------------------------------------------------------
     
     /**
-     * Returns number if data blocks in the file.
+     * Returns number of data blocks in the file.
      */
     public get length() {
 

@@ -2,12 +2,12 @@
 
 import type * as T from '../../../types.js'
 
+import Memory from '../../L0/Memory.js'
 import IBFSError from '../../errors/IBFSError.js'
-import Filesystem from '../Filesystem.js'
 import FileBlockMap, { TFBMOpenOptions } from './FileBlockMap.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
-import Memory from '../../L0/Memory.js'
+import { Readable } from 'node:stream'
 
 // Types ===============================================================================================================
 
@@ -86,11 +86,11 @@ export default class FileDescriptor {
             const buffer = Memory.alloc(bufferSize)
             let length = 0
 
-            for (const address of this.fbm.dataAddresses()) {
+            for (const [, address] of this.fbm.dataAddresses()) {
                 const [readError, dataBlock] = await this.fbm.containingFilesystem.volume.readDataBlock(address, this.fbm.containingFilesystem.aesKey, integrity)
                 if (readError) return IBFSError.eav('L1_FD_READ', null, readError, { dataBlockAddress: address })
 
-                length = dataBlock.length
+                length += dataBlock.length
                 buffer.write(dataBlock.data)
             }
 
@@ -106,8 +106,76 @@ export default class FileDescriptor {
 
     public async append() {}
 
-    public async createReadStream() {}
+    public async truncate() {}
+
+    /**
+     * Creates a readable stream of the file's contents.
+     * @param start Starting byte (inclusive)
+     * @param end Ending byte (exclusive)
+     * @param integrity Whether to perform integrity checks
+     * @returns [Error?, Readable?]
+     */
+    public async createReadStream(start: number = 0, end: number = Infinity, integrity = true): 
+        T.XEavA<Readable, 'L1_FG_READ_STREAM'|"L1_FG_READ_STREAM_BUFFER"|"L1_FG_READ_STREAM_OUTRANGE"> {
+        try {
+
+            if (start <= end) return IBFSError.eav('L1_FG_READ_STREAM_OUTRANGE', null, null, { start, end })
+
+            const stream = new Readable({})
+            const startBlock = Math.floor(start / this.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE)
+            const startOffset = start % this.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE
+            let bytesToRead = end - start
+            let firstRead = true
+
+            process.nextTick(async () => {
+                try {
+                    for (const [i, address] of this.fbm.dataAddresses()) {
+
+                        // Skip prepending blocks
+                        if (i < startBlock) { continue }
+
+                        const [readError, dataBlock] = await this.fbm.containingFilesystem.volume.readDataBlock(address, this.fbm.containingFilesystem.aesKey, integrity)
+                        if (readError) return IBFSError.eav('L1_FG_READ_STREAM_BUFFER', null, readError, { dataBlockAddress: address })
+
+                        let shouldDrain = false
+
+                        // Push subset on first read
+                        if (firstRead) {
+                            const data = dataBlock.data.subarray(startOffset, bytesToRead)
+                            bytesToRead -= data.length
+                            firstRead = false
+                            shouldDrain = stream.push(data)
+                        }
+                        else {
+                            const data = dataBlock.data.subarray(0, bytesToRead)
+                            bytesToRead -= data.length
+                            shouldDrain = stream.push(data)
+                        }
+
+                        if (shouldDrain) await new Promise<void>(resolve => stream.once('drain', resolve))
+                        if (bytesToRead <= 0 ) break
+
+                    }
+
+                    // End stream
+                    stream.push(null)
+
+                } 
+                catch (error) {
+                    stream.emit('error', error)
+                }
+            })
+
+            return [null, stream]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FG_READ_STREAM', null, error as Error)
+        }
+    }
 
     public async createWriteStream() {}
+
+    // Helpers ---------------------------------------------------------------------------------------------------------
 
 }
