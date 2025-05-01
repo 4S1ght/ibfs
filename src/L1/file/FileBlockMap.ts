@@ -146,6 +146,11 @@ export default class FileBlockMap {
                 }
             }
             
+            // FIXME: The current implementation does not save the state of the last
+            // FBM block to the disk. 
+            // Eg. If the block has space for 10 addresses and 5 get appended, it won't
+            // reach top capacity and won't be updated on the disk.
+            
         } 
         catch (error) {
             return new IBFSError('L1_FBM_APPEND', null, error as Error, { iteration })    
