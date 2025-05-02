@@ -49,4 +49,24 @@ describe('FTM initialization and IO', () => {
 
     })
 
+    test('Open file and stream its data (root directory)', async () => {
+
+        const [error, file] = await fs.open(fs.volume.root.fsRoot)
+        if (error) return expect(error).toBeNull()
+
+        const [streamError, stream] = file.createReadStream()
+        if (streamError) return expect(streamError).toBeNull()
+
+        let data = Buffer.alloc(0)
+
+        stream.on('data', (chunk) => { 
+            data = Buffer.concat([data, chunk])
+        })
+
+        stream.on('end', () => {
+            expect(data).toStrictEqual(Buffer.from([0x0, 0x0, 0x0, 0x0, 0x0]))
+        })
+
+    })
+
 })

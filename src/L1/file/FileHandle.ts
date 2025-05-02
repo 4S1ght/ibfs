@@ -7,7 +7,7 @@ import IBFSError from '../../errors/IBFSError.js'
 import FileBlockMap, { TFBMOpenOptions } from './FileBlockMap.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
-import { Readable } from 'node:stream'
+import FileReadStream from './FileReadStream.js'
 
 // Types ===============================================================================================================
 
@@ -35,7 +35,7 @@ export default class FileHandle {
      * @param options 
      * @returns FileHandle
      */
-    public static async open(options: TFHOpenOptions): T.XEavA<FileHandle, 'L1_FD_OPEN'> {
+    public static async open(options: TFHOpenOptions): T.XEavA<FileHandle, 'L1_FH_OPEN'> {
         try {
 
             const self = new this()
@@ -49,14 +49,14 @@ export default class FileHandle {
             // Load FBM ---------------------------
 
             const [fbmError, fbm] = await FileBlockMap.open(options)
-            if (fbmError) return IBFSError.eav('L1_FD_OPEN', null, fbmError, ssc(options, ['containingFilesystem']));
+            if (fbmError) return IBFSError.eav('L1_FH_OPEN', null, fbmError, ssc(options, ['containingFilesystem']));
             (self as any).fbm = fbm
 
             return [null, self]
             
         } 
         catch (error) {
-            return IBFSError.eav('L1_FD_OPEN', null, error as Error)
+            return IBFSError.eav('L1_FH_OPEN', null, error as Error)
         }
     }
 
@@ -79,7 +79,14 @@ export default class FileHandle {
 
     // I/O methods -----------------------------------------------------------------------------------------------------
 
-    public async readFull(integrity = true): T.XEavA<Buffer, 'L1_FD_READ'> {
+    /**
+     * Reads the full contents of the file and returns the resulting buffer. 
+     * This is potentially really memory intensive and should be avoided whenever 
+     * dealing with large files.
+     * @param integrity Whether to perform data integrity checks.
+     * @returns [Error?, Buffer?]
+     */
+    public async readFull(integrity = true): T.XEavA<Buffer, 'L1_FH_READ'> {
         try {
 
             const bufferSize = this.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE * this.fbm.length
@@ -88,7 +95,7 @@ export default class FileHandle {
 
             for (const [, address] of this.fbm.dataAddresses()) {
                 const [readError, dataBlock] = await this.fbm.containingFilesystem.volume.readDataBlock(address, this.fbm.containingFilesystem.aesKey, integrity)
-                if (readError) return IBFSError.eav('L1_FD_READ', null, readError, { dataBlockAddress: address })
+                if (readError) return IBFSError.eav('L1_FH_READ', null, readError, { dataBlockAddress: address })
 
                 length += dataBlock.length
                 buffer.write(dataBlock.data)
@@ -98,7 +105,7 @@ export default class FileHandle {
             
         } 
         catch (error) {
-            return IBFSError.eav('L1_FD_READ', null, error as Error)
+            return IBFSError.eav('L1_FH_READ', null, error as Error)
         }
     }
 
@@ -109,59 +116,30 @@ export default class FileHandle {
     public async truncate() {}
 
     /**
-     * Creates a readable stream of the file's contents.
+     * Creates a readable stream of the file's contents.  
+     * **NOTE:** The returned stream is not inherently error-safe. It **CAN** throw errors
+     * when reading from the file and should always be handled from within a try/catch block.
      * @param start Starting byte (inclusive)
      * @param end Ending byte (exclusive)
      * @param integrity Whether to perform integrity checks
      * @returns [Error?, Readable?]
      */
-    public async createReadStream(start: number = 0, end: number = Infinity, integrity = true): 
-        T.XEavA<Readable, 'L1_FG_READ_STREAM'|"L1_FG_READ_STREAM_BUFFER"|"L1_FG_READ_STREAM_OUTRANGE"> {
+    public createReadStream(start: number = 0, end: number = Infinity, integrity = true): 
+        T.XEav<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"|"L1_FH_READ_STREAM_OUTRANGE"> {
         try {
 
-            if (start <= end) return IBFSError.eav('L1_FG_READ_STREAM_OUTRANGE', null, null, { start, end })
+            if (start >= end) return IBFSError.eav('L1_FH_READ_STREAM_OUTRANGE', null, null, { start, end })
 
-            const stream = new Readable({})
-            const startBlock = Math.floor(start / this.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE)
-            const startOffset = start % this.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE
-            let bytesToRead = end - start
-            let firstRead = true
-
-            process.nextTick(async () => {
-                try {
-                    for (const [i, address] of this.fbm.dataAddresses()) {
-
-                        // Skip prepending blocks
-                        if (i < startBlock) { continue }
-                        let shouldDrain = false
-
-                        const [readError, dataBlock] = await this.fbm.containingFilesystem.volume.readDataBlock(address, this.fbm.containingFilesystem.aesKey, integrity)
-                        if (readError) return IBFSError.eav('L1_FG_READ_STREAM_BUFFER', null, readError, { dataBlockAddress: address })
-
-                        const data = dataBlock.data.subarray(firstRead ? startOffset : 0, bytesToRead)
-                        firstRead = false
-                        bytesToRead -= data.length
-                        shouldDrain = stream.push(data)
-
-                        if (shouldDrain) await new Promise<void>(resolve => stream.once('drain', resolve))
-                        if (bytesToRead <= 0 ) break
-
-                    }
-
-                    // End stream
-                    stream.push(null)
-
-                } 
-                catch (error) {
-                    stream.emit('error', error)
-                }
+            const stream = new FileReadStream(this, {
+                start, end, integrity,
+                maxChunkSize: this.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE
             })
 
             return [null, stream]
 
         } 
         catch (error) {
-            return IBFSError.eav('L1_FG_READ_STREAM', null, error as Error)
+            return IBFSError.eav('L1_FH_READ_STREAM', null, error as Error)
         }
     }
 
