@@ -145,11 +145,27 @@ export default class FileBlockMap {
                     return await this.append(addresses.slice(i), iteration++)
                 }
             }
-            
-            // FIXME: The current implementation does not save the state of the last
-            // FBM block to the disk. 
-            // Eg. If the block has space for 10 addresses and 5 get appended, it won't
-            // reach top capacity and won't be updated on the disk.
+
+            // Save the last block into memory if it hasn't been saved yet.
+            if (iteration === 0 && this.items.at(-1)!.block.length !== 0) {
+                const lastBlock = this.items.at(-1)!
+                const updateError = lastBlock.block.blockType === 'HEAD'
+                    ? await this.containingFilesystem.volume.writeHeadBlock({
+                        ...lastBlock.block as THeadBlockRead,
+                        aesKey: this.containingFilesystem.aesKey,
+                        address: lastBlock.address
+                    })
+                    : await this.containingFilesystem.volume.writeLinkBlock({
+                        ...lastBlock.block as TLinkBlockRead,
+                        aesKey: this.containingFilesystem.aesKey,
+                        address: lastBlock.address
+                    })
+                if (updateError) {
+                    this.containingFilesystem.adSpace.free(lastBlock.address)
+                    this.error = updateError
+                    return new IBFSError('L1_FBM_APPEND', null, updateError)
+                }
+            }
             
         } 
         catch (error) {
