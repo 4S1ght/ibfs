@@ -112,7 +112,7 @@ export default class FileReadStream extends Readable {
     }
 
     private _isReading = false
-    async _read(size: number) {
+    override async _read(size: number) {
 
         if (this._isReading) return
         this._isReading = true

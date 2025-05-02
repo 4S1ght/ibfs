@@ -7,7 +7,7 @@ import IBFSError from '../../errors/IBFSError.js'
 import FileBlockMap, { TFBMOpenOptions } from './FileBlockMap.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
-import FileReadStream from './FileReadStream.js'
+import FileReadStream, { TFRSOptions } from './FileReadStream.js'
 
 // Types ===============================================================================================================
 
@@ -89,12 +89,13 @@ export default class FileHandle {
     public async readFull(integrity = true): T.XEavA<Buffer, 'L1_FH_READ'> {
         try {
 
-            const bufferSize = this.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE * this.fbm.length
+            const fs = this.fbm.containingFilesystem
+            const bufferSize = fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length
             const buffer = Memory.alloc(bufferSize)
             let length = 0
 
             for (const [, address] of this.fbm.dataAddresses()) {
-                const [readError, dataBlock] = await this.fbm.containingFilesystem.volume.readDataBlock(address, this.fbm.containingFilesystem.aesKey, integrity)
+                const [readError, dataBlock] = await fs.volume.readDataBlock(address, fs.aesKey, integrity)
                 if (readError) return IBFSError.eav('L1_FH_READ', null, readError, { dataBlockAddress: address })
 
                 length += dataBlock.length
@@ -118,25 +119,16 @@ export default class FileHandle {
     /**
      * Creates a readable stream of the file's contents.  
      * **NOTE:** The returned stream is not inherently error-safe. It **CAN** throw errors
-     * when reading from the file and should always be handled from within a try/catch block.
-     * @param start Starting byte (inclusive)
-     * @param end Ending byte (exclusive)
-     * @param integrity Whether to perform integrity checks
+     * when reading from the file and should always be handled from within a try/catch block
      * @returns [Error?, Readable?]
      */
-    public createReadStream(start: number = 0, end: number = Infinity, integrity = true): 
+    public createReadStream(options: TFRSOptions = {}): 
         T.XEav<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"|"L1_FH_READ_STREAM_OUTRANGE"> {
         try {
-
-            if (start >= end) return IBFSError.eav('L1_FH_READ_STREAM_OUTRANGE', null, null, { start, end })
-
-            const stream = new FileReadStream(this, {
-                start, end, integrity,
-                maxChunkSize: this.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE
-            })
-
+            if (options.start !== undefined && options.end)
+            if (options.start >= options.end) return IBFSError.eav('L1_FH_READ_STREAM_OUTRANGE', null, null, options)
+            const stream = new FileReadStream(this, options)
             return [null, stream]
-
         } 
         catch (error) {
             return IBFSError.eav('L1_FH_READ_STREAM', null, error as Error)
