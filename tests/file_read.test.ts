@@ -1,4 +1,3 @@
-import * as C from '../src/Constants.js'
 import { describe, test, expect, beforeAll } from "vitest"
 import { getFilesystemPath, useEmptyFilesystem } from './defaults/filesystem.js'
 import Filesystem from '../src/L1/Filesystem.js'
@@ -54,18 +53,18 @@ describe('FTM initialization and IO', () => {
         const [error, file] = await fs.open(fs.volume.root.fsRoot)
         if (error) return expect(error).toBeNull()
 
-        const [streamError, stream] = file.createReadStream()
+        const [streamError, stream] = file.createReadStream({ maxChunkSize: 2 })
         if (streamError) return expect(streamError).toBeNull()
 
         let data = Buffer.alloc(0)
+        let chunks = 0
 
-        stream.on('data', (chunk) => { 
+        for await (const chunk of stream) {
+            chunks++
             data = Buffer.concat([data, chunk])
-        })
+        }
 
-        stream.on('end', () => {
-            expect(data).toStrictEqual(Buffer.from([0x0, 0x0, 0x0, 0x0, 0x0]))
-        })
+        expect(data).toStrictEqual(Buffer.from([0x0, 0x0, 0x0, 0x0, 0x0]))
 
     })
 

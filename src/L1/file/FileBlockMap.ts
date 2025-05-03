@@ -386,20 +386,20 @@ export default class FileBlockMap {
      * 
      * **NOTE:** This method tolerates some cases of FBM corruption
      * in which index blocks in the middle of the FBM linked-list
-     * are not filled entirely.
+     * are not filled entirely, this can potentially lead to errors.
      * 
      * @yields [Block Index, Block Address]
      */
-    public *dataAddresses(): Generator<[number, number]> {
+    public *dataAddresses(offset: number = 0): Generator<number> {
 
-        let index = 0
+        const { startingIndexBlock, startingAddress } = this._translateOffset(offset)
 
-        for (let i = 0; i < this.items.length; i++) {
+        for (let i = startingIndexBlock; i < this.items.length; i++) {
             const block = this.items[i]!.block
             
-            for (let j = 0; j < block.length; j++) {
+            for (let j = startingAddress; j < block.length; j++) {
                 const address = block.get(j)!
-                if (address) yield [index++, address]
+                if (address) yield address
                 else continue
             }
         }
@@ -471,6 +471,24 @@ export default class FileBlockMap {
     /** File's root block */
     public get root() {
         return this.items[0].block
+    }
+
+    /** 
+     * Translates the `startingAddress` to a block index and address offset inside that block
+     * for use in range-based file reads.
+     */
+    private _translateOffset(startingAddress: number): { startingIndexBlock: number, startingAddress: number } {
+
+        const headSpace = this.containingFilesystem.volume.bs.HEAD_ADDRESS_SPACE
+        const linkSpace = this.containingFilesystem.volume.bs.LINK_ADDRESS_SPACE
+
+        if (startingAddress < headSpace) return { startingIndexBlock: 0, startingAddress }
+
+        startingAddress -= headSpace
+
+        const startingIndexBlock = Math.floor(startingAddress / linkSpace) + 1
+        return { startingIndexBlock, startingAddress: startingAddress % linkSpace }
+
     }
 
 }

@@ -13,12 +13,12 @@ export interface TFRSOptions {
      * Offset at which to start reading the file.
      * @default 0
      */
-    start?: number
+    offset?: number
     /** 
      * End at which to stop reading the file. 
      * @default Infinity // (Full file read)
      */                   
-    end?: number
+    length?: number
     /** 
      * Whether to perform data integrity checks. 
      * If set to false, data integrity checks will be skipped.
@@ -31,6 +31,11 @@ export interface TFRSOptions {
      * @default 65536 // 64 kB
      */ 
     maxChunkSize?: number
+    /** 
+     * The watermark below which the stream will request more data.
+     * @default 65536 // 64 kB
+     */ 
+    highWaterMark?: number
 }
 
 // Exports =============================================================================================================
@@ -40,18 +45,20 @@ export default class FileReadStream extends Readable {
     private readonly handle:        FileHandle
     private readonly reader:        AsyncGenerator<Buffer>
 
-    public  readonly start:         number
-    public  readonly end:           number
+    public  readonly readOffset:    number
+    public  readonly readLength:    number
     public  readonly integrity:     boolean
     public  readonly maxChunkSize:  number
 
     constructor(handle: FileHandle, options: TFRSOptions) {
 
-        super()
+        super({
+            highWaterMark: options.maxChunkSize || KB_64,
+        })
 
         this.handle       = handle
-        this.start        = options.start        || 0
-        this.end          = options.end          || Infinity
+        this.readOffset   = options.offset       || 0
+        this.readLength   = options.length       || Infinity
         this.integrity    = options.integrity    || true
         this.maxChunkSize = options.maxChunkSize || KB_64
 
@@ -66,19 +73,14 @@ export default class FileReadStream extends Readable {
      */
     private async *createBlockReader(): AsyncGenerator<Buffer> {
 
-        const fs    = this.handle.fbm.containingFilesystem
-        const start = this.start
-        const end   = this.end
+        const fs          = this.handle.fbm.containingFilesystem
 
-        const startBlock  = Math.floor(start / fs.volume.bs.DATA_CONTENT_SIZE)
-        const startOffset = start % fs.volume.bs.DATA_CONTENT_SIZE
-        let   bytesToRead = end - start
+        const startBlock  = Math.floor(this.readOffset / fs.volume.bs.DATA_CONTENT_SIZE)
+        const startOffset = this.readOffset % fs.volume.bs.DATA_CONTENT_SIZE
+        let   bytesToRead = this.readLength
         let   firstRead   = true
 
-        for (const [i, address] of this.handle.fbm.dataAddresses()) {
-
-            // Skip blocks before the start block
-            if (i < startBlock) continue
+        for (const address of this.handle.fbm.dataAddresses(startBlock)) {
 
             const [readError, dataBlock] = await fs.volume.readDataBlock(address, fs.aesKey, this.integrity)
             if (readError) throw IBFSError.eav('L1_FH_READ_STREAM_BUFFER', null, readError, { dataBlockAddress: address })

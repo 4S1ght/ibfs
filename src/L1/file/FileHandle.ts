@@ -92,17 +92,14 @@ export default class FileHandle {
             const fs = this.fbm.containingFilesystem
             const bufferSize = fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length
             const buffer = Memory.alloc(bufferSize)
-            let length = 0
 
-            for (const [, address] of this.fbm.dataAddresses()) {
+            for (const address of this.fbm.dataAddresses()) {
                 const [readError, dataBlock] = await fs.volume.readDataBlock(address, fs.aesKey, integrity)
                 if (readError) return IBFSError.eav('L1_FH_READ', null, readError, { dataBlockAddress: address })
-
-                length += dataBlock.length
                 buffer.write(dataBlock.data)
             }
 
-            return [null, buffer.read(length)]
+            return [null, buffer.readFilled()]
             
         } 
         catch (error) {
@@ -123,10 +120,8 @@ export default class FileHandle {
      * @returns [Error?, Readable?]
      */
     public createReadStream(options: TFRSOptions = {}): 
-        T.XEav<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"|"L1_FH_READ_STREAM_OUTRANGE"> {
+        T.XEav<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"> {
         try {
-            if (options.start !== undefined && options.end)
-            if (options.start >= options.end) return IBFSError.eav('L1_FH_READ_STREAM_OUTRANGE', null, null, options)
             const stream = new FileReadStream(this, options)
             return [null, stream]
         } 
