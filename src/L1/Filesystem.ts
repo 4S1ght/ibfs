@@ -111,7 +111,7 @@ export default class Filesystem {
 
             self.adSpace = new AddressSpace({
                 size: self.volume.root.blockCount,
-                offset: Math.ceil(C.KB_64 / self.volume.bs.BLOCK_SIZE),
+                offset: Math.ceil(C.KB_64 / self.volume.bs.BLOCK_SIZE) + 1,
                 cacheSize: self.volume.meta.ibfs.adSpaceCacheSize || C.DEFAULT_ADDRESS_MAP_CACHE_SIZE
             })
 
@@ -148,7 +148,6 @@ export default class Filesystem {
                 const scanError = await this.scanForOccupancy()
                 if (scanError) return new IBFSError('L1_FS_ADSPACE_LOAD', null, scanError as Error)
             }
-
             // Unknown error - Propagate
             else {
                 return new IBFSError('L1_FS_ADSPACE_LOAD', null, loadError as Error)
@@ -171,14 +170,14 @@ export default class Filesystem {
             const scan = async (address: number) => {
 
                 // Open file descriptor and scan it
-                const [openError, fd] = await this.open(address)
+                const [openError, fh] = await this.open(address)
                 if (openError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, openError as Error)
-                for (const address of fd.fbm.allAddresses()) this.adSpace.markAllocated(address)
+                for (const address of fh.fbm.allAddresses()) this.adSpace.markAllocated(address)
 
                 // Scan subdirectories & files
-                if (fd.type === 'DIR') {
+                if (fh.type === 'DIR') {
 
-                    const [readError, data] = await fd.readFull()
+                    const [readError, data] = await fh.readFile()
                     if (readError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, readError as Error)
                     const dir = DirectoryTable.deserializeDRTable(data)
                 

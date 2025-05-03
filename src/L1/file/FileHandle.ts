@@ -86,7 +86,7 @@ export default class FileHandle {
      * @param integrity Whether to perform data integrity checks.
      * @returns [Error?, Buffer?]
      */
-    public async readFull(integrity = true): T.XEavA<Buffer, 'L1_FH_READ'> {
+    public async readFile(integrity = true): T.XEavA<Buffer, 'L1_FH_READ'> {
         try {
 
             const fs = this.fbm.containingFilesystem
