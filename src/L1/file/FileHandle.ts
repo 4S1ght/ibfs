@@ -81,8 +81,8 @@ export default class FileHandle {
 
     /**
      * Reads the full contents of the file and returns the resulting buffer. 
-     * This is potentially really memory intensive and should be avoided whenever 
-     * dealing with large files.
+     * This is potentially really memory intensive and should be avoided in favor
+     * of `createReadStream()` whenever dealing with large files.
      * @param integrity Whether to perform data integrity checks.
      * @returns [Error?, Buffer?]
      */
@@ -101,6 +101,30 @@ export default class FileHandle {
 
             return [null, buffer.readFilled()]
             
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FH_READ', null, error as Error)
+        }
+    }
+
+    /**
+     * Reads a specific part of the file and returns the resulting buffer.
+     * @param offset Offset at which to start reading the file.
+     * @param length Number of bytes to read from the offset (May result in shorter values if file ends early).
+     * @param integrity Whether to perform data integrity checks.
+     * @returns [Error?, Buffer?]
+     */
+    public async read(offset: number, length: number, integrity = true): T.XEavA<Buffer, 'L1_FH_READ'>  {
+        try {
+        
+            const memory = Memory.alloc(length)
+
+            const [streamError, stream] = this.createReadStream({ offset, length, integrity })
+            if (streamError) return IBFSError.eav('L1_FH_READ', null, streamError)
+
+            for await (const chunk of stream) memory.write(chunk)
+            return [null, memory.readFilled()]
+
         } 
         catch (error) {
             return IBFSError.eav('L1_FH_READ', null, error as Error)
