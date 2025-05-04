@@ -5,9 +5,10 @@ import type * as T from '../../../types.js'
 import Memory from '../../L0/Memory.js'
 import IBFSError from '../../errors/IBFSError.js'
 import FileBlockMap, { TFBMOpenOptions } from './FileBlockMap.js'
+import FileReadStream, { TFRSOptions } from './FileReadStream.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
-import FileReadStream, { TFRSOptions } from './FileReadStream.js'
+import toLookup from '../../misc/lookup.js'
 
 // Types ===============================================================================================================
 
@@ -15,18 +16,46 @@ import FileReadStream, { TFRSOptions } from './FileReadStream.js'
  * File descriptor open options.
 */
 export interface TFHOpenOptions extends TFBMOpenOptions {
-
+    /**
+     * File open mode.
+     * @default "w"
+     */
+    mode?: keyof typeof FileHandle['FILE_MODE_FLAGS']
 }
+type FileModeMap = typeof FileHandle.FILE_MODE_FLAGS
+type FileMode = keyof FileModeMap
+type FileModeFlags = FileModeMap[FileMode]
 
 // Exports =============================================================================================================
 
 export default class FileHandle {
 
+    // Static ----------------------------------------------------------------------------------------------------------
+
+    public static FILE_MODE_FLAGS = {
+        // [access modes]  read    write    truncate    append    create    exclusive   mustExist
+        'r':   toLookup([ 'read',                                                      'mustExist' ]),
+        'r+':  toLookup([ 'read', 'write',                                             'mustExist' ]),
+        'rs':  toLookup([ 'read',                                                      'mustExist' ]), 
+        'rs+': toLookup([ 'read', 'write',                                             'mustExist' ]),
+        'w':   toLookup([         'write', 'truncate',           'create'                          ]),
+        'wx':  toLookup([         'write', 'truncate',           'create', 'exclusive'             ]),
+        'w+':  toLookup([ 'read', 'write', 'truncate',           'create'                          ]),
+        'wx+': toLookup([ 'read', 'write', 'truncate',           'create', 'exclusive'             ]),
+        'a':   toLookup([         'write',             'append', 'create'                          ]),
+        'ax':  toLookup([         'write',             'append', 'create', 'exclusive'             ]),
+        'a+':  toLookup([ 'read', 'write',             'append', 'create'                          ]),
+        'ax+': toLookup([ 'read', 'write',             'append', 'create', 'exclusive'             ]),
+    }
+
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** File's top-level block map. */ public readonly declare fbm: FileBlockMap
+    /** File's top-level block map. */ public declare readonly fbm: FileBlockMap
 
     // Factory ---------------------------------------------------------------------------------------------------------
+
+    public declare readonly mode: FileMode
+    public declare readonly flags: FileModeFlags
 
     private constructor() {}
 
@@ -39,6 +68,8 @@ export default class FileHandle {
         try {
 
             const self = new this()
+            ;(self as any).mode = options.mode || 'w'
+            ;(self as any).flags = FileHandle.FILE_MODE_FLAGS[self.mode]
 
             // Check file locks -------------------
             // TODO
@@ -90,8 +121,7 @@ export default class FileHandle {
         try {
 
             const fs = this.fbm.containingFilesystem
-            const bufferSize = fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length
-            const buffer = Memory.alloc(bufferSize)
+            const buffer = Memory.alloc(fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length)
 
             for (const address of this.fbm.dataAddresses()) {
                 const [readError, dataBlock] = await fs.volume.readDataBlock(address, fs.aesKey, integrity)
@@ -131,7 +161,9 @@ export default class FileHandle {
         }
     }
 
-    public async writeFull() {}
+    public async writeFile() {}
+
+    public async write() {}
 
     public async append() {}
 
@@ -154,7 +186,15 @@ export default class FileHandle {
         }
     }
 
-    public async createWriteStream() {}
+    public async createWriteStream(options: TFWSOptions = {}): T.XEav<FileWriteStream, 'L1_FH_WRITE_STREAM'> {
+        try {
+            const stream = new FileWriteStream(this. options)
+            return [null, stream]
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FH_WRITE_STREAM', null, error as Error)
+        }
+    }
 
     // Helpers ---------------------------------------------------------------------------------------------------------
 

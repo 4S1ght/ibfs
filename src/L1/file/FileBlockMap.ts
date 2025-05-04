@@ -135,6 +135,9 @@ export default class FileBlockMap {
 
                 // Append address if there's space for it
                 if (startingBlock.block.isFull === false) {
+                    // This address will probably be allocated before use, but it's
+                    // worth making sure to prevent data from being overwritten later.
+                    this.containingFilesystem.adSpace.markAllocated(address)
                     startingBlock.block.append(address)
                 }
                 // Allocate a new link block and re-call append

@@ -8,7 +8,6 @@ import IBFSError from "../../errors/IBFSError.js";
 // Types ===============================================================================================================
 
 export interface TFRSOptions {
-
     /** 
      * Offset at which to start reading the file.
      * @default 0
@@ -101,6 +100,9 @@ export default class FileReadStream extends Readable {
 
     /**
      * Loops over the `buffer` and yields it chunk by chunk.
+     * Used to split the data read from the file into smaller chunks
+     * to prevent copying of large data blocks at once and overwhelming
+     * the internal stream buffer.
      */
     private *createViewReader(buffer: Buffer): Generator<Buffer> {
 

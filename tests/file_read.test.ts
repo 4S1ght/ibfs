@@ -40,7 +40,7 @@ describe('FTM initialization and IO', () => {
         const [error, file] = await fs.open(fs.volume.root.fsRoot)
         if (error) return expect(error).toBeNull()
 
-        const [readError, data] = await file.readFull()
+        const [readError, data] = await file.readFile()
         if (readError) return expect(readError).toBeNull()
 
         // 2B dir fields, 2B user perms, 1B metadata fields (5 bytes total)
@@ -65,6 +65,7 @@ describe('FTM initialization and IO', () => {
         }
 
         expect(data).toStrictEqual(Buffer.from([0x0, 0x0, 0x0, 0x0, 0x0]))
+        console.log(file)
 
     })
 
