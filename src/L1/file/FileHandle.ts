@@ -9,6 +9,7 @@ import FileReadStream, { TFRSOptions } from './FileReadStream.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
 import toLookup from '../../misc/lookup.js'
+import FileWriteStream, { TFWSOptions } from './FileWriteStream.js'
 
 // Types ===============================================================================================================
 
@@ -16,15 +17,8 @@ import toLookup from '../../misc/lookup.js'
  * File descriptor open options.
 */
 export interface TFHOpenOptions extends TFBMOpenOptions {
-    /**
-     * File open mode.
-     * @default "w"
-     */
-    mode?: keyof typeof FileHandle['FILE_MODE_FLAGS']
+
 }
-type FileModeMap = typeof FileHandle.FILE_MODE_FLAGS
-type FileMode = keyof FileModeMap
-type FileModeFlags = FileModeMap[FileMode]
 
 // Exports =============================================================================================================
 
@@ -32,30 +26,11 @@ export default class FileHandle {
 
     // Static ----------------------------------------------------------------------------------------------------------
 
-    public static FILE_MODE_FLAGS = {
-        // [access modes]  read    write    truncate    append    create    exclusive   mustExist
-        'r':   toLookup([ 'read',                                                      'mustExist' ]),
-        'r+':  toLookup([ 'read', 'write',                                             'mustExist' ]),
-        'rs':  toLookup([ 'read',                                                      'mustExist' ]), 
-        'rs+': toLookup([ 'read', 'write',                                             'mustExist' ]),
-        'w':   toLookup([         'write', 'truncate',           'create'                          ]),
-        'wx':  toLookup([         'write', 'truncate',           'create', 'exclusive'             ]),
-        'w+':  toLookup([ 'read', 'write', 'truncate',           'create'                          ]),
-        'wx+': toLookup([ 'read', 'write', 'truncate',           'create', 'exclusive'             ]),
-        'a':   toLookup([         'write',             'append', 'create'                          ]),
-        'ax':  toLookup([         'write',             'append', 'create', 'exclusive'             ]),
-        'a+':  toLookup([ 'read', 'write',             'append', 'create'                          ]),
-        'ax+': toLookup([ 'read', 'write',             'append', 'create', 'exclusive'             ]),
-    }
-
     // Initial ---------------------------------------------------------------------------------------------------------
 
     /** File's top-level block map. */ public declare readonly fbm: FileBlockMap
 
     // Factory ---------------------------------------------------------------------------------------------------------
-
-    public declare readonly mode: FileMode
-    public declare readonly flags: FileModeFlags
 
     private constructor() {}
 
@@ -68,8 +43,6 @@ export default class FileHandle {
         try {
 
             const self = new this()
-            ;(self as any).mode = options.mode || 'w'
-            ;(self as any).flags = FileHandle.FILE_MODE_FLAGS[self.mode]
 
             // Check file locks -------------------
             // TODO
@@ -149,7 +122,7 @@ export default class FileHandle {
         
             const memory = Memory.alloc(length)
 
-            const [streamError, stream] = this.createReadStream({ offset, length, integrity })
+            const [streamError, stream] = this.createReadStream({ offset, length, integrity, maxChunkSize: length })
             if (streamError) return IBFSError.eav('L1_FH_READ', null, streamError)
 
             for await (const chunk of stream) memory.write(chunk)
@@ -186,9 +159,9 @@ export default class FileHandle {
         }
     }
 
-    public async createWriteStream(options: TFWSOptions = {}): T.XEav<FileWriteStream, 'L1_FH_WRITE_STREAM'> {
+    public async createWriteStream(options: TFWSOptions = {}): T.XEavA<FileWriteStream, 'L1_FH_WRITE_STREAM'> {
         try {
-            const stream = new FileWriteStream(this. options)
+            const stream = new FileWriteStream(this, options)
             return [null, stream]
         } 
         catch (error) {

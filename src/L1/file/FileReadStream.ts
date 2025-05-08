@@ -91,7 +91,7 @@ export default class FileReadStream extends Readable {
             bytesToRead -= data.length
             firstRead = false
 
-            yield* this.createViewReader(data)
+            yield* this.createChunkReader(data)
             if (bytesToRead <= 0) break
 
         }
@@ -104,7 +104,7 @@ export default class FileReadStream extends Readable {
      * to prevent copying of large data blocks at once and overwhelming
      * the internal stream buffer.
      */
-    private *createViewReader(buffer: Buffer): Generator<Buffer> {
+    private *createChunkReader(buffer: Buffer): Generator<Buffer> {
 
         let offset = 0
 

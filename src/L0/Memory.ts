@@ -55,6 +55,20 @@ export default class Memory {
         return this.buffer.subarray(this.bytesRead, this.length)
     }
 
+    /**
+     * Resets the internal read/write heads allowing for reuse of the buffer.
+     * This method is intended primarily to allow easy reuse of the same buffer 
+     * instance inside write streams.
+     */
+    public reset() {
+        this.bytesRead = 0
+        this.bytesWritten = 0
+    }
+
+    public get spaceLeft(): number {
+        return this.length - this.bytesWritten
+    }
+
     // Sequential input =============================================
 
     /** Sequentially writes an 8-bit integer. */

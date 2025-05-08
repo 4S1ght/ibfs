@@ -1,6 +1,5 @@
 // Imports =============================================================================================================
 
-import path                             from 'node:path'
 import type * as T                      from '../../types.js'
 import * as C                           from '../Constants.js'
 
@@ -131,7 +130,7 @@ export default class Filesystem {
     /**
      * Loads the address space from disk into memory.  
      * It is done either by scanning the volume and mapping out all allocated blocks
-     * or by by loading ab already composed bitmap residing next to the volume.
+     * or by loading ab already composed bitmap residing next to the volume.
      */
     private async loadAddressSpace(): T.XEavSA<"L1_FS_ADSPACE_LOAD"> {
         try {

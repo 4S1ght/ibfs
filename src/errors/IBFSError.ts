@@ -154,11 +154,12 @@ const errorCodes = {
     L1_FBM_SHRINK:                  'Failed to shrink the FBM.',
     L1_FBM_SETMETA:                 'Failed to update the FBM metadata.',
 
-    // File descriptors
+    // File handles
     L1_FH_OPEN:                     'Failed to open a file descriptor.',
     L1_FH_READ:                     'Failed to read contents of a of this descriptor',
     L1_FH_READ_STREAM:              'Failed to create a read stream for a file descriptor.',
     L1_FH_READ_STREAM_BUFFER:       'An error occurred while buffering the read stream.',
+    L1_FH_WRITE_STREAM:             'Failed to create a write stream for a file descriptor.',
 
     // Directory serialization
     L1_DIR_INIT:                    'Failed to initialize the directory serialization context.',
