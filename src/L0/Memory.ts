@@ -65,6 +65,9 @@ export default class Memory {
         this.bytesWritten = 0
     }
 
+    /** 
+     * How much space is available left for writing from the current position.
+     */
     public get spaceLeft(): number {
         return this.length - this.bytesWritten
     }

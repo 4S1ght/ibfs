@@ -160,6 +160,8 @@ const errorCodes = {
     L1_FH_READ_STREAM:              'Failed to create a read stream for a file descriptor.',
     L1_FH_READ_STREAM_BUFFER:       'An error occurred while buffering the read stream.',
     L1_FH_WRITE_STREAM:             'Failed to create a write stream for a file descriptor.',
+    L1_FH_WRITE_STREAM_FIRST:       'An error occurred while loading the first affected write stream block.',
+    L1_FH_WRITE_STREAM_OUTRANGE:    'The provided write offset is larger than the length of the file.',
 
     // Directory serialization
     L1_DIR_INIT:                    'Failed to initialize the directory serialization context.',

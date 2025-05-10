@@ -307,7 +307,7 @@ export default class BlockSerializationContext {
         13    | 8B   | Int64  | Creation date (Unix timestamp - seconds)
         21    | 8B   | Int64  | Modification date (Unix timestamp - seconds)
         25    | 4B   | Int32  | Number of addresses stored
-        26    | 1B   | Int8   | Resource type
+        26    | 1B   | Int8   | Resource type (FILE or DIR)
         27-63 | ---- | ------ | ------------------ Reserved -------------------
         64    | N    | Body   | Block body
 

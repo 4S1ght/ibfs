@@ -159,7 +159,7 @@ export default class FileHandle {
         }
     }
 
-    public async createWriteStream(options: TFWSOptions = {}): T.XEavA<FileWriteStream, 'L1_FH_WRITE_STREAM'> {
+    public createWriteStream(options: TFWSOptions = {}): T.XEav<FileWriteStream, 'L1_FH_WRITE_STREAM'> {
         try {
             const stream = new FileWriteStream(this, options)
             return [null, stream]

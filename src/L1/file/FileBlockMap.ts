@@ -149,7 +149,7 @@ export default class FileBlockMap {
                 }
             }
 
-            // Save the last block into memory if it hasn't been saved yet.
+            // Save the last block onto disk if it hasn't been saved yet.
             if (iteration === 0 && this.items.at(-1)!.block.length !== 0) {
                 const lastBlock = this.items.at(-1)!
                 const updateError = lastBlock.block.blockType === 'HEAD'

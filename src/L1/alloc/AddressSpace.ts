@@ -78,7 +78,7 @@ export default class AddressSpace extends AddressMap {
         const start = region * this.cache.length
         const end = Math.min(start + this.cache.length, this.size) - 1
 
-        for (let i = start; i <= end; i++) {
+        for (let i = end; i >= start; i--) {
 
             const address = i + this.offset
             if (this.isTaken(address)) continue
@@ -107,7 +107,7 @@ export default class AddressSpace extends AddressMap {
         const start = this.offset
         const end = this.size -1
 
-        for (let i = start; i <= end; i++) {
+        for (let i = end; i >= start; i--) {
             
             const address = i
             if (this.isTaken(address)) continue
