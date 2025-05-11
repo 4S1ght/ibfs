@@ -65,7 +65,6 @@ describe('FTM initialization and IO', () => {
         }
 
         expect(data).toStrictEqual(Buffer.from([0x0, 0x0, 0x0, 0x0, 0x0]))
-        console.log(file)
 
     })
 

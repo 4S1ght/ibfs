@@ -85,54 +85,55 @@ export default class FileWriteStream extends Writable {
         // If starting from beginning of a block, turn to long mode
         if (this.firstBlockOffset == 0) this.mode = 'long'
         // If starting outside of file boundary, throw an error
-        if (this.firstBlock >= this.handle.fbm.length) throw new IBFSError('L1_FH_WRITE_STREAM_OUTRANGE')
-
-        // TODO: Guard against out of range writes on block level
-        // During FBM initialization, load the last data block, get its content size
-        // and calculate the usable file size
+        if (this.fileWriteOffset > this.handle.length)  throw new IBFSError('L1_FH_WRITE_STREAM_OUTRANGE', null, null, { outBy: this.fileWriteOffset - this.handle.length })
 
     }
 
-    private async writeChunk(chunk: Buffer) {
+    private async writeChunk(chunk: Buffer): Promise<Error | undefined> {
+        try {
+            
+            const fs = this.handle.fbm.containingFilesystem
+            const views = createBufferMultiview(chunk, this.blockSize, this.longCache.spaceLeft)
 
-        const views = createBufferMultiview(chunk, this.blockSize, this.longCache.spaceLeft)
-        // console.log(views)
+            // First chunk
+            this.longCache.write(views.firstChunk)
 
-        // First chunk
-        this.longCache.write(views.firstChunk)
+            if (this.longCache.spaceLeft === 0) {
+                const writeError = await fs.volume.writeDataBlock({
+                    data: this.longCache.buffer,
+                    aesKey: fs.aesKey,
+                    address: this.getCurrentBlockAddress()
+                })
+                if (writeError) throw writeError
+                this.longCache.reset()
+            }
 
-        if (this.longCache.spaceLeft === 0) {
-            const writeError = await this.handle.fbm.containingFilesystem.volume.writeDataBlock({
-                data: this.longCache.buffer,
-                aesKey: this.handle.fbm.containingFilesystem.aesKey,
-                address: this.getCurrentBlockAddress()
-            })
-            if (writeError) throw writeError
-            this.longCache.reset()
+            // Mid-chunks (full blocks)
+            for (const chunk of views.chunks) {
+                const writeError = await fs.volume.writeDataBlock({
+                    data: chunk,
+                    aesKey: fs.aesKey,
+                    address: this.getCurrentBlockAddress()
+                })
+                if (writeError) throw writeError
+            }
+
+            // Cache remaining data not eligible for a full block overwrite
+            if (views.lastChunk) {
+                this.longCache.write(views.lastChunk)
+            }
+
+            // Commit changes to the FBM
+            if (this.longAddresses.length >= this.fbmCommitFrequency) {
+                const error = await this.handle.fbm.append(this.longAddresses)
+                if (error) throw error
+                this.longAddresses.length = 0
+            }
+        } 
+        catch (error) {
+            this.longAddresses.forEach(address => this.handle.fbm.containingFilesystem.adSpace.free(address))
+            return error as Error
         }
-
-        // Mid-chunks (full blocks)
-        for (const chunk of views.chunks) {
-            const writeError = await this.handle.fbm.containingFilesystem.volume.writeDataBlock({
-                data: chunk,
-                aesKey: this.handle.fbm.containingFilesystem.aesKey,
-                address: this.getCurrentBlockAddress()
-            })
-            if (writeError) throw writeError
-        }
-
-        // Cache remaining data not eligible for a full block overwrite
-        if (views.lastChunk) {
-            this.longCache.write(views.lastChunk)
-        }
-
-        // Commit changes to the FBM
-        if (this.longAddresses.length >= this.fbmCommitFrequency) {
-            const error = await this.handle.fbm.append(this.longAddresses)
-            if (error) throw error
-            this.longAddresses.length = 0
-        }
-
     } 
 
     private getCurrentBlockAddress() {
@@ -157,8 +158,8 @@ export default class FileWriteStream extends Writable {
             return;
         }
         else {
-            await this.writeChunk(chunk)
-            callback()
+            const error = await this.writeChunk(chunk)
+            callback(error)
         }
     }
 
@@ -174,7 +175,7 @@ export default class FileWriteStream extends Writable {
 
                 const firstBlockAddress = this.getCurrentBlockAddress()
                 const [readError, firstBlock] = await fs.volume.readDataBlock(firstBlockAddress, fs.aesKey)
-                if (readError) return new IBFSError('L1_FH_WRITE_STREAM_FIRST', null, readError, { firstBlockAddress })
+                if (readError) return new IBFSError('L1_FH_WRITE_STREAM_FIRST', null, readError, { address: firstBlockAddress })
                 
                 const data = Memory.alloc(this.blockSize)
                 data.write(firstBlock.data)
@@ -201,7 +202,7 @@ export default class FileWriteStream extends Writable {
                     aesKey: fs.aesKey,
                     address: firstBlockAddress
                 })
-                if (writeError) return new IBFSError('L1_FH_WRITE_STREAM_FIRST', null, writeError, { firstBlockAddress })
+                if (writeError) return new IBFSError('L1_FH_WRITE_STREAM_FIRST', null, writeError, { address: firstBlockAddress })
                 
                 this.mode = 'long'
 
@@ -217,14 +218,78 @@ export default class FileWriteStream extends Writable {
     }
 
     override async _final(callback: (err?: Error) => void) {
+        try {
+    
+            if (this.mode === 'short' && this.shortChunks.length === 0) return callback()
+            if (this.mode === 'long' && this.longCache.bytesWritten === 0) return callback()
+    
+            const fs = this.handle.fbm.containingFilesystem
+    
+            // Index X to X (closed still in init mode)
+            if (this.mode === 'short' && this.shortChunks.length > 0 && this.shortChunks[0]!.length > 0) {
+    
+                const firstBlockAddress = this.getCurrentBlockAddress()
+                const [readError, firstBlock] = await fs.volume.readDataBlock(firstBlockAddress, fs.aesKey)
+                if (readError) throw new IBFSError('L1_FH_WRITE_STREAM_FINAL', null, readError, { address: firstBlockAddress })
+                
+                const data = Memory.alloc(this.blockSize)
+                data.write(firstBlock.data)
+                data.bytesWritten = this.firstBlockOffset
+                
+                // Compose first affected block's body
+                while (this.shortChunks.length > 0) {
+                    const chunk = this.shortChunks.shift()!
+                    data.write(chunk)
+                }
+                // Overwrite the first block
+                const writeError = await fs.volume.writeDataBlock({
+                    data: data.readFilled(),
+                    aesKey: fs.aesKey,
+                    address: firstBlockAddress
+                })
+                if (writeError) throw new IBFSError('L1_FH_WRITE_STREAM_FINAL', null, writeError, { address: firstBlockAddress })
+            }
+    
+            // Index 0 to X (closed in long mode)
+            if (this.mode === 'long' && this.longCache.bytesWritten > 0) {
+                
+                const address = this.getCurrentBlockAddress()
+                const shouldMerge = !!this.handle.fbm.get(this.currentBlock - 1)
+                const block = Memory.alloc(this.blockSize)
+                let finalBlockSize = 0
+                
+                if (shouldMerge) {
+                    const [readError, finalBlock] = await fs.volume.readDataBlock(address, fs.aesKey)
+                    if (readError) throw new IBFSError('L1_FH_WRITE_STREAM_FINAL', null, readError, { address })
+                    block.write(finalBlock.data)
+                    finalBlockSize = finalBlock.data.length
+                }
 
-        if (this.mode === 'long' && this.shortChunks.length === 0) return callback()
-        if (this.mode === 'short' && this.longCache.bytesWritten === 0) return callback()
+                block.write(this.longCache.readFilled(), 0)
+                block.bytesWritten = Math.max(finalBlockSize, this.longCache.bytesWritten)
 
-        // Handle writing last block:
-        // Index X to X (closed still in init mode)
-        // Index 0 to X (closed in long mode)
+                const writeError = await fs.volume.writeDataBlock({
+                    data: block.readFilled(),
+                    aesKey: this.handle.fbm.containingFilesystem.aesKey,
+                    address
+                })
+                if (writeError) throw writeError
 
+                const appendError = await this.handle.fbm.append(this.longAddresses)
+                if (appendError) throw appendError
+
+                this.longCache.reset()
+                this.longAddresses = []
+
+            }
+    
+            callback()
+    
+        } 
+        catch (error) {
+            this.longAddresses.forEach(address => this.handle.fbm.containingFilesystem.adSpace.free(address))
+            callback(error as Error)
+        }
     }
 
 }

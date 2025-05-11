@@ -153,6 +153,7 @@ const errorCodes = {
     L1_FBM_GROW:                    'Failed to grow the FBM, possibly due to a failed link block write',
     L1_FBM_SHRINK:                  'Failed to shrink the FBM.',
     L1_FBM_SETMETA:                 'Failed to update the FBM metadata.',
+    L1_FBM_GET_FILE_LENGTH:         'Failed to calculate the total length of the file.',
 
     // File handles
     L1_FH_OPEN:                     'Failed to open a file descriptor.',
@@ -162,6 +163,7 @@ const errorCodes = {
     L1_FH_WRITE_STREAM:             'Failed to create a write stream for a file descriptor.',
     L1_FH_WRITE_STREAM_FIRST:       'An error occurred while loading the first affected write stream block.',
     L1_FH_WRITE_STREAM_OUTRANGE:    'The provided write offset is larger than the length of the file.',
+    L1_FH_WRITE_STREAM_FINAL:       'An error occurred while finalizing the write stream.',
 
     // Directory serialization
     L1_DIR_INIT:                    'Failed to initialize the directory serialization context.',

@@ -28,7 +28,8 @@ export default class FileHandle {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** File's top-level block map. */ public declare readonly fbm: FileBlockMap
+    /** File's top-level block map.                             */ public declare readonly fbm: FileBlockMap
+    /** Length of the usable file data (not including overhead) */ public declare readonly length: number
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
@@ -53,8 +54,13 @@ export default class FileHandle {
             // Load FBM ---------------------------
 
             const [fbmError, fbm] = await FileBlockMap.open(options)
-            if (fbmError) return IBFSError.eav('L1_FH_OPEN', null, fbmError, ssc(options, ['containingFilesystem']));
-            (self as any).fbm = fbm
+            if (fbmError) return IBFSError.eav('L1_FH_OPEN', null, fbmError, ssc(options, ['containingFilesystem']))
+            ;(self as any).fbm = fbm
+
+            // Load file metadata -----------------
+            const [lenErr, length] = await self.fbm.dataLength()
+            if (lenErr) return IBFSError.eav('L1_FH_OPEN', null, lenErr)
+            ;(self as any).length = length
 
             return [null, self]
             
