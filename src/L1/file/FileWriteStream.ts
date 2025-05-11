@@ -85,7 +85,8 @@ export default class FileWriteStream extends Writable {
         // If starting from beginning of a block, turn to long mode
         if (this.firstBlockOffset == 0) this.mode = 'long'
         // If starting outside of file boundary, throw an error
-        if (this.fileWriteOffset > this.handle.length)  throw new IBFSError('L1_FH_WRITE_STREAM_OUTRANGE', null, null, { outBy: this.fileWriteOffset - this.handle.length })
+        if (this.fileWriteOffset > this.handle.originalLength) 
+            throw new IBFSError('L1_FH_WRITE_STREAM_OUTRANGE', null, null, { outBy: this.fileWriteOffset - this.handle.originalLength })
 
     }
 

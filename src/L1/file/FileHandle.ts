@@ -28,8 +28,8 @@ export default class FileHandle {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** File's top-level block map.                             */ public declare readonly fbm: FileBlockMap
-    /** Length of the usable file data (not including overhead) */ public declare readonly length: number
+    /** File's top-level block map.                             */ public declare readonly fbm:            FileBlockMap
+    /** Length of the usable file data (not including overhead) */ public declare readonly originalLength: number
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
@@ -60,7 +60,7 @@ export default class FileHandle {
             // Load file metadata -----------------
             const [lenErr, length] = await self.fbm.dataLength()
             if (lenErr) return IBFSError.eav('L1_FH_OPEN', null, lenErr)
-            ;(self as any).length = length
+            ;(self as any).originalLength = length
 
             return [null, self]
             
