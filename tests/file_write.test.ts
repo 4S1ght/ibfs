@@ -2,13 +2,11 @@ import { describe, test, expect, beforeAll } from "vitest"
 import { getFilesystemPath, useEmptyFilesystem } from './defaults/filesystem.js'
 import crypto from 'node:crypto'
 import Filesystem from '../src/L1/Filesystem.js'
-import fsp from 'fs/promises'
-import path from 'path'
 import { KB_4, MB_1 } from "../src/Constants.js"
 import BlockAESContext from "../src/L0/BlockAES.js"
-const dirname = await fsp.realpath(process.cwd())
+import Memory from "../src/L0/Memory.js"
 
-describe('FTM initialization and IO', async () => {
+describe('File write streams', async () => {
     
     Buffer.poolSize = MB_1
 
@@ -33,24 +31,29 @@ describe('FTM initialization and IO', async () => {
         fs = filesystem
     })
 
-    test('Open file and stream into it (root directory)', async () => {
+    test('Open file, stream into/out of it', async () => {
         
         const [error, file] = await fs.open(fs.volume.root.fsRoot)
         if (error) return expect(error).toBeNull()
 
-        const [streamError, stream] = file.createWriteStream({ offset: 5 })
-        if (streamError) return expect(streamError).toBeNull()
+        const [wsError, ws] = file.createWriteStream()
+        if (wsError) return expect(wsError).toBeNull()
 
         const writeData = crypto.randomBytes(KB_4 * 900)
-        stream.write(writeData)
-        stream.end()
-        await new Promise<void>(resolve => stream.on('finish', () => resolve()))
+        ws.write(writeData)
+        ws.end()
+        await new Promise<void>(resolve => ws.on('finish', () => resolve()))
 
-    }, 30_000)
+        const [rsError, rs] = file.createReadStream()
+        if (rsError) return expect(rsError).toBeNull()
 
-    test(`Stream to a file with offset equal to first block's length`, async () => {
+        const readData = Memory.alloc(KB_4 * 900)
+        rs.on('data', chunk => readData.write(chunk))
+        await new Promise<void>((resolve) => { rs.on('close', () => resolve()) })
+
+        expect(readData.buffer.subarray(0, KB_4)).toStrictEqual(writeData.subarray(0, KB_4))
+        expect(readData.buffer.subarray(KB_4*899)).toStrictEqual(writeData.subarray(KB_4*899))
 
     })
-
 
 })

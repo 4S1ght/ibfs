@@ -17,7 +17,10 @@ import FileWriteStream, { TFWSOptions } from './FileWriteStream.js'
  * File descriptor open options.
 */
 export interface TFHOpenOptions extends TFBMOpenOptions {
-
+    /** File's open mode - Read, Write, or Read/Write.               */ mode:     'r' | 'w' | 'rw'
+    /** Whether writes be appended to the end of the file.           */ append:   boolean
+    /** Whether the file should be truncated on open.                */ truncate: boolean
+    /** Whether the file should be created on open (fails if exists) */ create:   boolean
 }
 
 // Exports =============================================================================================================
@@ -28,8 +31,13 @@ export default class FileHandle {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** File's top-level block map.                             */ public declare readonly fbm:            FileBlockMap
-    /** Length of the usable file data (not including overhead) */ public declare readonly originalLength: number
+    /** File's top-level block map.                              */ public declare readonly fbm:            FileBlockMap
+    /** Length of the usable file data (not including overhead)  */ public declare readonly originalLength: number
+
+    /** File's open mode - Read, Write, or Read/Write.           */ public declare readonly _mode:           'r' | 'w' | 'rw'
+    /** Whether writes be appended to the end of the file.       */ public declare readonly _append:         boolean
+    /** Whether the file should be truncated on open.            */ public declare readonly _truncate:       boolean
+    /** Whether the file should be created on open.              */ public declare readonly _create:         boolean
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
@@ -44,6 +52,11 @@ export default class FileHandle {
         try {
 
             const self = new this()
+
+            ;(self as any)._mode           = options.mode
+            ;(self as any)._append         = options.append
+            ;(self as any)._truncate       = options.truncate
+            ;(self as any)._create         = options.create
 
             // Check file locks -------------------
             // TODO
