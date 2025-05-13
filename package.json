@@ -9,7 +9,7 @@
     "dev": "tsc -w"
   },
   "engines": {
-    "node": ">22.2.0"
+    "node": ">24.0.1"
   },
   "repository": {
     "type": "git",
