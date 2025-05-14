@@ -38,7 +38,7 @@ export default class FileWriteStream extends Writable {
     private readonly handle:                  FileHandle
     private readonly blockSize:               number
     private readonly fbmCommitFrequency:      number
-    private          currentBlock:            number
+    public           currentBlock:            number
 
     public readonly fileWriteOffset:          number
     public readonly firstBlock:               number

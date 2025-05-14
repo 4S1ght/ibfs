@@ -204,7 +204,13 @@ export default class Filesystem {
             
             const [openError, handle] = await FileHandle.open({
                 containingFilesystem: this,
-                headAddress: fileAddress
+                headAddress: fileAddress,
+                integrity,
+                // TODO: use object for Filesystem.open
+                // mode: 'r',
+                // append: false,
+                // truncate: false,
+                // create: false
             })
 
             return openError 

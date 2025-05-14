@@ -113,15 +113,13 @@ export default class FileHandle {
         try {
 
             const fs = this.fbm.containingFilesystem
-            const buffer = Memory.alloc(fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length)
+            const memory = Memory.alloc(fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length)
 
-            for (const address of this.fbm.dataAddresses()) {
-                const [readError, dataBlock] = await fs.volume.readDataBlock(address, fs.aesKey, integrity)
-                if (readError) return IBFSError.eav('L1_FH_READ', null, readError, { dataBlockAddress: address })
-                buffer.write(dataBlock.data)
-            }
+            const [streamError, stream] = this.createReadStream({ maxChunkSize: fs.volume.bs.DATA_CONTENT_SIZE })
+            if (streamError) return IBFSError.eav('L1_FH_READ', null, streamError)
 
-            return [null, buffer.readFilled()]
+            for await (const chunk of stream) memory.write(chunk)
+            return [null, memory.readFilled()]
             
         } 
         catch (error) {
@@ -153,13 +151,29 @@ export default class FileHandle {
         }
     }
 
-    public async writeFile() {}
+    public async writeFile(data: Buffer): T.XEavSA<'L1_FH_WRITE_FILE'> {
+        try {
+
+        } 
+        catch (error) {
+            return new IBFSError('L1_FH_WRITE_FILE', null, error as Error)    
+        }
+    }
 
     public async write() {}
 
     public async append() {}
 
-    public async truncate() {}
+    /**
+     * Truncates the file to a specific length.
+     */
+    public async truncate(length: number): T.XEavSA<'L1_FH_TRUNCATE'> {
+
+        // TODO
+        // Calculate which block would remain last in the file, modify
+        // it's length, and free the addresses of the remaining blocks
+
+    }
 
     /**
      * Creates a readable stream of the file's contents.  

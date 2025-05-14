@@ -247,7 +247,7 @@ export default class FileBlockMap {
     /**
      * Truncates `N` addresses from the end of the file and returns them to the address space.
      */
-    public async trunc(count: number, iteration = 0): T.XEavSA<"L1_FBM_TRUNC"|"L1_FBM_TRUNC_OUTRANGE"> {
+    public async truncBy(count: number, iteration = 0): T.XEavSA<"L1_FBM_TRUNC"|"L1_FBM_TRUNC_OUTRANGE"> {
         try {
 
             if (count > this.length) return new IBFSError('L1_FBM_TRUNC_OUTRANGE', null, null, { count, iteration })
@@ -263,7 +263,7 @@ export default class FileBlockMap {
                     const shrinkError = await this.shrink()
                     if (shrinkError) return new IBFSError('L1_FBM_TRUNC', null, shrinkError, { count, iteration })
                     
-                    const truncError = await this.trunc(i, iteration++)
+                    const truncError = await this.truncBy(i, iteration++)
                     if (truncError) return new IBFSError('L1_FBM_TRUNC', null, truncError, { count, iteration })
 
                     break
@@ -275,6 +275,14 @@ export default class FileBlockMap {
         catch (error) {
             return new IBFSError('L1_FBM_TRUNC', null, error as Error, { count })    
         }
+    }
+
+    /**
+     * Truncates the FBM to the size of `count` and returns the cut off block addresses to the address space.
+     */
+    public async truncTo(count: number): T.XEavSA<"L1_FBM_TRUNC"|"L1_FBM_TRUNC_OUTRANGE"> {
+        const truncBy = Math.max(0, this.length - count)
+        return await this.truncBy(truncBy)
     }
 
     /**
@@ -458,7 +466,8 @@ export default class FileBlockMap {
     // Helpers & Misc --------------------------------------------------------------------------------------------------
     
     /**
-     * Returns number of data blocks in the file.
+     * Returns the number of data blocks in the file.
+        if (count > this.length) return new IBFSError('L1_FBM_TRUNC_OUTRANGE', null, null, { count })
      */
     public get length() {
 
