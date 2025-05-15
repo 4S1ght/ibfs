@@ -279,6 +279,8 @@ export default class FileBlockMap {
 
     /**
      * Truncates the FBM to the size of `count` and returns the cut off block addresses to the address space.
+     * 
+     * Tolerates out of range truncations.
      */
     public async truncTo(count: number): T.XEavSA<"L1_FBM_TRUNC"|"L1_FBM_TRUNC_OUTRANGE"> {
         const truncBy = Math.max(0, this.length - count)
@@ -467,7 +469,6 @@ export default class FileBlockMap {
     
     /**
      * Returns the number of data blocks in the file.
-        if (count > this.length) return new IBFSError('L1_FBM_TRUNC_OUTRANGE', null, null, { count })
      */
     public get length() {
 

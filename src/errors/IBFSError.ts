@@ -165,7 +165,8 @@ const errorCodes = {
     L1_FH_WRITE_STREAM_OUTRANGE:    'The provided write offset is larger than the length of the file.',
     L1_FH_WRITE_STREAM_FINAL:       'An error occurred while finalizing the write stream.',
     L1_FH_WRITE_FILE:               'Failed to write to the file.',
-    L1_FH_TRUNCATE:                 'Failed to truncate the file.',
+    L1_FH_TRUNC:                    'Failed to truncate the file.',
+    L1_FH_TRUNC_OUTRANGE:           'The provided truncation length is out of range.',
 
     // Directory serialization
     L1_DIR_INIT:                    'Failed to initialize the directory serialization context.',

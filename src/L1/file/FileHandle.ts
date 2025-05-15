@@ -151,8 +151,31 @@ export default class FileHandle {
         }
     }
 
+    /**
+     * Overwrites the contents of the file.
+     * @param data Data to write
+     * @returns Error | undefined
+     */
     public async writeFile(data: Buffer): T.XEavSA<'L1_FH_WRITE_FILE'> {
         try {
+
+            const [lenError, fileLength] = await this.fbm.dataLength()
+            if (lenError) return new IBFSError('L1_FH_WRITE_FILE', null, lenError)
+
+            if (data.length < fileLength) {
+                const error = await this.truncate(data.length)
+                if (error) return new IBFSError('L1_FH_WRITE_FILE', null, error)
+            }
+
+            const [streamError, stream] = await this.createWriteStream()
+            if (streamError) return new IBFSError('L1_FH_WRITE_FILE', null, streamError)
+
+            stream.write(data)
+            stream.end()
+            await new Promise<void>((resolve, reject) => {
+                stream.once('finish', () => stream.once('close', () => resolve()))
+                stream.once('error', (error) => reject(error))
+            })
 
         } 
         catch (error) {
@@ -165,13 +188,33 @@ export default class FileHandle {
     public async append() {}
 
     /**
-     * Truncates the file to a specific length.
+     * Truncates the file to a specified length. If the length specified 
+     * is larger than the file, an error will be returned.
      */
-    public async truncate(length: number): T.XEavSA<'L1_FH_TRUNCATE'> {
+    public async truncate(length: number): T.XEavSA<'L1_FH_TRUNC'|'L1_FH_TRUNC_OUTRANGE'> {
 
-        // TODO
-        // Calculate which block would remain last in the file, modify
-        // it's length, and free the addresses of the remaining blocks
+        const [lenError, fileLength] = await this.fbm.dataLength()
+        if (lenError) return new IBFSError('L1_FH_TRUNC', null, lenError)
+        if (length > fileLength) return new IBFSError('L1_FH_TRUNC', `Cannot truncate to ${length} bytes, file is only ${fileLength} bytes long.`)
+
+        const fs = this.fbm.containingFilesystem
+        const leftoverBlocks = Math.ceil(length / fs.volume.bs.DATA_CONTENT_SIZE)
+        const tailBlockBytes = length % fs.volume.bs.DATA_CONTENT_SIZE
+
+        const fbmTruncError = await this.fbm.truncTo(leftoverBlocks)
+        if (fbmTruncError) return new IBFSError('L1_FH_TRUNC', null, fbmTruncError)
+
+        const [readError, tailBlock] = await fs.volume.readDataBlock(leftoverBlocks, fs.aesKey)
+        if (readError) return new IBFSError('L1_FH_TRUNC', null, readError)
+
+        const remainingBody = tailBlock.data.subarray(0, tailBlockBytes)
+        const writeError = await fs.volume.writeDataBlock({
+            data: remainingBody,
+            aesKey: fs.aesKey,
+            address: 0
+        })
+
+        if (writeError) return new IBFSError('L1_FH_TRUNC', null, writeError)
 
     }
 
