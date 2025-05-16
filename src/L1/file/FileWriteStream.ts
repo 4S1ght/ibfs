@@ -257,7 +257,6 @@ export default class FileWriteStream extends Writable {
                 const address = this.getCurrentBlockAddress()
                 const shouldMerge = !!this.handle.fbm.get(this.currentBlock - 1)
                 const block = Memory.alloc(this.blockSize)
-                let finalBlockSize = 0
 
                 const incomingData = this.longCache.readFilled()
                 let   existingData = Buffer.alloc(0)

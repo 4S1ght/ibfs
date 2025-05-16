@@ -73,4 +73,21 @@ describe('File write streams', async () => {
 
     }) 
 
+    test('read offsets/lengths', async () => {
+        
+        const [error, file] = await fs.open(fs.volume.root.fsRoot)
+        if (error) return expect(error).toBeNull()
+
+        const writtenBytes = crypto.randomBytes(KB_4 * 5)
+        const writeError = await file.writeFile(writtenBytes)
+        if (writeError) return expect(writeError).toBeNull()
+
+        console.log('---- TEST START ----')
+        const [readError, readBytes] = await file.read(0, 4000000)
+        if (readError) return expect(readError).toBeNull()
+
+        console.log(KB_4 * 5, readBytes.length)
+
+    }) 
+
 })

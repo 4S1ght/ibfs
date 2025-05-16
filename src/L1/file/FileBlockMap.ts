@@ -421,6 +421,14 @@ export default class FileBlockMap {
 
     }
 
+    /**
+     * Returns the last address stored in the FBM.
+     */
+    public get lastAddress(): number {
+        const lastBlock = this.items.at(-1)!.block
+        return lastBlock.get(lastBlock.length - 1)!
+    }
+
     // Setters ---------------------------------------------------------------------------------------------------------
 
     /**
