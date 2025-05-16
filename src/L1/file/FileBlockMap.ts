@@ -52,6 +52,10 @@ export default class FileBlockMap {
      */
     public declare items: TFBMArray
 
+    // TODO:
+    /** The cached length of the last data block referenced in the FBM. */
+    private declare lastBlockLength: number | undefined
+
     /** This value is true whenever an unrecoverable write error has occurred in the file trace map. */
     public error: IBFSError | undefined
 
