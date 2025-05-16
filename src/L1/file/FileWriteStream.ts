@@ -223,7 +223,7 @@ export default class FileWriteStream extends Writable {
     
             if (this.mode === 'short' && this.shortChunks.length === 0) return callback()
             if (this.mode === 'long' && this.longCache.bytesWritten === 0) return callback()
-    
+
             const fs = this.handle.fbm.containingFilesystem
     
             // Index X to X (closed still in init mode)
@@ -258,19 +258,24 @@ export default class FileWriteStream extends Writable {
                 const shouldMerge = !!this.handle.fbm.get(this.currentBlock - 1)
                 const block = Memory.alloc(this.blockSize)
                 let finalBlockSize = 0
+
+                const incomingData = this.longCache.readFilled()
+                let   existingData = Buffer.alloc(0)
                 
                 if (shouldMerge) {
                     const [readError, finalBlock] = await fs.volume.readDataBlock(address, fs.aesKey)
                     if (readError) throw new IBFSError('L1_FH_WRITE_STREAM_FINAL', null, readError, { address })
-                    block.write(finalBlock.data)
-                    finalBlockSize = finalBlock.data.length
+                    existingData = finalBlock.data
                 }
 
-                block.write(this.longCache.readFilled(), 0)
-                block.bytesWritten = Math.max(finalBlockSize, this.longCache.bytesWritten)
+                block.write(existingData, 0)
+                block.write(incomingData, 0)
+
+                const finalLength = Math.max(existingData.length, incomingData.length)
+                const finalData   = block.read(finalLength, 0)
 
                 const writeError = await fs.volume.writeDataBlock({
-                    data: block.readFilled(),
+                    data: finalData,
                     aesKey: this.handle.fbm.containingFilesystem.aesKey,
                     address
                 })

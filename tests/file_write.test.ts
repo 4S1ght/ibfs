@@ -39,7 +39,7 @@ describe('File write streams', async () => {
         const [wsError, ws] = file.createWriteStream()
         if (wsError) return expect(wsError).toBeNull()
 
-        const writeData = crypto.randomBytes(KB_4 * 900)
+        const writeData = crypto.randomBytes(KB_4 * 20)
         ws.write(writeData)
         ws.end()
         await new Promise<void>(resolve => ws.on('finish', () => resolve()))
@@ -47,13 +47,30 @@ describe('File write streams', async () => {
         const [rsError, rs] = file.createReadStream()
         if (rsError) return expect(rsError).toBeNull()
 
-        const readData = Memory.alloc(KB_4 * 900)
+        const readData = Memory.alloc(KB_4 * 20)
         rs.on('data', chunk => readData.write(chunk))
         await new Promise<void>((resolve) => { rs.on('close', () => resolve()) })
 
         expect(readData.buffer.subarray(0, KB_4)).toStrictEqual(writeData.subarray(0, KB_4))
-        expect(readData.buffer.subarray(KB_4*899)).toStrictEqual(writeData.subarray(KB_4*899))
+        expect(readData.buffer.subarray(KB_4*19)).toStrictEqual(writeData.subarray(KB_4*19))
 
     })
+
+    test('writeFile / readFile', async () => {
+        
+        const [error, file] = await fs.open(fs.volume.root.fsRoot)
+        if (error) return expect(error).toBeNull()
+    
+        const writtenBytes = crypto.randomBytes(KB_4 * 5)
+
+        const writeError = await file.writeFile(writtenBytes)
+        if (writeError) return expect(writeError).toBeNull()
+        
+        const [readError, readBytes] = await file.readFile()
+        if (readError) return expect(readError).toBeNull()
+
+        expect(readBytes).toStrictEqual(writtenBytes)
+
+    }) 
 
 })

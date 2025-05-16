@@ -113,7 +113,7 @@ export default class FileHandle {
         try {
 
             const fs = this.fbm.containingFilesystem
-            const memory = Memory.alloc(fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length)
+            const memory = Memory.allocUnsafe(fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length)
 
             const [streamError, stream] = this.createReadStream({ maxChunkSize: fs.volume.bs.DATA_CONTENT_SIZE })
             if (streamError) return IBFSError.eav('L1_FH_READ', null, streamError)
@@ -137,7 +137,7 @@ export default class FileHandle {
     public async read(offset: number, length: number, integrity = true): T.XEavA<Buffer, 'L1_FH_READ'>  {
         try {
         
-            const memory = Memory.alloc(length)
+            const memory = Memory.allocUnsafe(length)
 
             const [streamError, stream] = this.createReadStream({ offset, length, integrity, maxChunkSize: length })
             if (streamError) return IBFSError.eav('L1_FH_READ', null, streamError)
@@ -167,11 +167,12 @@ export default class FileHandle {
                 if (error) return new IBFSError('L1_FH_WRITE_FILE', null, error)
             }
 
-            const [streamError, stream] = await this.createWriteStream()
+            const [streamError, stream] = this.createWriteStream({ offset: 0 })
             if (streamError) return new IBFSError('L1_FH_WRITE_FILE', null, streamError)
 
             stream.write(data)
             stream.end()
+
             await new Promise<void>((resolve, reject) => {
                 stream.once('finish', () => stream.once('close', () => resolve()))
                 stream.once('error', (error) => reject(error))
@@ -195,7 +196,7 @@ export default class FileHandle {
 
         const [lenError, fileLength] = await this.fbm.dataLength()
         if (lenError) return new IBFSError('L1_FH_TRUNC', null, lenError)
-        if (length > fileLength) return new IBFSError('L1_FH_TRUNC', `Cannot truncate to ${length} bytes, file is only ${fileLength} bytes long.`)
+        if (length > fileLength) return new IBFSError('L1_FH_TRUNC_OUTRANGE', null, null, { truncLength: length, fileLength })
 
         const fs = this.fbm.containingFilesystem
         const leftoverBlocks = Math.ceil(length / fs.volume.bs.DATA_CONTENT_SIZE)
@@ -204,14 +205,15 @@ export default class FileHandle {
         const fbmTruncError = await this.fbm.truncTo(leftoverBlocks)
         if (fbmTruncError) return new IBFSError('L1_FH_TRUNC', null, fbmTruncError)
 
-        const [readError, tailBlock] = await fs.volume.readDataBlock(leftoverBlocks, fs.aesKey)
+        const tailAddress = this.fbm.get(leftoverBlocks-1)!
+        const [readError, tailBlock] = await fs.volume.readDataBlock(tailAddress, fs.aesKey)
         if (readError) return new IBFSError('L1_FH_TRUNC', null, readError)
 
         const remainingBody = tailBlock.data.subarray(0, tailBlockBytes)
         const writeError = await fs.volume.writeDataBlock({
             data: remainingBody,
             aesKey: fs.aesKey,
-            address: 0
+            address: tailAddress,
         })
 
         if (writeError) return new IBFSError('L1_FH_TRUNC', null, writeError)
