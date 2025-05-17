@@ -156,6 +156,7 @@ const errorCodes = {
 
     // File handles
     L1_FH_OPEN:                     'Failed to open a file descriptor.',
+    L1_FH_CLOSE:                    'Failed to close a file descriptor.',
     L1_FH_READ:                     'Failed to read contents of a of this descriptor',
     L1_FH_READ_STREAM:              'Failed to create a read stream for a file descriptor.',
     L1_FH_READ_STREAM_BUFFER:       'An error occurred while buffering the read stream.',
@@ -163,6 +164,7 @@ const errorCodes = {
     L1_FH_WRITE_STREAM_FIRST:       'An error occurred while loading the first affected write stream block.',
     L1_FH_WRITE_STREAM_OUTRANGE:    'The provided write offset is larger than the length of the file.',
     L1_FH_WRITE_STREAM_FINAL:       'An error occurred while finalizing the write stream.',
+    L1_FH_WRITE_STREAM_EXREF:       'Could not instantiate a new write stream because another one is still in use.',
     L1_FH_WRITE_FILE:               'Failed to write to the file.',
     L1_FH_TRUNC:                    'Failed to truncate the file.',
     L1_FH_TRUNC_OUTRANGE:           'The provided truncation length is out of range.',

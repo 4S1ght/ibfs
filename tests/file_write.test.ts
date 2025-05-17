@@ -86,7 +86,7 @@ describe('File write streams', async () => {
         const [readError, readBytes] = await file.read(0, 4000000)
         if (readError) return expect(readError).toBeNull()
 
-        console.log(KB_4 * 5, readBytes.length)
+        expect(readBytes).toStrictEqual(writtenBytes)
 
     }) 
 

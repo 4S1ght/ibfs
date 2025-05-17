@@ -8,7 +8,6 @@ import FileBlockMap, { TFBMOpenOptions } from './FileBlockMap.js'
 import FileReadStream, { TFRSOptions } from './FileReadStream.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
-import toLookup from '../../misc/lookup.js'
 import FileWriteStream, { TFWSOptions } from './FileWriteStream.js'
 
 // Types ===============================================================================================================
@@ -31,14 +30,16 @@ export default class FileHandle {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** File's top-level block map.                              */ public declare readonly fbm:            FileBlockMap
-    /** Original length of the file data.                       */  public declare readonly originalLength: number 
-    /** The cached length of the file data.                      */ private                 _lengthCache:   number | undefined = undefined
+    /** File's top-level block map.                        */ public declare readonly fbm:            FileBlockMap
+    /** Original length of the file data.                  */ public declare readonly originalLength: number 
 
-    /** File's open mode - Read, Write, or Read/Write.           */ private declare readonly _mode:         'r' | 'w' | 'rw'
-    /** Whether writes be appended to the end of the file.       */ private declare readonly _append:       boolean
-    /** Whether the file should be truncated on open.            */ private declare readonly _truncate:     boolean
-    /** Whether the file should be created on open.              */ private declare readonly _create:       boolean
+    /** The cached length of the file data.                */ private                  _lengthCache:  number | undefined = undefined
+    /** File's open mode - Read, Write, or Read/Write.     */ private declare readonly _mode:         'r' | 'w' | 'rw'
+    /** Whether writes be appended to the end of the file. */ private declare readonly _append:       boolean
+    /** Whether the file should be truncated on open.      */ private declare readonly _truncate:     boolean
+    /** References read streams open on this file.         */ private                  _rs:           Set<FileReadStream> = new Set()
+    /** References write streams open on this file.        */ private                  _ws:           FileWriteStream | undefined
+    /** Whether the file is currently open.                */ private                  _isOpen        = false
 
 
     // Factory ---------------------------------------------------------------------------------------------------------
@@ -59,7 +60,7 @@ export default class FileHandle {
             ;(self as any)._append         = options.append
             ;(self as any)._truncate       = options.truncate
             ;(self as any)._create         = options.create
-
+            
             // Check file locks -------------------
             // TODO
 
@@ -76,6 +77,9 @@ export default class FileHandle {
             const [lenErr, length] = await self.getFileLength()
             if (lenErr) return IBFSError.eav('L1_FH_OPEN', null, lenErr)
             ;(self as any).originalLength = length
+
+            // Set open flag ----------------------
+            self._isOpen = true
 
             return [null, self]
             
@@ -94,12 +98,22 @@ export default class FileHandle {
 
     // Lifecycle -------------------------------------------------------------------------------------------------------
 
-    public async close() {
+    public async close(): T.XEavSA<'L1_FH_CLOSE'> {
+        try {
+
+        // Fail silently if the file is already closed or is still busy.
+        if (this._isBusy() || this._isOpen === false) return
 
         // Lift the lock ----------------------------
         // TODO
 
-        // Remove reference from open files list ----
+        // Remove reference from open files set -----
+
+
+        } 
+        catch (error) {
+            return new IBFSError('L1_FH_CLOSE', null, error as Error)
+        }
     }
 
     // I/O methods -----------------------------------------------------------------------------------------------------
@@ -223,16 +237,18 @@ export default class FileHandle {
 
     }
 
+    // Core ------------------------------------------------------------------------------------------------------------
+
     /**
      * Creates a readable stream of the file's contents.  
      * **NOTE:** The returned stream is not inherently error-safe. It **CAN** throw errors
-     * when reading from the file and should always be handled from within a try/catch block
-     * @returns [Error?, Readable?]
+     * when reading from the file and should always be handled from within a try/catch block.
      */
     public createReadStream(options: TFRSOptions = {}): 
         T.XEav<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"> {
         try {
             const stream = new FileReadStream(this, options)
+            this._manageStream(stream)
             return [null, stream]
         } 
         catch (error) {
@@ -240,9 +256,16 @@ export default class FileHandle {
         }
     }
 
-    public createWriteStream(options: TFWSOptions = {}): T.XEav<FileWriteStream, 'L1_FH_WRITE_STREAM'> {
+    /**
+     * Creates writable stream allowing for writing to the file.
+     * **NOTE:** The returned stream is not inherently error-safe. It **CAN** throw errors
+     * when reading from the file and should always be handled from within a try/catch block.
+     */
+    public createWriteStream(options: TFWSOptions = {}): T.XEav<FileWriteStream, 'L1_FH_WRITE_STREAM'|'L1_FH_WRITE_STREAM_EXREF'> {
         try {
             const stream = new FileWriteStream(this, options)
+            if (this._ws) return IBFSError.eav('L1_FH_WRITE_STREAM_EXREF', null, null)
+            this._manageStream(stream)
             return [null, stream]
         } 
         catch (error) {
@@ -250,11 +273,41 @@ export default class FileHandle {
         }
     }
 
+    /**
+     * Manages the stream lifecycle and references it on the file handle
+     * to prevent closing of handles that are still in use by another receiver.
+     */
+    private _manageStream(stream: FileReadStream | FileWriteStream) {
+
+        if (stream instanceof FileWriteStream) {
+            this._ws = stream
+            const cleanup = () => this._ws = undefined
+            stream.once('end',   cleanup)
+            stream.once('close', cleanup)
+            stream.once('error', cleanup)
+        }
+        else {
+            this._rs.add(stream)
+            const cleanup = () => this._rs.delete(stream)
+            stream.once('end',   cleanup)
+            stream.once('close', cleanup)
+            stream.once('error', cleanup)
+        }
+    }
+
+    /**
+     * Returns whether the file handle is currently in use.
+     */
+    private _isBusy(): boolean {
+        return this._rs.size > 0 || this._ws !== undefined
+    }
+
     // Helpers ---------------------------------------------------------------------------------------------------------
 
     /**
      * Returns number of bytes stored inside the data blocks.
      */
+
     public async getFileLength(): T.XEavA<number, "L1_FH_GET_FILE_LENGTH"> {
         try {
 
