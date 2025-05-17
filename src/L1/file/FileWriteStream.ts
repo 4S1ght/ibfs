@@ -1,5 +1,6 @@
 // Imports =============================================================================================================
 
+import type * as T from "../../../types.js"
 import { Writable } from "node:stream"
 import FileHandle from "./FileHandle.js"
 import Memory from "../../L0/Memory.js"
@@ -64,7 +65,7 @@ export default class FileWriteStream extends Writable {
 
     private mode: 'short' | 'long' = 'short'
 
-    constructor(handle: FileHandle, options: TFWSOptions) {
+    private constructor(handle: FileHandle, options: TFWSOptions) {
 
         super({
             highWaterMark: options.highWaterMark || KB_64
@@ -84,10 +85,24 @@ export default class FileWriteStream extends Writable {
 
         // If starting from beginning of a block, turn to long mode
         if (this.firstBlockOffset == 0) this.mode = 'long'
-        // If starting outside of file boundary, throw an error
-        if (this.fileWriteOffset > this.handle.originalLength) 
-            throw new IBFSError('L1_FH_WRITE_STREAM_OUTRANGE', null, null, { outBy: this.fileWriteOffset - this.handle.originalLength })
 
+    }
+
+    public static async open(handle: FileHandle, options: TFWSOptions): T.XEavA<FileWriteStream, 'L1_FH_WRITE_STREAM_OPEN'|'L1_FH_WRITE_STREAM_OUTRANGE'> {
+        try {
+
+            const self = new this(handle, options)
+
+            const [lenError, fileLength] = await handle.getFileLength()
+            if (lenError) return IBFSError.eav('L1_FH_WRITE_STREAM_OPEN', null, lenError)
+            if (self.fileWriteOffset > fileLength) return IBFSError.eav('L1_FH_WRITE_STREAM_OUTRANGE', null, null, { readOffset: self.fileWriteOffset, fileLength })
+
+            return [null, self]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FH_WRITE_STREAM_OPEN', null, error as Error)
+        }
     }
 
     private async writeChunk(chunk: Buffer): Promise<Error | undefined> {

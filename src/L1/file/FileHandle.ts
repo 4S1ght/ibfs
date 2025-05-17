@@ -131,7 +131,7 @@ export default class FileHandle {
             const fs = this.fbm.containingFilesystem
             const memory = Memory.allocUnsafe(fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length)
 
-            const [streamError, stream] = this.createReadStream({ maxChunkSize: fs.volume.bs.DATA_CONTENT_SIZE })
+            const [streamError, stream] = await this.createReadStream({ maxChunkSize: fs.volume.bs.DATA_CONTENT_SIZE })
             if (streamError) return IBFSError.eav('L1_FH_READ', null, streamError)
 
             for await (const chunk of stream) memory.write(chunk)
@@ -155,7 +155,7 @@ export default class FileHandle {
         
             const memory = Memory.allocUnsafe(length)
 
-            const [streamError, stream] = this.createReadStream({ offset, length, integrity, maxChunkSize: length })
+            const [streamError, stream] = await this.createReadStream({ offset, length, integrity, maxChunkSize: length })
             if (streamError) return IBFSError.eav('L1_FH_READ', null, streamError)
 
             for await (const chunk of stream) memory.write(chunk)
@@ -184,14 +184,15 @@ export default class FileHandle {
                 if (error) return new IBFSError('L1_FH_WRITE_FILE', null, error)
             }
 
-            const [streamError, stream] = this.createWriteStream({ offset: 0 })
+            const [streamError, stream] = await this.createWriteStream({ offset: 0 })
             if (streamError) return new IBFSError('L1_FH_WRITE_FILE', null, streamError)
 
             stream.write(data)
             stream.end()
 
             await new Promise<void>((resolve, reject) => {
-                stream.once('finish', () => stream.once('close', () => resolve()))
+                stream.once('finish', () => resolve())
+                stream.once('close', () => resolve())
                 stream.once('error', (error) => reject(error))
             })
 
@@ -201,7 +202,34 @@ export default class FileHandle {
         }
     }
 
-    public async write() {}
+    /**
+     * Writes data at a specified offset. If `offset+data.length` are larger than the file, the file will be extended.
+     * If the offset is outside the file an error will be returned and no data will be written.
+     * @param data Data to write.
+     * @param offset Offset at which to start writing.
+     * @returns 
+     */
+    public async write(data: Buffer, offset: number): T.XEavSA<'L1_FH_WRITE'> {
+        try {
+
+            const [streamError, stream] = await this.createWriteStream({ offset })
+            if (streamError) return new IBFSError('L1_FH_WRITE', null, streamError)
+            this._lengthCache = undefined
+
+            stream.write(data)
+            stream.end()
+
+            await new Promise<void>((resolve, reject) => {
+                stream.once('finish', () => resolve())
+                stream.once('close', () => resolve())
+                stream.once('error', (error) => reject(error))
+            })
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_FH_WRITE', null, error as Error)
+        }
+    }
 
     public async append() {}
 
@@ -214,6 +242,7 @@ export default class FileHandle {
         const [lenError, fileLength] = await this.getFileLength()
         if (lenError) return new IBFSError('L1_FH_TRUNC', null, lenError)
         if (length > fileLength) return new IBFSError('L1_FH_TRUNC_OUTRANGE', null, null, { truncLength: length, fileLength })
+        this._lengthCache = undefined
 
         const fs = this.fbm.containingFilesystem
         const leftoverBlocks = Math.ceil(length / fs.volume.bs.DATA_CONTENT_SIZE)
@@ -244,12 +273,16 @@ export default class FileHandle {
      * **NOTE:** The returned stream is not inherently error-safe. It **CAN** throw errors
      * when reading from the file and should always be handled from within a try/catch block.
      */
-    public createReadStream(options: TFRSOptions = {}): 
-        T.XEav<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"> {
+    public async createReadStream(options: TFRSOptions = {}): 
+        T.XEavA<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"> {
         try {
-            const stream = new FileReadStream(this, options)
+
+            const [error, stream] = await FileReadStream.open(this, options)
+            if (error) return IBFSError.eav('L1_FH_READ_STREAM', null, error)
+
             this._manageStream(stream)
             return [null, stream]
+
         } 
         catch (error) {
             return IBFSError.eav('L1_FH_READ_STREAM', null, error as Error)
@@ -261,12 +294,18 @@ export default class FileHandle {
      * **NOTE:** The returned stream is not inherently error-safe. It **CAN** throw errors
      * when reading from the file and should always be handled from within a try/catch block.
      */
-    public createWriteStream(options: TFWSOptions = {}): T.XEav<FileWriteStream, 'L1_FH_WRITE_STREAM'|'L1_FH_WRITE_STREAM_EXREF'> {
+    public async createWriteStream(options: TFWSOptions = {}): T.XEavA<FileWriteStream, 'L1_FH_WRITE_STREAM'|'L1_FH_WRITE_STREAM_EXREF'> {
         try {
-            const stream = new FileWriteStream(this, options)
+            
+            const [error, stream] = await FileWriteStream.open(this, options)
+            if (error) return IBFSError.eav('L1_FH_WRITE_STREAM', null, error)
             if (this._ws) return IBFSError.eav('L1_FH_WRITE_STREAM_EXREF', null, null)
+
             this._manageStream(stream)
+            this._lengthCache = undefined
+
             return [null, stream]
+
         } 
         catch (error) {
             return IBFSError.eav('L1_FH_WRITE_STREAM', null, error as Error)
@@ -307,7 +346,6 @@ export default class FileHandle {
     /**
      * Returns number of bytes stored inside the data blocks.
      */
-
     public async getFileLength(): T.XEavA<number, "L1_FH_GET_FILE_LENGTH"> {
         try {
 

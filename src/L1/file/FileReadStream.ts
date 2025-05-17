@@ -1,5 +1,6 @@
 // Imports =============================================================================================================
 
+import type * as T from "../../../types.js"
 import { Readable } from "node:stream";
 import { KB_64 } from "../../Constants.js";
 import FileHandle from "./FileHandle.js";
@@ -49,7 +50,7 @@ export default class FileReadStream extends Readable {
     public  readonly integrity:     boolean
     public  readonly maxChunkSize:  number
 
-    constructor(handle: FileHandle, options: TFRSOptions) {
+    private constructor(handle: FileHandle, options: TFRSOptions) {
 
         super({
             highWaterMark: options.maxChunkSize || KB_64,
@@ -63,6 +64,23 @@ export default class FileReadStream extends Readable {
 
         this.reader       = this.createBlockReader()
 
+    }
+
+    public static async open(handle: FileHandle, options: TFRSOptions): T.XEavA<FileReadStream, 'L1_FH_READ_STREAM_OPEN'|'L1_FH_READ_STREAM_OUTRANGE'> {
+        try {
+
+            const self = new this(handle, options)
+
+            const [lenError, fileLength] = await handle.getFileLength()
+            if (lenError) return IBFSError.eav('L1_FH_READ_STREAM_OPEN', null, lenError)
+            if (self.readOffset > fileLength) return IBFSError.eav('L1_FH_READ_STREAM_OUTRANGE', null, null, { readOffset: self.readOffset, fileLength })
+
+            return [null, self]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FH_READ_STREAM_OPEN', null, error as Error)
+        }
     }
 
     /**
