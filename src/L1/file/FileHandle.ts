@@ -32,19 +32,21 @@ export default class FileHandle {
     // Initial ---------------------------------------------------------------------------------------------------------
 
     /** File's top-level block map.                              */ public declare readonly fbm:            FileBlockMap
-    /** Length of the usable file data (not including overhead)  */ public declare readonly originalLength: number
+    /** Original length of the file data.                       */  public declare readonly originalLength: number 
+    /** The cached length of the file data.                      */ private                 _lengthCache:   number | undefined = undefined
 
-    /** File's open mode - Read, Write, or Read/Write.           */ public declare readonly _mode:           'r' | 'w' | 'rw'
-    /** Whether writes be appended to the end of the file.       */ public declare readonly _append:         boolean
-    /** Whether the file should be truncated on open.            */ public declare readonly _truncate:       boolean
-    /** Whether the file should be created on open.              */ public declare readonly _create:         boolean
+    /** File's open mode - Read, Write, or Read/Write.           */ private declare readonly _mode:         'r' | 'w' | 'rw'
+    /** Whether writes be appended to the end of the file.       */ private declare readonly _append:       boolean
+    /** Whether the file should be truncated on open.            */ private declare readonly _truncate:     boolean
+    /** Whether the file should be created on open.              */ private declare readonly _create:       boolean
+
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
     private constructor() {}
 
     /**
-     * Opens an IBFS file descriptor.
+     * Opens an IBFS file handle.
      * @param options 
      * @returns FileHandle
      */
@@ -71,7 +73,7 @@ export default class FileHandle {
             ;(self as any).fbm = fbm
 
             // Load file metadata -----------------
-            const [lenErr, length] = await self.fbm.dataLength()
+            const [lenErr, length] = await self.getFileLength()
             if (lenErr) return IBFSError.eav('L1_FH_OPEN', null, lenErr)
             ;(self as any).originalLength = length
 
@@ -159,8 +161,9 @@ export default class FileHandle {
     public async writeFile(data: Buffer): T.XEavSA<'L1_FH_WRITE_FILE'> {
         try {
 
-            const [lenError, fileLength] = await this.fbm.dataLength()
+            const [lenError, fileLength] = await this.getFileLength()
             if (lenError) return new IBFSError('L1_FH_WRITE_FILE', null, lenError)
+            this._lengthCache = undefined
 
             if (data.length < fileLength) {
                 const error = await this.truncate(data.length)
@@ -194,7 +197,7 @@ export default class FileHandle {
      */
     public async truncate(length: number): T.XEavSA<'L1_FH_TRUNC'|'L1_FH_TRUNC_OUTRANGE'> {
 
-        const [lenError, fileLength] = await this.fbm.dataLength()
+        const [lenError, fileLength] = await this.getFileLength()
         if (lenError) return new IBFSError('L1_FH_TRUNC', null, lenError)
         if (length > fileLength) return new IBFSError('L1_FH_TRUNC_OUTRANGE', null, null, { truncLength: length, fileLength })
 
@@ -248,5 +251,31 @@ export default class FileHandle {
     }
 
     // Helpers ---------------------------------------------------------------------------------------------------------
+
+    /**
+     * Returns number of bytes stored inside the data blocks.
+     */
+    public async getFileLength(): T.XEavA<number, "L1_FH_GET_FILE_LENGTH"> {
+        try {
+
+            if (this._lengthCache !== undefined) return [null, this._lengthCache]
+            
+            const fs = this.fbm.containingFilesystem
+
+            const lastIndex = this.fbm.items.at(-1)?.block!
+            const lastDataBlockAddress = lastIndex.get(lastIndex.length-1)!
+
+            const [err, lastDataBlock] = await fs.volume.readDataBlock(lastDataBlockAddress, fs.aesKey)
+            if (err) return IBFSError.eav('L1_FH_GET_FILE_LENGTH', null, err)
+
+            const dataLength = lastDataBlock.length + ((this.fbm.length-1) * fs.volume.bs.DATA_CONTENT_SIZE)
+            
+            return [null, dataLength]
+            
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FH_GET_FILE_LENGTH', null, error as Error)
+        }
+    }
 
 }

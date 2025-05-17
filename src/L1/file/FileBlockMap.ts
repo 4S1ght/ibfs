@@ -52,10 +52,6 @@ export default class FileBlockMap {
      */
     public declare items: TFBMArray
 
-    // TODO:
-    /** The cached length of the last data block referenced in the FBM. */
-    private declare lastBlockLength: number | undefined
-
     /** This value is true whenever an unrecoverable write error has occurred in the file trace map. */
     public error: IBFSError | undefined
 
@@ -493,30 +489,6 @@ export default class FileBlockMap {
         const fullLinkBlockCount = this.items.length - 2
         return headSpace + linkSpace*fullLinkBlockCount + this.items.at(-1)!.block.length
     
-    }
-
-    /**
-     * Returns number of bytes stored inside the data blocks.
-     */
-    public async dataLength(): T.XEavA<number, "L1_FBM_GET_FILE_LENGTH"> {
-        try {
-
-            const fs = this.containingFilesystem
-
-            const lastIndex = this.items.at(-1)?.block!
-            const lastDataBlockAddress = lastIndex.get(lastIndex.length-1)!
-
-            const [err, lastDataBlock] = await fs.volume.readDataBlock(lastDataBlockAddress, fs.aesKey)
-            if (err) return IBFSError.eav('L1_FBM_GET_FILE_LENGTH', null, err)
-
-            const dataLength = lastDataBlock.length + ((this.length-1) * fs.volume.bs.DATA_CONTENT_SIZE)
-            
-            return [null, dataLength]
-            
-        } 
-        catch (error) {
-            return IBFSError.eav('L1_FBM_GET_FILE_LENGTH', null, error as Error)
-        }
     }
 
     /** File's root block */
