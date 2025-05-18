@@ -7,7 +7,7 @@ import Memory                           from '../L0/Memory.js'
 import Volume, { TVolumeInit }          from '../L0/Volume.js'
 import BlockSerializationContext        from '../L0/BlockSerialization.js'
 import AddressSpace                     from './alloc/AddressSpace.js'
-import FileHandle                       from './file/FileHandle.js'
+import FileHandle, { TFHOpenOptions }                       from './file/FileHandle.js'
 import DirectoryTable                   from './tables/DirectoryTables.js'
 
 import IBFSError                        from '../errors/IBFSError.js'
@@ -18,6 +18,10 @@ import ssc                              from '../misc/safeShallowCopy.js'
 
 export interface TFSInit extends TVolumeInit {
     /** Whether to omit integrity checks when creating the volume & filesystem. */ initialIntegrity?: boolean
+}
+
+export interface TFSOpenFile extends Omit<TFHOpenOptions, 'headAddress'> {
+    /** Address of the file. */ fileAddress: number
 }
 
 // Exports =============================================================================================================
@@ -168,7 +172,7 @@ export default class Filesystem {
             const scan = async (address: number) => {
 
                 // Open file descriptor and scan it
-                const [openError, fh] = await this.open(address)
+                const [openError, fh] = await this.open({ fileAddress: address, mode: 'r', containingFilesystem: this })
                 if (openError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, openError as Error)
                 for (const address of fh.fbm.allAddresses()) this.adSpace.markAllocated(address)
 
@@ -199,22 +203,19 @@ export default class Filesystem {
 
     // Methods ---------------------------------------------------------------------------------------------------------
 
-    public async open(fileAddress: number, integrity = true): T.XEavA<FileHandle, 'L1_FS_OPEN_FILE'> {
+    public async open(options: TFSOpenFile): T.XEavA<FileHandle, 'L1_FS_OPEN_FILE'> {
         try {
             
             const [openError, handle] = await FileHandle.open({
+                mode: options.mode,
+                append: options.append,
+                truncate: options.truncate,
                 containingFilesystem: this,
-                headAddress: fileAddress,
-                integrity,
-                // TODO: use object for Filesystem.open
-                // mode: 'r',
-                // append: false,
-                // truncate: false,
-                // create: false
+                headAddress: options.fileAddress
             })
 
             return openError 
-                ? IBFSError.eav('L1_FS_OPEN_FILE', null, openError, { fileAddress, integrity })
+                ? IBFSError.eav('L1_FS_OPEN_FILE', null, openError, options)
                 : [null, handle]
 
         } 

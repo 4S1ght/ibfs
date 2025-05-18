@@ -17,7 +17,3 @@ export function createBufferMultiview(buffer: Buffer, chunkSize: number, firstCh
 
     return { firstChunk, chunks, lastChunk }
 }
-
-// const x = Buffer.from([1,2,3,4,5,6,7,8,9,1,2,3,4,5,6,7,8,9,1,2,3,4,5])
-// const y = createBufferMultiview(x, 10, 3)
-// console.log(y)

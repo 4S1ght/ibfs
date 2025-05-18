@@ -29,9 +29,9 @@ export interface TLockOptions {
  * An IO queuing class responsible for managing the order of read & write operations.  
  * It ensures only a single read or write operation is happening at a time.   
  * This significantly decreases performance during multi-user access, but is necessary for
- * write safety. The main scenarios it's taking care of is preventing reads of any block that
- * is currently being written to, and preventing multiple parallel writes that may produce
- * unsafe results due to Node's FileHandle API limitations:
+ * write safety and block-level atomicity. The main scenarios it's taking care of is 
+ * preventing reads of any block that is currently being written to, and preventing multiple 
+ * parallel writes that may produce unsafe results due to Node's FileHandle API limitations:
  * 
  * See https://nodejs.org/api/fs.html#filehandlewritestring-position-encoding
  * > "It is unsafe to use filehandle.write() multiple times on the same file without 

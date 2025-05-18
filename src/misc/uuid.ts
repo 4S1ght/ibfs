@@ -3,7 +3,7 @@ import crypto from 'crypto'
 export default class UUID {
 
     /** 
-     * Makes a random UUID v4 in binary format that's easy to use in file metadata.
+     * Turns a string UUIDv4 into a Buffer easier to integrate into binary structures.
     */
     public static fromString(uuid: string) {
         const hex = uuid.replace(/-/g, '')
@@ -12,6 +12,9 @@ export default class UUID {
         return buf
     }
 
+    /**
+     * Turns a binary UUIDv4 representation back to a string.
+     */
     public static toString(buffer: Buffer) {
         const hex = [...buffer].map(b => b.toString(16).padStart(2, '0')).join('')
         return [

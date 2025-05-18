@@ -6,9 +6,10 @@ import Memory from '../../L0/Memory.js'
 import IBFSError from '../../errors/IBFSError.js'
 import FileBlockMap, { TFBMOpenOptions } from './FileBlockMap.js'
 import FileReadStream, { TFRSOptions } from './FileReadStream.js'
+import FileWriteStream, { TFWSOptions } from './FileWriteStream.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
-import FileWriteStream, { TFWSOptions } from './FileWriteStream.js'
+import streamFinish from '../../misc/streamFinish.js'
 
 // Types ===============================================================================================================
 
@@ -16,10 +17,9 @@ import FileWriteStream, { TFWSOptions } from './FileWriteStream.js'
  * File descriptor open options.
 */
 export interface TFHOpenOptions extends TFBMOpenOptions {
-    /** File's open mode - Read, Write, or Read/Write.               */ mode:     'r' | 'w' | 'rw'
-    /** Whether writes be appended to the end of the file.           */ append:   boolean
-    /** Whether the file should be truncated on open.                */ truncate: boolean
-    /** Whether the file should be created on open (fails if exists) */ create:   boolean
+    /** File's open mode - Read, Write, or Read/Write.               */ mode:      'r' | 'w' | 'rw'
+    /** Whether writes be appended to the end of the file.           */ append?:   boolean
+    /** Whether the file should be truncated on open.                */ truncate?: boolean
 }
 
 // Exports =============================================================================================================
@@ -30,16 +30,16 @@ export default class FileHandle {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** File's top-level block map.                        */ public declare readonly fbm:            FileBlockMap
-    /** Original length of the file data.                  */ public declare readonly originalLength: number 
+    /** File's top-level block map.                        */ public declare readonly fbm:                 FileBlockMap
+    /** Original length of the file data.                  */ public declare readonly originalLength:      number 
 
-    /** The cached length of the file data.                */ private                  _lengthCache:  number | undefined = undefined
-    /** File's open mode - Read, Write, or Read/Write.     */ private declare readonly _mode:         'r' | 'w' | 'rw'
-    /** Whether writes be appended to the end of the file. */ private declare readonly _append:       boolean
-    /** Whether the file should be truncated on open.      */ private declare readonly _truncate:     boolean
-    /** References read streams open on this file.         */ private                  _rs:           Set<FileReadStream> = new Set()
-    /** References write streams open on this file.        */ private                  _ws:           FileWriteStream | undefined
-    /** Whether the file is currently open.                */ private                  _isOpen        = false
+    /** The cached length of the file data.                */ private                  _cachedFileLength:  number | undefined
+    /** File's open mode - Read, Write, or Read/Write.     */ private declare readonly _mode:              'r' | 'w' | 'rw'
+    /** Whether writes be appended to the end of the file. */ private declare readonly _append:            boolean
+    /** Whether the file should be truncated on open.      */ private declare readonly _truncate:          boolean
+    /** References read streams open on this file.         */ private                  _rs:                Set<FileReadStream> = new Set()
+    /** References write streams open on this file.        */ private                  _ws:                FileWriteStream | undefined
+    /** Whether the file is currently open.                */ private                  _isOpen             = false
 
 
     // Factory ---------------------------------------------------------------------------------------------------------
@@ -57,9 +57,8 @@ export default class FileHandle {
             const self = new this()
 
             ;(self as any)._mode           = options.mode
-            ;(self as any)._append         = options.append
-            ;(self as any)._truncate       = options.truncate
-            ;(self as any)._create         = options.create
+            ;(self as any)._append         = options.append   || false
+            ;(self as any)._truncate       = options.truncate || false
             
             // Check file locks -------------------
             // TODO
@@ -68,14 +67,15 @@ export default class FileHandle {
             // TODO
 
             // Load FBM ---------------------------
-
             const [fbmError, fbm] = await FileBlockMap.open(options)
             if (fbmError) return IBFSError.eav('L1_FH_OPEN', null, fbmError, ssc(options, ['containingFilesystem']))
             ;(self as any).fbm = fbm
 
             // Load file metadata -----------------
+
+            // 1. Length
             const [lenErr, length] = await self.getFileLength()
-            if (lenErr) return IBFSError.eav('L1_FH_OPEN', null, lenErr)
+            if (lenErr) return IBFSError.eav('L1_FH_OPEN', null, lenErr, ssc(options, ['containingFilesystem']))
             ;(self as any).originalLength = length
 
             // Set open flag ----------------------
@@ -104,11 +104,14 @@ export default class FileHandle {
         // Fail silently if the file is already closed or is still busy.
         if (this._isBusy() || this._isOpen === false) return
 
-        // Lift the lock ----------------------------
+        // Lift the lock --------------------------------------------
         // TODO
 
-        // Remove reference from open files set -----
+        // Remove the handle reference from the filesystem ----------
 
+
+
+        this._isOpen = false
 
         } 
         catch (error) {
@@ -125,8 +128,10 @@ export default class FileHandle {
      * @param integrity Whether to perform data integrity checks.
      * @returns [Error?, Buffer?]
      */
-    public async readFile(integrity = true): T.XEavA<Buffer, 'L1_FH_READ'> {
+    public async readFile(integrity = true): T.XEavA<Buffer, 'L1_FH_READ'|'L1_FH_READ_MODE'> {
         try {
+
+            if (this._mode === 'w') return IBFSError.eav('L1_FH_READ_MODE')
 
             const fs = this.fbm.containingFilesystem
             const memory = Memory.allocUnsafe(fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length)
@@ -150,8 +155,10 @@ export default class FileHandle {
      * @param integrity Whether to perform data integrity checks.
      * @returns [Error?, Buffer?]
      */
-    public async read(offset: number, length: number, integrity = true): T.XEavA<Buffer, 'L1_FH_READ'>  {
+    public async read(offset: number, length: number, integrity = true): T.XEavA<Buffer, 'L1_FH_READ'|'L1_FH_READ_MODE'>  {
         try {
+
+            if (this._mode === 'w') return IBFSError.eav('L1_FH_READ_MODE')
         
             const memory = Memory.allocUnsafe(length)
 
@@ -172,29 +179,26 @@ export default class FileHandle {
      * @param data Data to write
      * @returns Error | undefined
      */
-    public async writeFile(data: Buffer): T.XEavSA<'L1_FH_WRITE_FILE'> {
+    public async writeFile(data: Buffer): T.XEavSA<'L1_FH_WRITE_FILE'|'L1_FH_WRITE_MODE'> {
         try {
+
+            if (this._mode === 'r') return new IBFSError('L1_FH_WRITE_MODE')
 
             const [lenError, fileLength] = await this.getFileLength()
             if (lenError) return new IBFSError('L1_FH_WRITE_FILE', null, lenError)
-            this._lengthCache = undefined
+            this._cachedFileLength = undefined
 
             if (data.length < fileLength) {
                 const error = await this.truncate(data.length)
                 if (error) return new IBFSError('L1_FH_WRITE_FILE', null, error)
             }
 
-            const [streamError, stream] = await this.createWriteStream({ offset: 0 })
-            if (streamError) return new IBFSError('L1_FH_WRITE_FILE', null, streamError)
+            const [wsError, ws] = await this.createWriteStream({ offset: 0 })
+            if (wsError) return new IBFSError('L1_FH_WRITE_FILE', null, wsError)
 
-            stream.write(data)
-            stream.end()
-
-            await new Promise<void>((resolve, reject) => {
-                stream.once('finish', () => resolve())
-                stream.once('close', () => resolve())
-                stream.once('error', (error) => reject(error))
-            })
+            ws.write(data)
+            ws.end()
+            await streamFinish(ws)
 
         } 
         catch (error) {
@@ -209,21 +213,23 @@ export default class FileHandle {
      * @param offset Offset at which to start writing.
      * @returns 
      */
-    public async write(data: Buffer, offset: number): T.XEavSA<'L1_FH_WRITE'> {
+    public async write(data: Buffer, offset: number): T.XEavSA<'L1_FH_WRITE'|'L1_FH_WRITE_MODE'> {
         try {
 
-            const [streamError, stream] = await this.createWriteStream({ offset })
-            if (streamError) return new IBFSError('L1_FH_WRITE', null, streamError)
-            this._lengthCache = undefined
+            if (this._mode === 'r') return new IBFSError('L1_FH_WRITE_MODE')
 
-            stream.write(data)
-            stream.end()
+            if (this._append) {
+                const error = await this.append(data)
+                return error ? new IBFSError('L1_FH_WRITE', null, error) : undefined
+            }
 
-            await new Promise<void>((resolve, reject) => {
-                stream.once('finish', () => resolve())
-                stream.once('close', () => resolve())
-                stream.once('error', (error) => reject(error))
-            })
+            const [wsError, ws] = await this.createWriteStream({ offset })
+            if (wsError) return new IBFSError('L1_FH_WRITE', null, wsError)
+            this._cachedFileLength = undefined
+
+            ws.write(data)
+            ws.end()
+            await streamFinish(ws)
             
         } 
         catch (error) {
@@ -231,18 +237,43 @@ export default class FileHandle {
         }
     }
 
-    public async append() {}
+    /**
+     * Appends data at the end of the file.
+     */
+    public async append(data: Buffer): T.XEavSA<'L1_FH_APPEND'|'L1_FH_WRITE_MODE'> {
+        try {
+
+            if (this._mode === 'r') return new IBFSError('L1_FH_WRITE_MODE')
+
+            const [lenError, fileLength] = await this.getFileLength()
+            if (lenError) return new IBFSError('L1_FH_APPEND', null, lenError)
+            this._cachedFileLength = undefined
+            
+            const [wsError, ws] = await this.createWriteStream({ offset: fileLength })
+            if (wsError) return new IBFSError('L1_FH_APPEND', null, wsError)
+
+            ws.write(data)
+            ws.end()
+            await streamFinish(ws)
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_FH_APPEND', null, error as Error)    
+        }
+    }
 
     /**
      * Truncates the file to a specified length. If the length specified 
      * is larger than the file, an error will be returned.
      */
-    public async truncate(length: number): T.XEavSA<'L1_FH_TRUNC'|'L1_FH_TRUNC_OUTRANGE'> {
+    public async truncate(length: number): T.XEavSA<'L1_FH_TRUNC'|'L1_FH_TRUNC_OUTRANGE'|'L1_FH_TRUNC_MODE'> {
+
+        if (this._mode === 'r') return new IBFSError('L1_FH_TRUNC_MODE')
 
         const [lenError, fileLength] = await this.getFileLength()
         if (lenError) return new IBFSError('L1_FH_TRUNC', null, lenError)
         if (length > fileLength) return new IBFSError('L1_FH_TRUNC_OUTRANGE', null, null, { truncLength: length, fileLength })
-        this._lengthCache = undefined
+        this._cachedFileLength = undefined
 
         const fs = this.fbm.containingFilesystem
         const leftoverBlocks = Math.ceil(length / fs.volume.bs.DATA_CONTENT_SIZE)
@@ -274,8 +305,10 @@ export default class FileHandle {
      * when reading from the file and should always be handled from within a try/catch block.
      */
     public async createReadStream(options: TFRSOptions = {}): 
-        T.XEavA<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"> {
+        T.XEavA<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"|'L1_FH_READ_MODE'> {
         try {
+
+            if (this._mode === 'w') return IBFSError.eav('L1_FH_READ_MODE')
 
             const [error, stream] = await FileReadStream.open(this, options)
             if (error) return IBFSError.eav('L1_FH_READ_STREAM', null, error)
@@ -294,15 +327,17 @@ export default class FileHandle {
      * **NOTE:** The returned stream is not inherently error-safe. It **CAN** throw errors
      * when reading from the file and should always be handled from within a try/catch block.
      */
-    public async createWriteStream(options: TFWSOptions = {}): T.XEavA<FileWriteStream, 'L1_FH_WRITE_STREAM'|'L1_FH_WRITE_STREAM_EXREF'> {
+    public async createWriteStream(options: TFWSOptions = {}): T.XEavA<FileWriteStream, 'L1_FH_WRITE_STREAM'|'L1_FH_WRITE_STREAM_EXREF'|'L1_FH_WRITE_MODE'> {
         try {
+
+            if (this._mode === 'r') return IBFSError.eav('L1_FH_WRITE_MODE')
             
             const [error, stream] = await FileWriteStream.open(this, options)
             if (error) return IBFSError.eav('L1_FH_WRITE_STREAM', null, error)
             if (this._ws) return IBFSError.eav('L1_FH_WRITE_STREAM_EXREF', null, null)
 
             this._manageStream(stream)
-            this._lengthCache = undefined
+            this._cachedFileLength = undefined
 
             return [null, stream]
 
@@ -349,7 +384,7 @@ export default class FileHandle {
     public async getFileLength(): T.XEavA<number, "L1_FH_GET_FILE_LENGTH"> {
         try {
 
-            if (this._lengthCache !== undefined) return [null, this._lengthCache]
+            if (this._cachedFileLength !== undefined) return [null, this._cachedFileLength]
             
             const fs = this.fbm.containingFilesystem
 
@@ -370,3 +405,5 @@ export default class FileHandle {
     }
 
 }
+
+

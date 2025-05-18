@@ -25,7 +25,7 @@ describe('FTM initialization and IO', () => {
 
     test(`Test file's FBM`, async () => {
 
-        const [error, file] = await fs.open(fs.volume.root.fsRoot)
+        const [error, file] = await fs.open({ containingFilesystem: fs, fileAddress: fs.volume.root.fsRoot, mode: 'rw' })
         if (error) return expect(error).toBeNull()
 
         expect(file.fbm.items[0]!.block.length).toBe(1)
@@ -37,7 +37,7 @@ describe('FTM initialization and IO', () => {
 
     test('Open file and read its data (root directory)', async () => {
 
-        const [error, file] = await fs.open(fs.volume.root.fsRoot)
+        const [error, file] = await fs.open({ containingFilesystem: fs, fileAddress: fs.volume.root.fsRoot, mode: 'rw' })
         if (error) return expect(error).toBeNull()
 
         const [readError, data] = await file.readFile()

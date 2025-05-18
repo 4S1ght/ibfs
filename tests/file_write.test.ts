@@ -33,10 +33,10 @@ describe('File write streams', async () => {
 
     test('Open file, stream into/out of it', async () => {
         
-        const [error, file] = await fs.open(fs.volume.root.fsRoot)
+        const [error, file] = await fs.open({ containingFilesystem: fs, fileAddress: fs.volume.root.fsRoot, mode: 'rw' })
         if (error) return expect(error).toBeNull()
 
-        const [wsError, ws] = file.createWriteStream()
+        const [wsError, ws] = await file.createWriteStream()
         if (wsError) return expect(wsError).toBeNull()
 
         const writeData = crypto.randomBytes(KB_4 * 20)
@@ -44,7 +44,7 @@ describe('File write streams', async () => {
         ws.end()
         await new Promise<void>(resolve => ws.on('finish', () => resolve()))
 
-        const [rsError, rs] = file.createReadStream()
+        const [rsError, rs] = await file.createReadStream()
         if (rsError) return expect(rsError).toBeNull()
 
         const readData = Memory.alloc(KB_4 * 20)
@@ -58,7 +58,7 @@ describe('File write streams', async () => {
 
     test('writeFile / readFile', async () => {
         
-        const [error, file] = await fs.open(fs.volume.root.fsRoot)
+        const [error, file] = await fs.open({ containingFilesystem: fs, fileAddress: fs.volume.root.fsRoot, mode: 'rw' })
         if (error) return expect(error).toBeNull()
     
         const writtenBytes = crypto.randomBytes(KB_4 * 5)
@@ -75,14 +75,13 @@ describe('File write streams', async () => {
 
     test('read offsets/lengths', async () => {
         
-        const [error, file] = await fs.open(fs.volume.root.fsRoot)
+        const [error, file] = await fs.open({ containingFilesystem: fs, fileAddress: fs.volume.root.fsRoot, mode: 'rw' })
         if (error) return expect(error).toBeNull()
 
         const writtenBytes = crypto.randomBytes(KB_4 * 5)
         const writeError = await file.writeFile(writtenBytes)
         if (writeError) return expect(writeError).toBeNull()
 
-        console.log('---- TEST START ----')
         const [readError, readBytes] = await file.read(0, 4000000)
         if (readError) return expect(readError).toBeNull()
 
