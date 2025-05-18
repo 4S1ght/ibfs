@@ -10,6 +10,7 @@ import FileWriteStream, { TFWSOptions } from './FileWriteStream.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
 import streamFinish from '../../misc/streamFinish.js'
+import EventEmitter from 'node:events'
 
 // Types ===============================================================================================================
 
@@ -24,27 +25,34 @@ export interface TFHOpenOptions extends TFBMOpenOptions {
 
 // Exports =============================================================================================================
 
-export default class FileHandle {
+export default interface FileHandle extends EventEmitter {
+    once(event: 'close', listener: () => void): this
+    on  (event: 'close', listener: () => void): this
+    emit(event: 'close'): boolean
+}
+export default class FileHandle extends EventEmitter {
 
     // Static ----------------------------------------------------------------------------------------------------------
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** File's top-level block map.                        */ public declare readonly fbm:                 FileBlockMap
-    /** Original length of the file data.                  */ public declare readonly originalLength:      number 
+    /** File's top-level block map.                        */ public declare readonly   fbm:                FileBlockMap
+    /** Original length of the file data.                  */ public declare readonly   originalLength:     number 
 
-    /** The cached length of the file data.                */ private                  _cachedFileLength:  number | undefined
-    /** File's open mode - Read, Write, or Read/Write.     */ private declare readonly _mode:              'r' | 'w' | 'rw'
-    /** Whether writes be appended to the end of the file. */ private declare readonly _append:            boolean
-    /** Whether the file should be truncated on open.      */ private declare readonly _truncate:          boolean
-    /** References read streams open on this file.         */ private                  _rs:                Set<FileReadStream> = new Set()
-    /** References write streams open on this file.        */ private                  _ws:                FileWriteStream | undefined
-    /** Whether the file is currently open.                */ private                  _isOpen             = false
+    /** Whether the file is currently open for reading.    */ private declare readonly _read:               boolean
+    /** Whether the file is currently open for writing.    */ private declare readonly _write:              boolean
+    /** Whether writes be appended to the end of the file. */ private declare readonly _append:             boolean
+    /** Whether the file should be truncated on open.      */ private declare readonly _truncate:           boolean
+    /** References read streams open on this file.         */ private                  _rs:                 Set<FileReadStream> = new Set()
+    /** References write streams open on this file.        */ private                  _ws:                 FileWriteStream | undefined
+    /** Whether the file is currently open.                */ private                  _isOpen              = false
 
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
-    private constructor() {}
+    private constructor() {
+        super()
+    }
 
     /**
      * Opens an IBFS file handle.
@@ -56,7 +64,8 @@ export default class FileHandle {
 
             const self = new this()
 
-            ;(self as any)._mode           = options.mode
+            ;(self as any)._read           = ['rw', 'r'].includes(options.mode)
+            ;(self as any)._write          = ['rw', 'w'].includes(options.mode)
             ;(self as any)._append         = options.append   || false
             ;(self as any)._truncate       = options.truncate || false
             
@@ -101,17 +110,18 @@ export default class FileHandle {
     public async close(): T.XEavSA<'L1_FH_CLOSE'> {
         try {
 
-        // Fail silently if the file is already closed or is still busy.
-        if (this._isBusy() || this._isOpen === false) return
+            // Fail silently if the file is already closed or is still busy.
+            if (this._isBusy() || this._isOpen === false) return
 
-        // Lift the lock --------------------------------------------
-        // TODO
+            // Lift the lock --------------------------------------------
+            // TODO
 
-        // Remove the handle reference from the filesystem ----------
+            // Remove the handle reference from the filesystem ----------
 
 
 
-        this._isOpen = false
+            this.emit('close')
+            this._isOpen = false
 
         } 
         catch (error) {
@@ -131,7 +141,7 @@ export default class FileHandle {
     public async readFile(integrity = true): T.XEavA<Buffer, 'L1_FH_READ'|'L1_FH_READ_MODE'> {
         try {
 
-            if (this._mode === 'w') return IBFSError.eav('L1_FH_READ_MODE')
+            if (!this._read) return IBFSError.eav('L1_FH_READ_MODE')
 
             const fs = this.fbm.containingFilesystem
             const memory = Memory.allocUnsafe(fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length)
@@ -158,7 +168,7 @@ export default class FileHandle {
     public async read(offset: number, length: number, integrity = true): T.XEavA<Buffer, 'L1_FH_READ'|'L1_FH_READ_MODE'>  {
         try {
 
-            if (this._mode === 'w') return IBFSError.eav('L1_FH_READ_MODE')
+            if (!this._read) return IBFSError.eav('L1_FH_READ_MODE')
         
             const memory = Memory.allocUnsafe(length)
 
@@ -182,11 +192,10 @@ export default class FileHandle {
     public async writeFile(data: Buffer): T.XEavSA<'L1_FH_WRITE_FILE'|'L1_FH_WRITE_MODE'> {
         try {
 
-            if (this._mode === 'r') return new IBFSError('L1_FH_WRITE_MODE')
+            if (!this._write) return new IBFSError('L1_FH_WRITE_MODE')
 
             const [lenError, fileLength] = await this.getFileLength()
             if (lenError) return new IBFSError('L1_FH_WRITE_FILE', null, lenError)
-            this._cachedFileLength = undefined
 
             if (data.length < fileLength) {
                 const error = await this.truncate(data.length)
@@ -216,16 +225,10 @@ export default class FileHandle {
     public async write(data: Buffer, offset: number): T.XEavSA<'L1_FH_WRITE'|'L1_FH_WRITE_MODE'> {
         try {
 
-            if (this._mode === 'r') return new IBFSError('L1_FH_WRITE_MODE')
-
-            if (this._append) {
-                const error = await this.append(data)
-                return error ? new IBFSError('L1_FH_WRITE', null, error) : undefined
-            }
+            if (!this._write) return new IBFSError('L1_FH_WRITE_MODE')
 
             const [wsError, ws] = await this.createWriteStream({ offset })
             if (wsError) return new IBFSError('L1_FH_WRITE', null, wsError)
-            this._cachedFileLength = undefined
 
             ws.write(data)
             ws.end()
@@ -243,11 +246,10 @@ export default class FileHandle {
     public async append(data: Buffer): T.XEavSA<'L1_FH_APPEND'|'L1_FH_WRITE_MODE'> {
         try {
 
-            if (this._mode === 'r') return new IBFSError('L1_FH_WRITE_MODE')
+            if (!this._write) return new IBFSError('L1_FH_WRITE_MODE')
 
             const [lenError, fileLength] = await this.getFileLength()
             if (lenError) return new IBFSError('L1_FH_APPEND', null, lenError)
-            this._cachedFileLength = undefined
             
             const [wsError, ws] = await this.createWriteStream({ offset: fileLength })
             if (wsError) return new IBFSError('L1_FH_APPEND', null, wsError)
@@ -268,12 +270,11 @@ export default class FileHandle {
      */
     public async truncate(length: number): T.XEavSA<'L1_FH_TRUNC'|'L1_FH_TRUNC_OUTRANGE'|'L1_FH_TRUNC_MODE'> {
 
-        if (this._mode === 'r') return new IBFSError('L1_FH_TRUNC_MODE')
+        if (!this._write) return new IBFSError('L1_FH_TRUNC_MODE')
 
         const [lenError, fileLength] = await this.getFileLength()
         if (lenError) return new IBFSError('L1_FH_TRUNC', null, lenError)
         if (length > fileLength) return new IBFSError('L1_FH_TRUNC_OUTRANGE', null, null, { truncLength: length, fileLength })
-        this._cachedFileLength = undefined
 
         const fs = this.fbm.containingFilesystem
         const leftoverBlocks = Math.ceil(length / fs.volume.bs.DATA_CONTENT_SIZE)
@@ -308,7 +309,7 @@ export default class FileHandle {
         T.XEavA<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"|'L1_FH_READ_MODE'> {
         try {
 
-            if (this._mode === 'w') return IBFSError.eav('L1_FH_READ_MODE')
+            if (!this._read) return IBFSError.eav('L1_FH_READ_MODE')
 
             const [error, stream] = await FileReadStream.open(this, options)
             if (error) return IBFSError.eav('L1_FH_READ_STREAM', null, error)
@@ -330,14 +331,21 @@ export default class FileHandle {
     public async createWriteStream(options: TFWSOptions = {}): T.XEavA<FileWriteStream, 'L1_FH_WRITE_STREAM'|'L1_FH_WRITE_STREAM_EXREF'|'L1_FH_WRITE_MODE'> {
         try {
 
-            if (this._mode === 'r') return IBFSError.eav('L1_FH_WRITE_MODE')
+            if (!this._write) return IBFSError.eav('L1_FH_WRITE_MODE')
+
+            let offset = options.offset
+            if (this._append) {
+                const [lenError, fileLength] = await this.getFileLength()
+                if (lenError) return IBFSError.eav('L1_FH_WRITE_STREAM', null, lenError)
+                offset = fileLength
+            }
             
-            const [error, stream] = await FileWriteStream.open(this, options)
+            const [error, stream] = await FileWriteStream.open(this, { ...options, offset })
+
             if (error) return IBFSError.eav('L1_FH_WRITE_STREAM', null, error)
             if (this._ws) return IBFSError.eav('L1_FH_WRITE_STREAM_EXREF', null, null)
 
             this._manageStream(stream)
-            this._cachedFileLength = undefined
 
             return [null, stream]
 
@@ -383,8 +391,6 @@ export default class FileHandle {
      */
     public async getFileLength(): T.XEavA<number, "L1_FH_GET_FILE_LENGTH"> {
         try {
-
-            if (this._cachedFileLength !== undefined) return [null, this._cachedFileLength]
             
             const fs = this.fbm.containingFilesystem
 

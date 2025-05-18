@@ -3,11 +3,14 @@
 import type * as T                      from '../../types.js'
 import * as C                           from '../Constants.js'
 
+import crypto                           from 'node:crypto'
+
 import Memory                           from '../L0/Memory.js'
 import Volume, { TVolumeInit }          from '../L0/Volume.js'
 import BlockSerializationContext        from '../L0/BlockSerialization.js'
 import AddressSpace                     from './alloc/AddressSpace.js'
-import FileHandle, { TFHOpenOptions }                       from './file/FileHandle.js'
+import FileHandle, { TFHOpenOptions }   from './file/FileHandle.js'
+import HandleRefs                       from './file/FileHandleRefs.js'
 import DirectoryTable                   from './tables/DirectoryTables.js'
 
 import IBFSError                        from '../errors/IBFSError.js'
@@ -28,9 +31,16 @@ export interface TFSOpenFile extends Omit<TFHOpenOptions, 'headAddress'> {
 
 export default class Filesystem {
 
+    // Static ----------------------------------------------------------------------------------------------------------
+
+    // Initial ---------------------------------------------------------------------------------------------------------
+
     public declare volume:  Volume
     public declare adSpace: AddressSpace
     public declare aesKey:  Buffer
+
+    private readonly _rh = new HandleRefs()
+    private readonly _wh = new Map<number, FileHandle>()
 
     private constructor() {}
 
@@ -122,7 +132,6 @@ export default class Filesystem {
             const adSpaceError = await self.loadAddressSpace()
             if (adSpaceError) return IBFSError.eav('L1_FS_OPEN', null, adSpaceError, { image })
 
-
             return [null, self]
 
         } 
@@ -171,7 +180,7 @@ export default class Filesystem {
             
             const scan = async (address: number) => {
 
-                // Open file descriptor and scan it
+                // Open file handle and scan it
                 const [openError, fh] = await this.open({ fileAddress: address, mode: 'r', containingFilesystem: this })
                 if (openError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, openError as Error)
                 for (const address of fh.fbm.allAddresses()) this.adSpace.markAllocated(address)
@@ -203,20 +212,56 @@ export default class Filesystem {
 
     // Methods ---------------------------------------------------------------------------------------------------------
 
-    public async open(options: TFSOpenFile): T.XEavA<FileHandle, 'L1_FS_OPEN_FILE'> {
+    /**
+     * Opens an IBFS file handle.  
+     * Due to the filesystem's design, read-only handles are shared across multiple consumers.
+     */
+    public async open(options: TFSOpenFile): T.XEavA<FileHandle, 'L1_FS_OPEN_FILE'|'L1_FS_OPEN_EXREF'> {
         try {
-            
-            const [openError, handle] = await FileHandle.open({
+
+            const createHandle = () => FileHandle.open({
                 mode: options.mode,
                 append: options.append,
                 truncate: options.truncate,
-                containingFilesystem: this,
-                headAddress: options.fileAddress
+                headAddress: options.fileAddress,
+                containingFilesystem: this
             })
 
-            return openError 
-                ? IBFSError.eav('L1_FS_OPEN_FILE', null, openError, options)
-                : [null, handle]
+            if (this._wh.get(options.fileAddress)) return IBFSError.eav('L1_FS_OPEN_EXREF')
+
+            // Attempt to reuse read-only handles and only 
+            // create new ones if necessary.
+            if (options.mode === 'r') {
+
+                const existingRef = this._rh.getRef(options.fileAddress)
+                if (existingRef) return [null, existingRef.handle]
+
+                const [openError, handle] = await createHandle()
+                if (openError) return IBFSError.eav('L1_FS_OPEN_FILE', null, openError, options)
+
+                this._rh.addRef(options.fileAddress, handle)
+                handle.once('close', () => this._rh.removeRef(options.fileAddress))
+                return [null, handle]
+
+            }
+            
+            // Create new write or read/write handle (exclusive access)
+            else {
+
+                if (this._rh.getRef(options.fileAddress)) return IBFSError.eav(
+                    'L1_FS_OPEN_EXREF',
+                    'Could not open the file in write-enabled mode because it is already in use elsewhere and writing requires exclusive access.'
+                )
+
+                const [openError, handle] = await createHandle()
+                if (openError) return IBFSError.eav('L1_FS_OPEN_FILE', null, openError, options)
+
+                this._wh.set(options.fileAddress, handle)
+                handle.once('close', () => this._wh.delete(options.fileAddress))
+
+                return [null, handle]
+
+            }
 
         } 
         catch (error) {

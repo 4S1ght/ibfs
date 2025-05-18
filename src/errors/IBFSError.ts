@@ -196,6 +196,7 @@ const errorCodes = {
     // Filesystem I/O
     L1_FS_OPEN_FBM:                 'Failed to open the file block map.',
     L1_FS_OPEN_FILE:                'Failed to open a file.',
+    L1_FS_OPEN_EXREF:               'Could not open this file because it is already in use by another consumer in a write-enabled mode.',
     L1_FS_ADSPACE_LOAD:             'Failed to load the address space.',
 
 }
