@@ -1,14 +1,13 @@
 import crypto from 'node:crypto'
-import BlockSerializationContext, { TCommonWriteMeta, TDataBlock, THeadBlock, TIndexBlockManage, TLinkBlock, TMetaCluster, TMetadataWriteMeta, TRootBlock } from '../src/L0/BlockSerialization.js'
-import BlockAESContext from '../src/L0/BlockAES.js'
-import * as C from '../src/Constants.js'
+import BlockSerializationContext, { TCommonWriteMeta, TDataBlock, THeadBlock, TIndexBlockManage, TLinkBlock, TMetaCluster, TMetadataWriteMeta, TRootBlock } from '../../src/L0/BlockSerialization.js'
+import BlockAESContext from '../../src/L0/BlockAES.js'
+import * as C from '../../src/Constants.js'
 import { describe, test, expect } from "vitest"
-import { uniform, uniformAsync } from '../test/libs/uniform.js'
+import { uniform } from '../libs/uniform.js'
 
 describe('Block serialization & deserialization', () => {
     
-    const [keyError, key] = BlockAESContext.deriveAESKey('aes-128-xts', 'hello world')
-    if (keyError) return expect(keyError).toBeUndefined()
+    const key = uniform(BlockAESContext.deriveAESKey('aes-128-xts', 'hello world'))
     const iv = Buffer.alloc(16)
 
     const bs = new BlockSerializationContext({
@@ -32,11 +31,8 @@ describe('Block serialization & deserialization', () => {
             uuid: crypto.randomUUID()
         }
 
-        const [srError, serialized] = BlockSerializationContext.serializeRootBlock(data)
-        if (srError) return expect(srError).toBeUndefined()
-    
-        const [dsError, deserialized] = BlockSerializationContext.deserializeRootBlock(serialized)
-        if (dsError) return expect(dsError).toBeUndefined()
+        const serialized = uniform(BlockSerializationContext.serializeRootBlock(data))
+        const deserialized = uniform(BlockSerializationContext.deserializeRootBlock(serialized))
     
         expect(serialized.length)            .toEqual(C.KB_1)
 
@@ -64,11 +60,8 @@ describe('Block serialization & deserialization', () => {
             }
         }
 
-        const [srError, serialized] = BlockSerializationContext.serializeMetaCluster(data)
-        if (srError) return expect(srError).toBeUndefined()
-
-        const [dsError, deserialized] = BlockSerializationContext.deserializeMetaCluster(serialized)
-        if (dsError) return expect(dsError).toBeUndefined()
+        const serialized = uniform(BlockSerializationContext.serializeMetaCluster(data))
+        const deserialized = uniform(BlockSerializationContext.deserializeMetaCluster(serialized))
 
         expect(serialized.length)   .toBeGreaterThanOrEqual(C.KB_64)
         expect(deserialized)        .toStrictEqual(data.metadata)
@@ -88,11 +81,8 @@ describe('Block serialization & deserialization', () => {
             address: 321
         }
 
-        const [srError, serialized] = bs.serializeHeadBlock(data)
-        if (srError) return expect(srError).toBeUndefined()
-
-        const [dsError, deserialized] = bs.deserializeHeadBlock(serialized, data.address, data.aesKey)
-        if (dsError) return expect(dsError).toBeUndefined()
+        const serialized = uniform(bs.serializeHeadBlock(data))
+        const deserialized = uniform(bs.deserializeHeadBlock(serialized, data.address, data.aesKey))
 
         expect(deserialized.blockType)      .toBe('HEAD')
         expect(deserialized.created)        .toBe(now)
@@ -152,11 +142,8 @@ describe('Block serialization & deserialization', () => {
             address: 321
         }
 
-        const [srError, serialized] = bs.serializeLinkBlock(data)
-        if (srError) return expect(srError).toBeUndefined()
-
-        const [dsError, deserialized] = bs.deserializeLinkBlock(serialized, data.address, data.aesKey)    
-        if (dsError) return expect(dsError).toBeUndefined()
+        const serialized = uniform(bs.serializeLinkBlock(data))
+        const deserialized = uniform(bs.deserializeLinkBlock(serialized, data.address, data.aesKey))
 
         expect(deserialized.blockType)      .toBe('LINK')
         expect(deserialized.next)           .toBe(123)
@@ -213,11 +200,8 @@ describe('Block serialization & deserialization', () => {
             address: 321
         }
 
-        const [srError, serialized] = bs.serializeDataBlock(data)
-        if (srError) return expect(srError).toBeUndefined()
-
-        const [dsError, deserialized] = bs.deserializeDataBlock(serialized, data.address, data.aesKey)    
-        if (dsError) return expect(dsError).toBeUndefined()
+        const serialized = uniform(bs.serializeDataBlock(data))
+        const deserialized = uniform(bs.deserializeDataBlock(serialized, data.address, data.aesKey))
 
         expect(deserialized.blockType)      .toBe('DATA')
         expect(deserialized.data)           .toStrictEqual(data.data)
