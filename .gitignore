@@ -1,5 +1,6 @@
 node_modules/
 tests/temp/
+test/temp/
 dist/
 
 .DS_Store

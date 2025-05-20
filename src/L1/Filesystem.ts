@@ -23,7 +23,7 @@ export interface TFSInit extends TVolumeInit {
     /** Whether to omit integrity checks when creating the volume & filesystem. */ initialIntegrity?: boolean
 }
 
-export interface TFSOpenFile extends Omit<TFHOpenOptions, 'headAddress'> {
+export interface TFSOpenFile extends Omit<TFHOpenOptions, 'headAddress' | 'containingFilesystem'> {
     /** Address of the file. */ fileAddress: number
 }
 
@@ -181,7 +181,7 @@ export default class Filesystem {
             const scan = async (address: number) => {
 
                 // Open file handle and scan it
-                const [openError, fh] = await this.open({ fileAddress: address, mode: 'r', containingFilesystem: this })
+                const [openError, fh] = await this.open({ fileAddress: address, mode: 'r' })
                 if (openError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, openError as Error)
                 for (const address of fh.fbm.allAddresses()) this.adSpace.markAllocated(address)
 
