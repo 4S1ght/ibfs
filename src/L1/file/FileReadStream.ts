@@ -160,4 +160,8 @@ export default class FileReadStream extends Readable {
 
     }
 
+    override [Symbol.asyncIterator](): AsyncIterableIterator<Buffer> {
+        return super[Symbol.asyncIterator]() as AsyncIterableIterator<Buffer>;
+    }
+
 }

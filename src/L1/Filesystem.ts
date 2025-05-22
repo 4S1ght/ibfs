@@ -16,6 +16,7 @@ import DirectoryTable                   from './tables/DirectoryTables.js'
 import IBFSError                        from '../errors/IBFSError.js'
 import Time                             from '../misc/time.js'
 import ssc                              from '../misc/safeShallowCopy.js'
+import { close } from 'node:fs'
 
 // Types ===============================================================================================================
 
@@ -176,6 +177,9 @@ export default class Filesystem {
      * cache is missing.
      */
     private async scanForOccupancy(): T.XEavSA<"L1_FS_ADSPACE_SCAN"> {
+
+        let handle: FileHandle
+
         try {
             
             const scan = async (address: number) => {
@@ -183,6 +187,8 @@ export default class Filesystem {
                 // Open file handle and scan it
                 const [openError, fh] = await this.open({ fileAddress: address, mode: 'r' })
                 if (openError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, openError as Error)
+                handle = fh
+
                 for (const address of fh.fbm.allAddresses()) this.adSpace.markAllocated(address)
 
                 // Scan subdirectories & files
@@ -207,6 +213,9 @@ export default class Filesystem {
         } 
         catch (error) {
             return new IBFSError('L1_FS_ADSPACE_SCAN', null, error as Error)
+        }
+        finally {
+            try { await handle!.close() } catch {}
         }
     }
 
