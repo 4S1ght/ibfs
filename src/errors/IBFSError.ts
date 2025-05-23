@@ -158,7 +158,7 @@ const errorCodes = {
     L1_FH_OPEN:                     'Failed to open a file handle.',
     L1_FH_CLOSE:                    'Failed to close a file handle.',
 
-    L1_FH_READ:                     'Failed to read contents of a of this handle',
+    L1_FH_READ:                     'Failed to read contents of the file.',
     L1_FH_READ_STREAM_OPEN:         'An error occurred while opening the read stream.',
     L1_FH_READ_STREAM:              'Failed to create a read stream for a file handle.',
     L1_FH_READ_STREAM_BUFFER:       'An error occurred while buffering the read stream.',

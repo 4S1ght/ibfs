@@ -103,7 +103,7 @@ export default class FileReadStream extends Readable {
             if (readError) throw IBFSError.eav('L1_FH_READ_STREAM_BUFFER', null, readError, { dataBlockAddress: address })
 
             const data = firstRead 
-                ? dataBlock.data.subarray(startOffset, bytesToRead)
+                ? dataBlock.data.subarray(startOffset, startOffset + bytesToRead)
                 : dataBlock.data
 
             bytesToRead -= data.length

@@ -20,7 +20,7 @@ describe('Volume', () => {
 
     test('read root block', async () => {
 
-        const vol = await useEmptyVolume('block_root')
+        const vol = await useEmptyVolume('l0_block_root')
 
         expect(vol.root.aesCipher).toBe('aes-256-xts')
         expect(vol.root.blockSize).toBe(1)
@@ -38,7 +38,7 @@ describe('Volume', () => {
 
     test('read/write head block', async () => {
 
-        const vol = await useEmptyVolume('block_head')
+        const vol = await useEmptyVolume('l0_block_head')
         const now = Math.floor(Date.now() / 1000)
         const data = Buffer.from(BigUint64Array.of(1n, 2n, 3n, 4n, 5n).buffer)
 
@@ -69,7 +69,7 @@ describe('Volume', () => {
 
     test('read/write link block', async () => {
 
-        const vol = await useEmptyVolume('block_link')
+        const vol = await useEmptyVolume('l0_block_link')
         const data = Buffer.from(BigUint64Array.of(1n, 2n, 3n, 4n, 5n).buffer)
 
         const blockData: TLinkBlock & TCommonWriteMeta = {
@@ -91,7 +91,7 @@ describe('Volume', () => {
 
     test('read/write data block', async () => {
 
-        const vol = await useEmptyVolume('block_data')
+        const vol = await useEmptyVolume('l0_block_data')
         const data = Buffer.from(BigUint64Array.of(1n, 2n, 3n, 4n, 5n).buffer)
 
         const blockData: TDataBlock & TCommonWriteMeta = {
