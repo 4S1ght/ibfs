@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest"
-import { uniform, uniformAsync } from "../libs/uniform.js"
+import { uniform, uniformAsync, uniformSA } from "../libs/uniform.js"
 import { emptyFilesystem } from "../libs/empty-filesystem.js"
 import BlockAESContext from "../../src/L0/BlockAES.js"
 
@@ -27,6 +27,8 @@ describe('Filesystem', () => {
 
         expect(Buffer.concat(chunks)).toStrictEqual(Buffer.from([0, 0, 0, 0, 0]))
 
+        await uniformSA(file.close())
+
     })
 
     test('handle.readFile', async () => {
@@ -36,6 +38,8 @@ describe('Filesystem', () => {
         
         const data = await uniformAsync(file.readFile())
         expect(data).toStrictEqual(Buffer.from([0, 0, 0, 0, 0]))
+
+        await uniformSA(file.close())
 
     })
 
@@ -63,6 +67,8 @@ describe('Filesystem', () => {
         // Overreach
         const overreach = await uniformAsync(file.read(0, 10))
         expect(overreach).toStrictEqual(Buffer.from([0, 0, 0, 0, 0]))
+
+        await uniformSA(file.close())
 
     })
 
