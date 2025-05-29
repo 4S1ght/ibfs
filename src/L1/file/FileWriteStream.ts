@@ -257,13 +257,16 @@ export default class FileWriteStream extends Writable {
                     const chunk = this.shortChunks.shift()!
                     data.write(chunk)
                 }
+
                 // Overwrite the first block
+                const finalLength = Math.max(data.bytesWritten, firstBlock.data.length)
                 const writeError = await fs.volume.writeDataBlock({
-                    data: data.readFilled(),
+                    data: data.read(finalLength, 0),
                     aesKey: fs.aesKey,
                     address: firstBlockAddress
                 })
                 if (writeError) throw new IBFSError('L1_FH_WRITE_STREAM_FINAL', null, writeError, { address: firstBlockAddress })
+            
             }
     
             // Index 0 to X (closed in long mode)

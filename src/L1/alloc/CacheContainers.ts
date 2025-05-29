@@ -83,7 +83,7 @@ export default class CacheContainer {
         const decrypted = this.decrypt(encrypted, key, iv, authTag, cipher)
         
         return {
-            bitmap: decrypted.subarray(bodyLength),
+            bitmap: decrypted.subarray(0, bodyLength),
             volumeUUID: uuid
         }
 

@@ -87,7 +87,13 @@ export default class FileHandle extends EventEmitter {
             if (lenErr) return IBFSError.eav('L1_FH_OPEN', null, lenErr, ssc(options, ['containingFilesystem']))
             ;(self as any).originalLength = length
 
-            // Set open flag ----------------------
+            // Finish init ------------------------
+            if (self._truncate) {
+                const truncError = await self.truncate(self.originalLength)
+                if (truncError) return IBFSError.eav('L1_FH_OPEN', null, truncError, ssc(options, ['containingFilesystem']))
+            }
+
+            // Set open flags ---------------------
             self._isOpen = true
 
             return [null, self]
@@ -287,7 +293,7 @@ export default class FileHandle extends EventEmitter {
         const [readError, tailBlock] = await fs.volume.readDataBlock(tailAddress, fs.aesKey)
         if (readError) return new IBFSError('L1_FH_TRUNC', null, readError)
 
-        const remainingBody = tailBlock.data.subarray(0, tailBlockBytes)
+        const remainingBody = tailBlock.data.subarray(tailBlockBytes)
         const writeError = await fs.volume.writeDataBlock({
             data: remainingBody,
             aesKey: fs.aesKey,

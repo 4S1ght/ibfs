@@ -9,7 +9,7 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
 
     constructor(code: Code, message?: string | null, cause?: Error | null, meta?: IBFSErrorMetadata) {
         
-        super(message || errorCodes[code])
+        super(`[${code}] ${message || errorCodes[code]}`)
         this.name = this.constructor.name
         this.code = code
         meta && (this.meta = meta)
@@ -18,6 +18,7 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
         Error.captureStackTrace(this, this.constructor)
 
         if (cause) {
+            IBFSError.trimErrorStack(cause)
             if (cause instanceof IBFSError) {
                 this.causes = [cause, ...cause.causes]
                 // @ts-ignore - Readonly only outside the error class.
@@ -39,6 +40,21 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
     public static eav<Code extends IBFSErrorCode>(code: Code, ...params: T.OmitFirst<ConstructorParameters<typeof IBFSError>>): [IBFSError<Code>, null] {
         return [new this(code, ...params), null]
     }
+
+    private static trimErrorStack(error: Error, limit = 2) {
+        if (!error || typeof error.stack !== 'string') return
+
+        const lines = error.stack.split('\n')
+        const messageLine = lines[0]
+        const traceLines = lines.slice(1).filter(line => line.trim().startsWith('at'))
+
+        error.stack = [
+            messageLine,
+            ...traceLines.slice(0, limit)
+        ].join('\n') + (traceLines.length > limit ? ' ...' : '')
+    }
+
+
 
 }
 
@@ -158,7 +174,7 @@ const errorCodes = {
     L1_FH_OPEN:                     'Failed to open a file handle.',
     L1_FH_CLOSE:                    'Failed to close a file handle.',
 
-    L1_FH_READ:                     'Failed to read contents of a of this handle',
+    L1_FH_READ:                     'Failed to read contents of the file.',
     L1_FH_READ_STREAM_OPEN:         'An error occurred while opening the read stream.',
     L1_FH_READ_STREAM:              'Failed to create a read stream for a file handle.',
     L1_FH_READ_STREAM_BUFFER:       'An error occurred while buffering the read stream.',
