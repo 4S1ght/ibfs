@@ -10,13 +10,13 @@ import Volume, { TVolumeInit }          from '../L0/Volume.js'
 import BlockSerializationContext        from '../L0/BlockSerialization.js'
 import AddressSpace                     from './alloc/AddressSpace.js'
 import FileHandle, { TFHOpenOptions }   from './file/FileHandle.js'
-import HandleRefs                       from './file/FileHandleRefs.js'
 import DirectoryTable                   from './tables/DirectoryTables.js'
 
 import IBFSError                        from '../errors/IBFSError.js'
 import Time                             from '../misc/time.js'
 import ssc                              from '../misc/safeShallowCopy.js'
 import { close } from 'node:fs'
+import InstanceRegistry from './file/InstanceRegistry.js'
 
 // Types ===============================================================================================================
 
@@ -40,8 +40,8 @@ export default class Filesystem {
     public declare adSpace: AddressSpace
     public declare aesKey:  Buffer
 
-    private readonly _rh = new HandleRefs()
-    private readonly _wh = new Map<number, FileHandle>()
+    private readonly _rh = new InstanceRegistry<number, FileHandle>()
+    private readonly _wh = new InstanceRegistry<'handle', FileHandle>()
 
     private constructor() {}
 
@@ -236,14 +236,17 @@ export default class Filesystem {
                 containingFilesystem: this
             })
 
-            if (this._wh.get(options.fileAddress)) return IBFSError.eav('L1_FS_OPEN_EXREF')
+            // Check if there is a write-enable handle
+            const wh = this._wh.getRef('handle')
+            const whr = wh ? wh.ref.deref() : undefined
+            if (whr) return IBFSError.eav('L1_FS_OPEN_EXREF')
 
             // Attempt to reuse read-only handles and only 
             // create new ones if necessary.
             if (options.mode === 'r') {
 
-                const existingRef = this._rh.getRef(options.fileAddress)
-                if (existingRef) return [null, existingRef.handle]
+                const existingRef = this._rh.reuse(options.fileAddress)
+                if (existingRef) return [null, existingRef]
 
                 const [openError, handle] = await createHandle()
                 if (openError) return IBFSError.eav('L1_FS_OPEN_FILE', null, openError, options)
@@ -257,7 +260,9 @@ export default class Filesystem {
             // Create new write or read/write handle (exclusive access)
             else {
 
-                if (this._rh.getRef(options.fileAddress)) return IBFSError.eav(
+                const cache = this._wh.getRef('handle')
+                const instance = cache && cache.ref.deref()
+                if (instance) return IBFSError.eav(
                     'L1_FS_OPEN_EXREF',
                     'Could not open the file in write-enabled mode because it is already in use elsewhere and writing requires exclusive access.'
                 )
@@ -265,8 +270,8 @@ export default class Filesystem {
                 const [openError, handle] = await createHandle()
                 if (openError) return IBFSError.eav('L1_FS_OPEN_FILE', null, openError, options)
 
-                this._wh.set(options.fileAddress, handle)
-                handle.once('close', () => this._wh.delete(options.fileAddress))
+                this._wh.addRef('handle', handle)
+                handle.once('close', () => this._wh.removeRef('handle'))
 
                 return [null, handle]
 

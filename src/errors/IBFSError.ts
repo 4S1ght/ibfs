@@ -173,12 +173,14 @@ const errorCodes = {
     // File handles
     L1_FH_OPEN:                     'Failed to open a file handle.',
     L1_FH_CLOSE:                    'Failed to close a file handle.',
+    L1_FH_BUSY:                     `The operation can't be performed because the file handle is busy.`,
 
     L1_FH_READ:                     'Failed to read contents of the file.',
     L1_FH_READ_STREAM_OPEN:         'An error occurred while opening the read stream.',
     L1_FH_READ_STREAM:              'Failed to create a read stream for a file handle.',
     L1_FH_READ_STREAM_BUFFER:       'An error occurred while buffering the read stream.',
     L1_FH_READ_STREAM_OUTRANGE:     'The provided read offset is larger than the length of the file.',
+    L1_FH_READ_STREAM_EXREF:        'Can not create a read stream while a write stream is in use.',
     L1_FH_READ_MODE:                'Can not read data from a file open in write-only mode.',
 
     L1_FH_WRITE:                    'Failed to write to a file.',
@@ -187,7 +189,7 @@ const errorCodes = {
     L1_FH_WRITE_STREAM_FIRST:       'An error occurred while loading the first affected write stream block.',
     L1_FH_WRITE_STREAM_OUTRANGE:    'The provided write offset is larger than the length of the file.',
     L1_FH_WRITE_STREAM_FINAL:       'An error occurred while finalizing the write stream.',
-    L1_FH_WRITE_STREAM_EXREF:       'Could not instantiate a new write stream because another one is still in use.',
+    L1_FH_WRITE_STREAM_EXREF:       'Can not create a write stream while another read stream is in use.',
     L1_FH_WRITE_FILE:               'Failed to write to the file.',
     L1_FH_WRITE_MODE:               'Can not write data to a file open in read-only mode.',
 

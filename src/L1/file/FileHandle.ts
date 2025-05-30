@@ -1,5 +1,7 @@
 // Imports =============================================================================================================
 
+import EventEmitter from 'node:events'
+
 import type * as T from '../../../types.js'
 
 import Memory from '../../L0/Memory.js'
@@ -10,7 +12,7 @@ import FileWriteStream, { TFWSOptions } from './FileWriteStream.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
 import streamFinish from '../../misc/streamFinish.js'
-import EventEmitter from 'node:events'
+import InstanceRegistry from './InstanceRegistry.js'
 
 // Types ===============================================================================================================
 
@@ -43,8 +45,9 @@ export default class FileHandle extends EventEmitter {
     /** Whether the file is currently open for writing.    */ private declare readonly _write:              boolean
     /** Whether writes be appended to the end of the file. */ private declare readonly _append:             boolean
     /** Whether the file should be truncated on open.      */ private declare readonly _truncate:           boolean
-    /** References read streams open on this file.         */ private                  _rs:                 Set<FileReadStream> = new Set()
-    /** References write streams open on this file.        */ private                  _ws:                 FileWriteStream | undefined
+    /** Misc counter used for the instance registry.       */ private                  _ctr                 = 0
+    /** References read streams open on this file.         */ private                  _rs                  = new InstanceRegistry<number, FileReadStream>()
+    /** References write streams open on this file.        */ private                  _ws                  = new InstanceRegistry<'stream', FileWriteStream>()
     /** Whether the file is currently open.                */ private                  _isOpen              = false
 
 
@@ -117,14 +120,14 @@ export default class FileHandle extends EventEmitter {
         try {
 
             // Fail silently if the file is already closed or is still busy.
-            if (this._isBusy() || this._isOpen === false) return
+            if (!this._isOpen) return new IBFSError('L1_FH_CLOSE', 'The handle is already closed')
+            if (this._isBusy()) return new IBFSError('L1_FH_CLOSE', `Can't close the handle because it's busy. Wait for`
+                +` all read/write activity to finish or close all active streams before closing.`)
 
             // Lift the lock --------------------------------------------
             // TODO
 
             // Remove the handle reference from the filesystem ----------
-
-
 
             this.emit('close')
             this._isOpen = false
@@ -144,15 +147,16 @@ export default class FileHandle extends EventEmitter {
      * @param integrity Whether to perform data integrity checks.
      * @returns [Error?, Buffer?]
      */
-    public async readFile(integrity = true): T.XEavA<Buffer, 'L1_FH_READ'|'L1_FH_READ_MODE'> {
+    public async readFile(integrity = true): T.XEavA<Buffer, 'L1_FH_READ'|'L1_FH_READ_MODE'|'L1_FH_BUSY'> {
         try {
 
             if (!this._read) return IBFSError.eav('L1_FH_READ_MODE')
+            if (this._isBusy()) return IBFSError.eav('L1_FH_BUSY')
 
             const fs = this.fbm.containingFilesystem
             const memory = Memory.allocUnsafe(fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length)
 
-            const [streamError, stream] = await this.createReadStream({ maxChunkSize: fs.volume.bs.DATA_CONTENT_SIZE })
+            const [streamError, stream] = await this.createReadStream({ maxChunkSize: fs.volume.bs.DATA_CONTENT_SIZE, integrity })
             if (streamError) return IBFSError.eav('L1_FH_READ', null, streamError)
 
             for await (const chunk of stream) memory.write(chunk)
@@ -171,10 +175,11 @@ export default class FileHandle extends EventEmitter {
      * @param integrity Whether to perform data integrity checks.
      * @returns [Error?, Buffer?]
      */
-    public async read(offset: number, length: number, integrity = true): T.XEavA<Buffer, 'L1_FH_READ'|'L1_FH_READ_MODE'>  {
+    public async read(offset: number, length: number, integrity = true): T.XEavA<Buffer, 'L1_FH_READ'|'L1_FH_READ_MODE'|"L1_FH_BUSY">  {
         try {
 
             if (!this._read) return IBFSError.eav('L1_FH_READ_MODE')
+            if (this._isBusy()) return IBFSError.eav('L1_FH_BUSY')
         
             const memory = Memory.allocUnsafe(length)
 
@@ -195,10 +200,11 @@ export default class FileHandle extends EventEmitter {
      * @param data Data to write
      * @returns Error | undefined
      */
-    public async writeFile(data: Buffer): T.XEavSA<'L1_FH_WRITE_FILE'|'L1_FH_WRITE_MODE'> {
+    public async writeFile(data: Buffer): T.XEavSA<'L1_FH_WRITE_FILE'|'L1_FH_WRITE_MODE'|'L1_FH_BUSY'> {
         try {
 
             if (!this._write) return new IBFSError('L1_FH_WRITE_MODE')
+            if (this._isBusy()) return new IBFSError('L1_FH_BUSY')
 
             const [lenError, fileLength] = await this.getFileLength()
             if (lenError) return new IBFSError('L1_FH_WRITE_FILE', null, lenError)
@@ -228,10 +234,11 @@ export default class FileHandle extends EventEmitter {
      * @param offset Offset at which to start writing.
      * @returns 
      */
-    public async write(data: Buffer, offset: number): T.XEavSA<'L1_FH_WRITE'|'L1_FH_WRITE_MODE'> {
+    public async write(data: Buffer, offset: number): T.XEavSA<'L1_FH_WRITE'|'L1_FH_WRITE_MODE'|'L1_FH_BUSY'> {
         try {
 
             if (!this._write) return new IBFSError('L1_FH_WRITE_MODE')
+            if (this._isBusy()) return new IBFSError('L1_FH_BUSY')
 
             const [wsError, ws] = await this.createWriteStream({ offset })
             if (wsError) return new IBFSError('L1_FH_WRITE', null, wsError)
@@ -249,10 +256,11 @@ export default class FileHandle extends EventEmitter {
     /**
      * Appends data at the end of the file.
      */
-    public async append(data: Buffer): T.XEavSA<'L1_FH_APPEND'|'L1_FH_WRITE_MODE'> {
+    public async append(data: Buffer): T.XEavSA<'L1_FH_APPEND'|'L1_FH_WRITE_MODE'|'L1_FH_BUSY'> {
         try {
 
             if (!this._write) return new IBFSError('L1_FH_WRITE_MODE')
+            if (this._isBusy()) return new IBFSError('L1_FH_BUSY')
 
             const [lenError, fileLength] = await this.getFileLength()
             if (lenError) return new IBFSError('L1_FH_APPEND', null, lenError)
@@ -274,9 +282,10 @@ export default class FileHandle extends EventEmitter {
      * Truncates the file to a specified length. If the length specified 
      * is larger than the file, an error will be returned.
      */
-    public async truncate(length: number): T.XEavSA<'L1_FH_TRUNC'|'L1_FH_TRUNC_OUTRANGE'|'L1_FH_TRUNC_MODE'> {
+    public async truncate(length: number): T.XEavSA<'L1_FH_TRUNC'|'L1_FH_TRUNC_OUTRANGE'|'L1_FH_TRUNC_MODE'|'L1_FH_BUSY'> {
 
         if (!this._write) return new IBFSError('L1_FH_TRUNC_MODE')
+        if (this._isBusy()) return new IBFSError('L1_FH_BUSY')
 
         const [lenError, fileLength] = await this.getFileLength()
         if (lenError) return new IBFSError('L1_FH_TRUNC', null, lenError)
@@ -312,10 +321,11 @@ export default class FileHandle extends EventEmitter {
      * when reading from the file and should always be handled from within a try/catch block.
      */
     public async createReadStream(options: TFRSOptions = {}): 
-        T.XEavA<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"|'L1_FH_READ_MODE'> {
+        T.XEavA<FileReadStream, 'L1_FH_READ_STREAM'|"L1_FH_READ_STREAM_BUFFER"|'L1_FH_READ_MODE'|'L1_FH_READ_STREAM_EXREF'> {
         try {
 
             if (!this._read) return IBFSError.eav('L1_FH_READ_MODE')
+            if (this._ws.activeCount() > 0) return IBFSError.eav('L1_FH_READ_STREAM_EXREF')
 
             const [error, stream] = await FileReadStream.open(this, options)
             if (error) return IBFSError.eav('L1_FH_READ_STREAM', null, error)
@@ -338,6 +348,8 @@ export default class FileHandle extends EventEmitter {
         try {
 
             if (!this._write) return IBFSError.eav('L1_FH_WRITE_MODE')
+            if (this._ws.activeCount() > 0) return IBFSError.eav('L1_FH_WRITE_STREAM_EXREF')
+            if (this._rs.activeCount() > 0) return IBFSError.eav('L1_FH_WRITE_STREAM_EXREF')
 
             let offset = options.offset
             if (this._append) {
@@ -347,9 +359,7 @@ export default class FileHandle extends EventEmitter {
             }
             
             const [error, stream] = await FileWriteStream.open(this, { ...options, offset })
-
             if (error) return IBFSError.eav('L1_FH_WRITE_STREAM', null, error)
-            if (this._ws) return IBFSError.eav('L1_FH_WRITE_STREAM_EXREF', null, null)
 
             this._manageStream(stream)
 
@@ -368,15 +378,16 @@ export default class FileHandle extends EventEmitter {
     private _manageStream(stream: FileReadStream | FileWriteStream) {
 
         if (stream instanceof FileWriteStream) {
-            this._ws = stream
-            const cleanup = () => this._ws = undefined
+            this._ws.addRef('stream', stream)
+            const cleanup = () => this._ws.removeRef('stream')
             stream.once('end',   cleanup)
             stream.once('close', cleanup)
             stream.once('error', cleanup)
         }
         else {
-            this._rs.add(stream)
-            const cleanup = () => this._rs.delete(stream)
+            const ctr = this._ctr++
+            this._rs.addRef(ctr, stream)
+            const cleanup = () => this._rs.removeRef(ctr)
             stream.once('end',   cleanup)
             stream.once('close', cleanup)
             stream.once('error', cleanup)
@@ -387,7 +398,8 @@ export default class FileHandle extends EventEmitter {
      * Returns whether the file handle is currently in use.
      */
     private _isBusy(): boolean {
-        return this._rs.size > 0 || this._ws !== undefined
+        return this._rs.activeCount() > 0 || 
+               this._ws.activeCount() > 0
     }
 
     // Helpers ---------------------------------------------------------------------------------------------------------

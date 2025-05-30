@@ -25,5 +25,3 @@ export function toGridString(obj: FlatObject): string {
 
   return `${header}\n${values}`
 }
-
-console.log(toGridString({ 'hello world': 3, 'foo': 'bar' }))
