@@ -3,6 +3,7 @@
 import { styleText } from "node:util"
 import { toGridString } from "../../misc/toGridString.js"
 
+
 // Types ===============================================================================================================
 
 interface TRefMetadata {
@@ -38,18 +39,24 @@ export default class InstanceRegistry<Key, Ref extends object> {
 
         if (meta && meta.refCount > 0) {
             console.warn(
-                red(`[IBFS Cleanup Warning]\n\n`) +
+                red(`------------------------------------ [IBFS GC Warning] ------------------------------------\n\n`) +
                 gray(
                     `An object was garbage-collected without proper cleanup. This can and probably\n`+
                     `already HAS caused loss of uncommitted in-flight data and/or corruption.\n\n`+
                     `Make sure to ALWAYS close open file handles, streams and any other open\n`+
                     `resources explicitly by calling .close() or with the "using" keyword if supported.\n\n`
                 ) +
+                red(
+                    `Note that due to JS garbage collection's nondeterministic behavior, this message\n`+
+                    `may be emitted far later than the object has actually been garbage-collected.\n`+
+                    `This message is here strictly to signify that this program does not guarantee data safety.\n\n`
+                ) +
                 toGridString({ 
                     'Remaining reference count': meta.refCount, 
                     'Resource Token': meta.uToken.description, 
                     ...meta.meta, 
-                })
+                })+
+                red(`\n\n-------------------------------------------------------------------------------------------`)
             )
         }
 
