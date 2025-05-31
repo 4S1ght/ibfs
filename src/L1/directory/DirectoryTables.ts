@@ -5,7 +5,7 @@ import Memory from "../../L0/Memory.js"
 // Types ===============================================================================================================
 
 type TPermLevel = 0 | 1 | 2 | 3
-export interface TDirectoryTable {
+export interface TDirectory {
     /** Directory's children items. */
     ch: Record<string, number>,
     /** Defines directory read permissions for each user - none/read/write/exec (cascading). */
@@ -58,7 +58,7 @@ export default class DirectoryTable {
         --------------------------------------------------------
         
      */
-    public static serializeDRTable(dir: TDirectoryTable) {
+    public static serializeDRTable(dir: TDirectory) {
 
         let bufSize = this.DIR_ITEM_COUNT + this.USER_PERM_COUNT + this.MD_FIELD_COUNT
         let childFields = 0
@@ -130,7 +130,7 @@ export default class DirectoryTable {
     public static deserializeDRTable(buf: Buffer) {
 
         const mem = Memory.wrap(buf)
-        const dir: TDirectoryTable = { ch: {}, usr: {}, md: {} }
+        const dir: TDirectory = { ch: {}, usr: {}, md: {} }
 
         let childFields = mem.readInt16()
         for (let i = 0; i < childFields; i++) {
@@ -142,7 +142,7 @@ export default class DirectoryTable {
 
         let permFields = mem.readInt16()
         for (let i = 0; i < permFields; i++) {
-            const id    = mem.readInt32().toString(16)
+            const id    = mem.readInt32().toString(16).padStart(6, '0')
             const perm  = mem.readInt8()
             dir.usr[id] = perm as TPermLevel
         }

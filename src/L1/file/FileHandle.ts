@@ -1,18 +1,19 @@
 // Imports =============================================================================================================
 
-import EventEmitter from 'node:events'
+import EventEmitter                         from 'node:events'
 
-import type * as T from '../../../types.js'
+import type * as T                          from '../../../types.js'
 
-import Memory from '../../L0/Memory.js'
-import IBFSError from '../../errors/IBFSError.js'
-import FileBlockMap, { TFBMOpenOptions } from './FileBlockMap.js'
-import FileReadStream, { TFRSOptions } from './FileReadStream.js'
-import FileWriteStream, { TFWSOptions } from './FileWriteStream.js'
+import Memory                               from '../../L0/Memory.js'
+import IBFSError                            from '../../errors/IBFSError.js'
+import FileBlockMap, { TFBMOpenOptions }    from './FileBlockMap.js'
+import FileReadStream, { TFRSOptions }      from './FileReadStream.js'
+import FileWriteStream, { TFWSOptions }     from './FileWriteStream.js'
+import DirectoryTable, { TDirectory }       from '../directory/DirectoryTables.js'
+import InstanceRegistry                     from '../../caching/InstanceRegistry.js'
 
-import ssc from '../../misc/safeShallowCopy.js'
-import streamFinish from '../../misc/streamFinish.js'
-import InstanceRegistry from '../../caching/InstanceRegistry.js'
+import ssc                                  from '../../misc/safeShallowCopy.js'
+import streamFinish                         from '../../misc/streamFinish.js'
 
 // Types ===============================================================================================================
 
@@ -306,6 +307,61 @@ export default class FileHandle extends EventEmitter {
 
         if (writeError) return new IBFSError('L1_FH_TRUNC', null, writeError)
 
+    }
+
+    public async readAsDir(integrity = true): T.XEavA<TDirectory, 'L1_FH_DIR_READ'|'L1_FH_READ_MODE'|'L1_FH_BUSY'|'L1_FH_DIR_READ_TYPE'> {
+        try {
+
+            if (this.type !== 'DIR') return IBFSError.eav('L1_FH_DIR_READ_TYPE')
+            if (!this._read) return IBFSError.eav('L1_FH_READ_MODE')
+            if (this._isBusy()) return IBFSError.eav('L1_FH_BUSY')
+
+            const fs = this.fbm.containingFilesystem
+            const memory = Memory.allocUnsafe(fs.volume.bs.DATA_CONTENT_SIZE * this.fbm.length)
+
+            const [streamError, stream] = await this.createReadStream({ maxChunkSize: fs.volume.bs.DATA_CONTENT_SIZE, integrity })
+            if (streamError) return IBFSError.eav('L1_FH_DIR_READ', null, streamError)
+
+            for await (const chunk of stream) memory.write(chunk)
+
+            const buffer = memory.readFilled()
+            const dir = DirectoryTable.deserializeDRTable(buffer)
+            return [null, dir]
+            
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FH_DIR_READ', null, error as Error)
+        }
+    }
+
+    public async writeAsDir(dir: TDirectory): T.XEavSA<'L1_FH_DIR_WRITE'|'L1_FH_WRITE_MODE'|'L1_FH_BUSY'|'L1_FH_DIR_WRITE_TYPE'> {
+        try {
+
+            if (this.type !== 'DIR') return new IBFSError('L1_FH_DIR_WRITE_TYPE')
+            if (!this._write) return new IBFSError('L1_FH_WRITE_MODE')
+            if (this._isBusy()) return new IBFSError('L1_FH_BUSY')
+
+            const data = DirectoryTable.serializeDRTable(dir)
+
+            const [lenError, fileLength] = await this.getFileLength()
+            if (lenError) return new IBFSError('L1_FH_DIR_WRITE', null, lenError)
+
+            if (data.length < fileLength) {
+                const error = await this.truncate(data.length)
+                if (error) return new IBFSError('L1_FH_DIR_WRITE', null, error)
+            }
+
+            const [wsError, ws] = await this.createWriteStream({ offset: 0 })
+            if (wsError) return new IBFSError('L1_FH_DIR_WRITE', null, wsError)
+
+            ws.write(data)
+            ws.end()
+            await streamFinish(ws)
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_FH_DIR_WRITE', null, error as Error)
+        }
     }
 
     // Core ------------------------------------------------------------------------------------------------------------

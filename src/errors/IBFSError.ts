@@ -198,14 +198,13 @@ const errorCodes = {
     L1_FH_TRUNC_MODE:               'Can not truncate a file open in read-only mode.',
 
     L1_FH_APPEND:                   'Failed to append to the file.',
-
     L1_FH_GET_FILE_LENGTH:          'Failed to calculate the total length of the file.',
 
-    // Directory serialization
-    L1_DIR_INIT:                    'Failed to initialize the directory serialization context.',
-    
-    L1_DIR_SR:                      'Failed to serialize a directory.',
-    L1_DIR_DS:                      'Failed to deserialize a directory.',
+    // Directories
+    L1_FH_DIR_READ:                 'Failed to read the open directory.',
+    L1_FH_DIR_READ_TYPE:            'Tried to read as a directory from a file',
+    L1_FH_DIR_WRITE:                'Failed to write to the open directory.',
+    L1_FH_DIR_WRITE_TYPE:           'Tried to write as a directory to a file',
 
     // Filesystem
     L1_FS_CREATE:                   'Failed to create the filesystem.',

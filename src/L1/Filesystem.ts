@@ -8,7 +8,7 @@ import Volume, { TVolumeInit }          from '../L0/Volume.js'
 import BlockSerializationContext        from '../L0/BlockSerialization.js'
 import AddressSpace                     from './alloc/AddressSpace.js'
 import FileHandle, { TFHOpenOptions }   from './file/FileHandle.js'
-import DirectoryTable                   from './tables/DirectoryTables.js'
+import DirectoryTable                   from './directory/DirectoryTables.js'
 import InstanceRegistry                 from '../caching/InstanceRegistry.js'
 
 import IBFSError                        from '../errors/IBFSError.js'
