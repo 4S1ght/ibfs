@@ -141,7 +141,7 @@ export default class AddressSpace extends AddressMap {
 
     // Caching ---------------------------------------------------------------------------------------------------------
     // This section is used solely for loading and saving the address space bitmap to the disk
-    // To peed up subsequent startups.
+    // To speed up subsequent startups.
 
     public async loadBitmap(filePath: string): T.XEavSA<"L1_AS_BITMAP_LOAD"|"L1_AS_BITMAP_LOAD_NOTFOUND"> {
         try {

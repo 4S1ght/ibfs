@@ -47,9 +47,10 @@ export default class FileHandle extends EventEmitter {
     /** Whether writes be appended to the end of the file. */ private declare readonly _append:             boolean
     /** Whether the file should be truncated on open.      */ private declare readonly _truncate:           boolean
     /** Misc counter used for the instance registry.       */ private                  _ctr                 = 0
-    /** References read streams open on this file.         */ private                  _rs                  = new InstanceRegistry<number, FileReadStream>()
-    /** References write streams open on this file.        */ private                  _ws                  = new InstanceRegistry<'stream', FileWriteStream>()
     /** Whether the file is currently open.                */ private                  _isOpen              = false
+    
+    /** References read streams open on this file.         */ private _rs = new InstanceRegistry<number, FileReadStream>()
+    /** References write streams open on this file.        */ private _ws = new InstanceRegistry<'stream', FileWriteStream>()
 
 
     // Factory ---------------------------------------------------------------------------------------------------------
@@ -72,12 +73,6 @@ export default class FileHandle extends EventEmitter {
             ;(self as any)._write          = ['rw', 'w'].includes(options.mode)
             ;(self as any)._append         = options.append   || false
             ;(self as any)._truncate       = options.truncate || false
-            
-            // Check file locks -------------------
-            // TODO
-
-            // Lock file --------------------------
-            // TODO
 
             // Load FBM ---------------------------
             const [fbmError, fbm] = await FileBlockMap.open(options)

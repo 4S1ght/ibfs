@@ -210,6 +210,9 @@ const errorCodes = {
     L1_FS_CREATE:                   'Failed to create the filesystem.',
     L1_FS_OPEN:                     'Failed to open the filesystem.',
 
+    // Structs
+    L1_FS_CREATE_STRUCT:            'Failed to create an empty structure',
+
     // Filesystem I/O
     L1_FS_OPEN_FBM:                 'Failed to open the file block map.',
     L1_FS_OPEN_FILE:                'Failed to open a file.',

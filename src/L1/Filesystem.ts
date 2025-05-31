@@ -4,8 +4,8 @@ import type * as T                      from '../../types.js'
 import * as C                           from '../Constants.js'
 
 import Memory                           from '../L0/Memory.js'
-import Volume, { TVolumeInit }          from '../L0/Volume.js'
-import BlockSerializationContext        from '../L0/BlockSerialization.js'
+import Volume, { THeadBlockRead, TVolumeInit }          from '../L0/Volume.js'
+import BlockSerializationContext, { THeadBlock }        from '../L0/BlockSerialization.js'
 import AddressSpace                     from './alloc/AddressSpace.js'
 import FileHandle, { TFHOpenOptions }   from './file/FileHandle.js'
 import DirectoryTable                   from './directory/DirectoryTables.js'
@@ -23,6 +23,10 @@ export interface TFSInit extends TVolumeInit {
 
 export interface TFSOpenFile extends Omit<TFHOpenOptions, 'headAddress' | 'containingFilesystem'> {
     /** Address of the file. */ fileAddress: number
+}
+
+export interface TCreateStructOptions {
+    /** Tye type of the structure */ type: THeadBlockRead['resourceType']
 }
 
 // Exports =============================================================================================================
@@ -71,7 +75,7 @@ export default class Filesystem {
             const rbError = await volume.overwriteRootBlock()
             if (rbError) return new IBFSError('L1_FS_CREATE', null, rbError, ssc(init, ['aesKey']))
 
-            // Create root directory -------------------------------------
+            // Seed root directory --------------------------------------
     
             const headError = await volume.writeHeadBlock({
                 created: Time.now(),
@@ -155,11 +159,11 @@ export default class Filesystem {
             // Cache file not found - scan the volume
             if (loadError.code === 'L1_AS_BITMAP_LOAD_NOTFOUND') {
                 const scanError = await this.scanForOccupancy()
-                if (scanError) return new IBFSError('L1_FS_ADSPACE_LOAD', null, scanError as Error)
+                if (scanError) return new IBFSError('L1_FS_ADSPACE_LOAD', null, scanError)
             }
             // Unknown error - Propagate
             else {
-                return new IBFSError('L1_FS_ADSPACE_LOAD', null, loadError as Error)
+                return new IBFSError('L1_FS_ADSPACE_LOAD', null, loadError)
             }
             
         } 
@@ -183,17 +187,24 @@ export default class Filesystem {
 
                 // Open file handle and scan it
                 const [openError, fh] = await this.open({ fileAddress: address, mode: 'r' })
-                if (openError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, openError as Error)
+                if (openError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, openError)
                 handle = fh
+
+                const close = async () => {
+                    const closeError = await fh.close()
+                    if (closeError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, closeError)
+                }
 
                 for (const address of fh.fbm.allAddresses()) this.adSpace.markAllocated(address)
 
                 // Scan subdirectories & files
                 if (fh.type === 'DIR') {
 
-                    const [readError, data] = await fh.readFile()
-                    if (readError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, readError as Error)
-                    const dir = DirectoryTable.deserializeDRTable(data)
+                    const [readError, dir] = await fh.readAsDir()
+                    if (readError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, readError)
+
+                    const closeError = await close()
+                    if (closeError) return closeError
                 
                     for (const filename in dir.ch) {
                         if (Object.prototype.hasOwnProperty.call(dir.ch, filename)) {
@@ -201,6 +212,10 @@ export default class Filesystem {
                         }
                     }
 
+                }
+                else {
+                    const closeError = await close()
+                    if (closeError) return closeError
                 }
 
             }
@@ -277,6 +292,43 @@ export default class Filesystem {
         } 
         catch (error) {
             return IBFSError.eav('L1_FS_OPEN_FILE', null, error as Error)
+        }
+    }
+
+    public async createEmptyStructure(options: TCreateStructOptions): T.XEavA<number, 'L1_FS_CREATE_STRUCT'> {
+        try {
+            
+            const headAddress = this.adSpace.alloc()
+            const dataAddress = this.adSpace.alloc()
+
+            const headBody = Buffer.allocUnsafe(8)
+            headBody.writeBigInt64LE(BigInt(dataAddress), 0)
+
+            const headError = await this.volume.writeHeadBlock({
+                created: Time.now(),
+                modified: Time.now(),
+                resourceType: options.type,
+                next: 0,
+                data: headBody,
+                aesKey: this.aesKey,
+                address: headAddress
+            })
+
+            if (headError) return IBFSError.eav('L1_FS_CREATE_STRUCT', null, headError)
+
+            const dataError = await this.volume.writeDataBlock({
+                data: Buffer.alloc(0),
+                aesKey: this.aesKey,
+                address: dataAddress
+            })
+
+            if (dataError) return IBFSError.eav('L1_FS_CREATE_STRUCT', null, dataError)
+
+            return [null, headAddress]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L1_FS_CREATE_STRUCT', null, error as Error)
         }
     }
 
