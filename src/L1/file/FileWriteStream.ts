@@ -36,10 +36,10 @@ export interface TFWSOptions {
 
 export default class FileWriteStream extends Writable {
 
-    private readonly handle:                  FileHandle
-    private readonly blockSize:               number
-    private readonly fbmCommitFrequency:      number
-    public           currentBlock:            number
+    public  readonly _handle:                  FileHandle
+    private readonly _blockSize:               number
+    public  readonly _fbmCommitFrequency:      number
+    public           _currentBlock:            number
 
     public readonly fileWriteOffset:          number
     public readonly firstBlock:               number
@@ -71,17 +71,17 @@ export default class FileWriteStream extends Writable {
             highWaterMark: options.highWaterMark || KB_64
         })
 
-        this.blockSize =  handle.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE
+        this._blockSize =  handle.fbm.containingFilesystem.volume.bs.DATA_CONTENT_SIZE
 
         this.fileWriteOffset          = options.offset || 0
-        this.firstBlock               = Math.floor(this.fileWriteOffset / this.blockSize)
-        this.firstBlockOffset         = this.fileWriteOffset % this.blockSize
-        this.firstBlockAffectedRegion = this.blockSize - this.firstBlockOffset
-        this.fbmCommitFrequency       = options.fbmCommitFrequency || 16
+        this.firstBlock               = Math.floor(this.fileWriteOffset / this._blockSize)
+        this.firstBlockOffset         = this.fileWriteOffset % this._blockSize
+        this.firstBlockAffectedRegion = this._blockSize - this.firstBlockOffset
+        this._fbmCommitFrequency       = options.fbmCommitFrequency || 16
 
-        this.currentBlock             = this.firstBlock
-        this.handle                   = handle
-        this.longCache                = Memory.allocUnsafe(this.blockSize)
+        this._currentBlock            = this.firstBlock
+        this._handle                  = handle
+        this.longCache                = Memory.allocUnsafe(this._blockSize)
 
         // If starting from beginning of a block, turn to long mode
         if (this.firstBlockOffset == 0) this.mode = 'long'
@@ -105,11 +105,11 @@ export default class FileWriteStream extends Writable {
         }
     }
 
-    private async writeChunk(chunk: Buffer): Promise<Error | undefined> {
+    private async _writeChunk(chunk: Buffer): Promise<Error | undefined> {
         try {
             
-            const fs = this.handle.fbm.containingFilesystem
-            const views = createBufferMultiview(chunk, this.blockSize, this.longCache.spaceLeft)
+            const fs = this._handle.fbm.containingFilesystem
+            const views = createBufferMultiview(chunk, this._blockSize, this.longCache.spaceLeft)
 
             // First chunk
             this.longCache.write(views.firstChunk)
@@ -118,7 +118,7 @@ export default class FileWriteStream extends Writable {
                 const writeError = await fs.volume.writeDataBlock({
                     data: this.longCache.buffer,
                     aesKey: fs.aesKey,
-                    address: this.getCurrentBlockAddress()
+                    address: this._getCurrentBlockAddress()
                 })
                 if (writeError) throw writeError
                 this.longCache.reset()
@@ -129,7 +129,7 @@ export default class FileWriteStream extends Writable {
                 const writeError = await fs.volume.writeDataBlock({
                     data: chunk,
                     aesKey: fs.aesKey,
-                    address: this.getCurrentBlockAddress()
+                    address: this._getCurrentBlockAddress()
                 })
                 if (writeError) throw writeError
             }
@@ -140,29 +140,29 @@ export default class FileWriteStream extends Writable {
             }
 
             // Commit changes to the FBM
-            if (this.longAddresses.length >= this.fbmCommitFrequency) {
-                const error = await this.handle.fbm.append(this.longAddresses)
+            if (this.longAddresses.length >= this._fbmCommitFrequency) {
+                const error = await this._handle.fbm.append(this.longAddresses)
                 if (error) throw error
                 this.longAddresses.length = 0
             }
         } 
         catch (error) {
-            this.longAddresses.forEach(address => this.handle.fbm.containingFilesystem.adSpace.free(address))
+            this.longAddresses.forEach(address => this._handle.fbm.containingFilesystem.adSpace.free(address))
             return error as Error
         }
     } 
 
-    private getCurrentBlockAddress() {
+    private _getCurrentBlockAddress() {
 
-        let address = this.handle.fbm.get(this.currentBlock)
+        let address = this._handle.fbm.get(this._currentBlock)
 
         if (!address) {
-            const newAddress = this.handle.fbm.containingFilesystem.adSpace.alloc()
+            const newAddress = this._handle.fbm.containingFilesystem.adSpace.alloc()
             this.longAddresses.push(newAddress)
             address = newAddress
         }
 
-        this.currentBlock++
+        this._currentBlock++
         return address
 
     }
@@ -174,7 +174,7 @@ export default class FileWriteStream extends Writable {
             return;
         }
         else {
-            const error = await this.writeChunk(chunk)
+            const error = await this._writeChunk(chunk)
             callback(error)
         }
     }
@@ -187,13 +187,13 @@ export default class FileWriteStream extends Writable {
 
             if (totalChunks >= this.firstBlockAffectedRegion) {
 
-                const fs = this.handle.fbm.containingFilesystem
+                const fs = this._handle.fbm.containingFilesystem
 
-                const firstBlockAddress = this.getCurrentBlockAddress()
+                const firstBlockAddress = this._getCurrentBlockAddress()
                 const [readError, firstBlock] = await fs.volume.readDataBlock(firstBlockAddress, fs.aesKey)
                 if (readError) return new IBFSError('L1_FH_WRITE_STREAM_FIRST', null, readError, { address: firstBlockAddress })
                 
-                const data = Memory.alloc(this.blockSize)
+                const data = Memory.alloc(this._blockSize)
                 data.write(firstBlock.data)
                 data.bytesWritten = this.firstBlockOffset
                 
@@ -223,7 +223,7 @@ export default class FileWriteStream extends Writable {
                 this.mode = 'long'
 
                 // Write chunks to subsequent blocks and move to long mode.
-                for (const chunk of this.shortChunks) await this.writeChunk(chunk)
+                for (const chunk of this.shortChunks) await this._writeChunk(chunk)
                 this.shortChunks = []
         
             }
@@ -239,16 +239,16 @@ export default class FileWriteStream extends Writable {
             if (this.mode === 'short' && this.shortChunks.length === 0) return callback()
             if (this.mode === 'long' && this.longCache.bytesWritten === 0) return callback()
 
-            const fs = this.handle.fbm.containingFilesystem
+            const fs = this._handle.fbm.containingFilesystem
     
             // Index X to X (closed still in init mode)
             if (this.mode === 'short' && this.shortChunks.length > 0 && this.shortChunks[0]!.length > 0) {
     
-                const firstBlockAddress = this.getCurrentBlockAddress()
+                const firstBlockAddress = this._getCurrentBlockAddress()
                 const [readError, firstBlock] = await fs.volume.readDataBlock(firstBlockAddress, fs.aesKey)
                 if (readError) throw new IBFSError('L1_FH_WRITE_STREAM_FINAL', null, readError, { address: firstBlockAddress })
                 
-                const data = Memory.alloc(this.blockSize)
+                const data = Memory.alloc(this._blockSize)
                 data.write(firstBlock.data)
                 data.bytesWritten = this.firstBlockOffset
                 
@@ -272,9 +272,9 @@ export default class FileWriteStream extends Writable {
             // Index 0 to X (closed in long mode)
             if (this.mode === 'long' && this.longCache.bytesWritten > 0) {
                 
-                const address = this.getCurrentBlockAddress()
-                const shouldMerge = !!this.handle.fbm.get(this.currentBlock - 1)
-                const block = Memory.alloc(this.blockSize)
+                const address = this._getCurrentBlockAddress()
+                const shouldMerge = !!this._handle.fbm.get(this._currentBlock - 1)
+                const block = Memory.alloc(this._blockSize)
 
                 const incomingData = this.longCache.readFilled()
                 let   existingData = Buffer.alloc(0)
@@ -293,12 +293,12 @@ export default class FileWriteStream extends Writable {
 
                 const writeError = await fs.volume.writeDataBlock({
                     data: finalData,
-                    aesKey: this.handle.fbm.containingFilesystem.aesKey,
+                    aesKey: this._handle.fbm.containingFilesystem.aesKey,
                     address
                 })
                 if (writeError) throw writeError
 
-                const appendError = await this.handle.fbm.append(this.longAddresses)
+                const appendError = await this._handle.fbm.append(this.longAddresses)
                 if (appendError) throw appendError
 
                 this.longCache.reset()
@@ -310,7 +310,7 @@ export default class FileWriteStream extends Writable {
     
         } 
         catch (error) {
-            this.longAddresses.forEach(address => this.handle.fbm.containingFilesystem.adSpace.free(address))
+            this.longAddresses.forEach(address => this._handle.fbm.containingFilesystem.adSpace.free(address))
             callback(error as Error)
         }
     }

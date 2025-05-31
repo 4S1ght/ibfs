@@ -42,13 +42,13 @@ export interface TFRSOptions {
 
 export default class FileReadStream extends Readable {
 
-    private readonly handle:        FileHandle
-    private readonly reader:        AsyncGenerator<Buffer>
+    public  readonly _handle:        FileHandle
+    private readonly _reader:        AsyncGenerator<Buffer>
 
-    public  readonly readOffset:    number
-    public  readonly readLength:    number
-    public  readonly integrity:     boolean
-    public  readonly maxChunkSize:  number
+    public  readonly _readOffset:    number
+    public  readonly _readLength:    number
+    public  readonly _integrity:     boolean
+    public  readonly _maxChunkSize:  number
 
     private constructor(handle: FileHandle, options: TFRSOptions) {
 
@@ -56,13 +56,13 @@ export default class FileReadStream extends Readable {
             highWaterMark: options.maxChunkSize || KB_64,
         })
 
-        this.handle       = handle
-        this.readOffset   = options.offset       || 0
-        this.readLength   = options.length       || Infinity
-        this.integrity    = options.integrity    || true
-        this.maxChunkSize = options.maxChunkSize || KB_64
+        this._handle       = handle
+        this._readOffset   = options.offset       || 0
+        this._readLength   = options.length       || Infinity
+        this._integrity    = options.integrity    || true
+        this._maxChunkSize = options.maxChunkSize || KB_64
 
-        this.reader       = this.createBlockReader()
+        this._reader       = this.createBlockReader()
 
     }
 
@@ -73,7 +73,7 @@ export default class FileReadStream extends Readable {
 
             const [lenError, fileLength] = await handle.getFileLength()
             if (lenError) return IBFSError.eav('L1_FH_READ_STREAM_OPEN', null, lenError)
-            if (self.readOffset > fileLength) return IBFSError.eav('L1_FH_READ_STREAM_OUTRANGE', null, null, { readOffset: self.readOffset, fileLength })
+            if (self._readOffset > fileLength) return IBFSError.eav('L1_FH_READ_STREAM_OUTRANGE', null, null, { readOffset: self._readOffset, fileLength })
 
             return [null, self]
 
@@ -90,16 +90,16 @@ export default class FileReadStream extends Readable {
      */
     private async *createBlockReader(): AsyncGenerator<Buffer> {
 
-        const fs          = this.handle.fbm.containingFilesystem
+        const fs          = this._handle.fbm.containingFilesystem
 
-        const startBlock  = Math.floor(this.readOffset / fs.volume.bs.DATA_CONTENT_SIZE)
-        const startOffset = this.readOffset % fs.volume.bs.DATA_CONTENT_SIZE
-        let   bytesToRead = this.readLength
+        const startBlock  = Math.floor(this._readOffset / fs.volume.bs.DATA_CONTENT_SIZE)
+        const startOffset = this._readOffset % fs.volume.bs.DATA_CONTENT_SIZE
+        let   bytesToRead = this._readLength
         let   firstRead   = true
 
-        for (const address of this.handle.fbm.dataAddresses(startBlock)) {
+        for (const address of this._handle.fbm.dataAddresses(startBlock)) {
 
-            const [readError, dataBlock] = await fs.volume.readDataBlock(address, fs.aesKey, this.integrity)
+            const [readError, dataBlock] = await fs.volume.readDataBlock(address, fs.aesKey, this._integrity)
             if (readError) throw IBFSError.eav('L1_FH_READ_STREAM_BUFFER', null, readError, { dataBlockAddress: address })
 
             const data = firstRead 
@@ -127,8 +127,8 @@ export default class FileReadStream extends Readable {
         let offset = 0
 
         while (offset < buffer.length) {
-            yield buffer.subarray(offset, offset + this.maxChunkSize)
-            offset += this.maxChunkSize
+            yield buffer.subarray(offset, offset + this._maxChunkSize)
+            offset += this._maxChunkSize
         }
 
     }
@@ -142,7 +142,7 @@ export default class FileReadStream extends Readable {
 
         try {
             while (dataLeft > 0) {
-                const { value, done } = await this.reader.next()
+                const { value, done } = await this._reader.next()
                 if (done) {
                     this.push(null)
                     break

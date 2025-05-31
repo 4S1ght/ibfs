@@ -12,7 +12,7 @@ import FileWriteStream, { TFWSOptions } from './FileWriteStream.js'
 
 import ssc from '../../misc/safeShallowCopy.js'
 import streamFinish from '../../misc/streamFinish.js'
-import InstanceRegistry from './InstanceRegistry.js'
+import InstanceRegistry from '../../caching/InstanceRegistry.js'
 
 // Types ===============================================================================================================
 
@@ -123,11 +123,6 @@ export default class FileHandle extends EventEmitter {
             if (!this._isOpen) return new IBFSError('L1_FH_CLOSE', 'The handle is already closed')
             if (this._isBusy()) return new IBFSError('L1_FH_CLOSE', `Can't close the handle because it's busy. Wait for`
                 +` all read/write activity to finish or close all active streams before closing.`)
-
-            // Lift the lock --------------------------------------------
-            // TODO
-
-            // Remove the handle reference from the filesystem ----------
 
             this.emit('close')
             this._isOpen = false
@@ -372,21 +367,28 @@ export default class FileHandle extends EventEmitter {
     }
 
     /**
-     * Manages the stream lifecycle and references it on the file handle
-     * to prevent closing of handles that are still in use by another receiver.
+     * Manages the stream lifecycle and locking of the file handle
+     * based on the number of active streams.
      */
     private _manageStream(stream: FileReadStream | FileWriteStream) {
 
         if (stream instanceof FileWriteStream) {
-            this._ws.addRef('stream', stream)
-            const cleanup = () => this._ws.removeRef('stream')
-            stream.once('end',   cleanup)
-            stream.once('close', cleanup)
-            stream.once('error', cleanup)
+            const streamMeta = { 
+                "File address": stream._handle.fbm.startingAddress, 
+                "Commit frequency": stream._fbmCommitFrequency 
+            }
+            this._ws.addRef('stream', stream, streamMeta)
+            stream.once('end',   () => this._ws.removeRef('stream'))
+            stream.once('close', () => this._ws.removeRef('stream'))
+            stream.once('error', () => this._ws.removeRef('stream'))
         }
         else {
+            const streamMeta = { 
+                "File address": stream._handle.fbm.startingAddress, 
+                "Integrity": stream._integrity
+            }
             const ctr = this._ctr++
-            this._rs.addRef(ctr, stream)
+            this._rs.addRef(ctr, stream, streamMeta)
             const cleanup = () => this._rs.removeRef(ctr)
             stream.once('end',   cleanup)
             stream.once('close', cleanup)
