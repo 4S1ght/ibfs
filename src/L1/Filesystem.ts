@@ -295,6 +295,16 @@ export default class Filesystem {
         }
     }
 
+    /**
+     * Used to create initial empty structures in the filesystem.
+     * 
+     * `Filesystem.open()` is used to open existing files, but can not create them directly as it requires
+     * a valid file address. This method sets up the basic structures and returns the pointer which can then
+     * in turn be used to open a file handle and begin writing or reading data.
+     * 
+     * **Note:** If the file type is set to `DIR` the internal directory structure will be created as well.
+     * Only `FILE` types are initialized empty.
+     */
     public async createEmptyStructure(options: TCreateStructOptions): T.XEavA<number, 'L1_FS_CREATE_STRUCT'> {
         try {
             
@@ -316,8 +326,12 @@ export default class Filesystem {
 
             if (headError) return IBFSError.eav('L1_FS_CREATE_STRUCT', null, headError)
 
+            const dataBody = options.type === 'FILE'
+                ? Buffer.alloc(0)
+                : DirectoryTable.serializeDRTable({ ch: {}, usr: {}, md: {} })
+
             const dataError = await this.volume.writeDataBlock({
-                data: Buffer.alloc(0),
+                data: dataBody,
                 aesKey: this.aesKey,
                 address: dataAddress
             })

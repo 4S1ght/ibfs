@@ -304,6 +304,10 @@ export default class FileHandle extends EventEmitter {
 
     }
 
+    /**
+     * Reads the entire contents of the file and parses its directory content.
+     * Returns an error if the handle wasn't opened on a directory.
+     */
     public async readAsDir(integrity = true): T.XEavA<TDirectory, 'L1_FH_DIR_READ'|'L1_FH_READ_MODE'|'L1_FH_BUSY'|'L1_FH_DIR_READ_TYPE'> {
         try {
 
@@ -329,6 +333,10 @@ export default class FileHandle extends EventEmitter {
         }
     }
 
+    /**
+     * Writes a directory structure to the underlying handle's contents.
+     * This method assumes the handle was opened for a directory and will return an error if it wasn't.
+     */
     public async writeAsDir(dir: TDirectory): T.XEavSA<'L1_FH_DIR_WRITE'|'L1_FH_WRITE_MODE'|'L1_FH_BUSY'|'L1_FH_DIR_WRITE_TYPE'> {
         try {
 
