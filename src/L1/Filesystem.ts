@@ -18,7 +18,7 @@ import ssc                              from '../misc/safeShallowCopy.js'
 // Types ===============================================================================================================
 
 export interface TFSInit extends TVolumeInit {
-    /** Whether to omit integrity checks when creating the volume & filesystem. */ initialIntegrity?: boolean
+
 }
 
 export interface TFSOpenFile extends Omit<TFHOpenOptions, 'headAddress' | 'containingFilesystem'> {
@@ -57,7 +57,7 @@ export default class Filesystem {
             // Create volume ---------------------------------------------
 
             const volumeCreateError = await Volume.createEmptyVolume(init)
-            const [openError, $volume] = await Volume.open(init.fileLocation, init.initialIntegrity)
+            const [openError, $volume] = await Volume.open(init.fileLocation)
 
             if (volumeCreateError) return new IBFSError('L1_FS_CREATE', null, volumeCreateError, ssc(init, ['aesKey']))
             if (openError)         return new IBFSError('L1_FS_CREATE', null, openError, ssc(init, ['aesKey']))

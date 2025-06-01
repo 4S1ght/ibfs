@@ -219,4 +219,9 @@ const errorCodes = {
     L1_FS_OPEN_EXREF:               'Could not open this file because it is already in use by another consumer in a write-enabled mode.',
     L1_FS_ADSPACE_LOAD:             'Failed to load the address space.',
 
+    // Level 2 =========================================================================================================
+
+    L2_NS_CREATE:                   'Failed to create the filesystem namespace.',
+    L2_NS_OPEN:                     'Failed to open the filesystem namespace.',
+
 }
