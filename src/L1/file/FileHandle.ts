@@ -10,7 +10,7 @@ import FileBlockMap, { TFBMOpenOptions }    from './FileBlockMap.js'
 import FileReadStream, { TFRSOptions }      from './FileReadStream.js'
 import FileWriteStream, { TFWSOptions }     from './FileWriteStream.js'
 import DirectoryTable, { TDirectory }       from '../directory/DirectoryTables.js'
-import InstanceRegistry                     from '../../caching/InstanceRegistry.js'
+import InstanceRegistry                     from '../caching/InstanceRegistry.js'
 
 import ssc                                  from '../../misc/safeShallowCopy.js'
 import streamFinish                         from '../../misc/streamFinish.js'

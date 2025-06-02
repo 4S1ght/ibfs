@@ -224,4 +224,6 @@ const errorCodes = {
     L2_NS_CREATE:                   'Failed to create the filesystem namespace.',
     L2_NS_OPEN:                     'Failed to open the filesystem namespace.',
 
+    L2_NS_SCAN_TREE:                'Failed to scan the filesystem directory tree.',
+
 }

@@ -1,7 +1,7 @@
 // Imports =============================================================================================================
 
 import { styleText } from "node:util"
-import { toGridString } from "../misc/toGridString.js"
+import { toGridString } from "../../misc/toGridString.js"
 
 
 // Types ===============================================================================================================
