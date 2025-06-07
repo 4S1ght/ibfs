@@ -3,7 +3,7 @@
 import type * as T from '../../types.js'
 import IBFSError from '../errors/IBFSError.js'
 import Filesystem, { TFSInit } from '../L1/Filesystem.js'
-import DirectoryTree from './caching/DirectoryTree.js'
+import VFS from './VFS.js'
 
 // Types ===============================================================================================================
 
@@ -18,7 +18,7 @@ export default class Namespace {
     // Initial ---------------------------------------------------------------------------------------------------------
 
     private declare fs: Filesystem
-    private dt = new DirectoryTree()
+    private declare vfs: VFS
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
@@ -48,13 +48,16 @@ export default class Namespace {
         try {
 
             const self = new this()
+            self.vfs = new VFS()
 
             const [fsError, fs] = await Filesystem.open(image, aesKey)
             if (fsError) return IBFSError.eav('L2_NS_OPEN', null, fsError)
             self.fs = fs
-
+        
             const treeScanError = await self.scanFilesystemTree()
             if (treeScanError) return IBFSError.eav('L2_NS_OPEN', null, treeScanError)
+
+            
 
             return [null, self]
 

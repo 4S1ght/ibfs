@@ -4,7 +4,7 @@ import Memory from "../../L0/Memory.js"
 
 // Types ===============================================================================================================
 
-type TPermLevel = 0 | 1 | 2 | 3
+export type TPermLevel = 0 | 1 | 2 | 3
 export interface TDirectory {
     /** Directory's children items. */
     ch: Record<string, number>,
