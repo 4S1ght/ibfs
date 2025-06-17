@@ -27,13 +27,11 @@ type TNode = TDirectory | TFile
 // Method types --------------------------------------------------------------------------------------------------------
 
 export interface TMakeDir {
-    /** The user as which to perform the action.            */ asUser:      string
     /** Physical address of the directory head block.       */ address:     number
     /** Whether to create parent directories recursively.   */ recursive?:  boolean
 }
 
 export interface TMakeFile {
-    /** The user as which to perform the action.            */ asUser:      string
     /** Physical address of the file head block.            */ address:     number
 }
 
@@ -71,9 +69,9 @@ export default class VFS {
         let permLevel = rootLevel
         return {
             progress: (newPerm?: TPermLevel) => {
-                if (newPerm === undefined) return // Inherit perm level if not overwritten
-                if (newPerm === 3) return         // Admin always has full permissions
-                permLevel = Math.min(newPerm, permLevel) as TPermLevel
+                if (newPerm === undefined) return                       // Inherit perm level if not overwritten
+                if (newPerm === 3) return                               // Admin always has full permissions
+                permLevel = Math.min(newPerm, permLevel) as TPermLevel  // Inherit same level or drop it
             },
             get canRead() { return permLevel >= 1 },       
             get canWrite() { return permLevel >= 2 },
@@ -95,28 +93,32 @@ export default class VFS {
     // Methods ---------------------------------------------------------------------------------------------------------
 
     /**
-     * Resolves the `path` to a node in the VFS.
+     * Resolves the `path` to a node in the VFS.  
+     * **IMPORTANT - Skipping the `asUser` parameter disables permission checking! Only for internal use!**
      * @param path Standard file path. Eg. `/a/b/c`
+     * @param asUser User making the request
      * @returns [Error?, Node?]
      */
-    public resolvePath(path: string): T.XEav<TNode, "L2_VFS_MISDIR"> {
+    public resolvePathUnsafe(path: string, asUser?: string): T.XEav<TNode, "L2_VFS_MISDIR"|'L2_VFS_NO_PERM'> {
         try {
 
             if (path === '/' || path === '') return [null, this._vfs]
 
             let current: TNode = this._vfs
             const parts = VFS.normalizePath(path).split('/')
+            const perm = VFS.createPermCascade(this._vfs.perms[asUser!] || 0)
 
             for (let i = 0; i < parts.length; i++) {
                 
                 const last = i === parts.length - 1
                 const part = parts[i]!
 
+                if (asUser && !perm.canRead)         return IBFSError.eav('L2_VFS_NO_PERM', null, null, x)
                 if (!last && current.type !== 'DIR') return IBFSError.eav('L2_VFS_MISDIR', `Entry "${part}" inside "${path}" is not a directory.`, null, { path })
                 if (!current.children[part])         return IBFSError.eav('L2_VFS_MISDIR', `Entry "${part}" inside "${path}" does not exist.`, null, { path })
                 
-                const child = current.children[part] as TDirectory
-                current = child
+                current = current.children[part] as TDirectory
+                perm.progress(current.perms[asUser!])
 
             }
 
@@ -129,16 +131,28 @@ export default class VFS {
     }
 
     /**
+     * Resolves the `path` to a node in the VFS.
+     * @param path Standard file path. Eg. `/a/b/c`
+     * @param asUser User making the request
+     * @returns [Error?, Node?]
+     */
+    public resolvePath(path: string, asUser: string): T.XEav<TNode, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
+        if (!asUser) return IBFSError.eav('L2_VFS_NO_PERM', 'Undefined user ID passed to VFS.resolvePath(path, -> asUser <-)', null, x)
+        return this.resolvePathUnsafe(path, asUser)
+    }
+
+    /**
      * Makes a new virtual directory.
      * @param path Path to the directory.
-     * @param recursive Whether to create parent folders recursively.
+     * @param asUser User making the directory.
+     * @param opt Make options
      */
-    public mkDir(path: string, x: TMakeDir): T.XEavS<'L2_VFS_MKDIR'|'L2_VFS_NO_PERM'> {
+    public mkDir(path: string, asUser: string, opt: TMakeDir): T.XEavS<'L2_VFS_MKDIR'|'L2_VFS_NO_PERM'> {
         try {
 
             let current: TDirectory = this._vfs
             const parts = VFS.normalizePath(path).split('/')
-            const perm = VFS.createPermCascade(this._vfs.perms[x.asUser] || 0)
+            const perm = VFS.createPermCascade(this._vfs.perms[asUser] || 0)
 
             for (let i = 0; i < parts.length; i++) {
 
@@ -148,16 +162,16 @@ export default class VFS {
                 if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, x)
                 if (current.children[part] && current.children[part]?.type !== 'DIR') return new IBFSError('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" is not a directory.`, null, { path, ...x })
 
-                if (x.recursive) {
-                    if (!current.children[part]) current.children[part] = VFS.dir(x.address)
+                if (opt.recursive) {
+                    if (!current.children[part]) current.children[part] = VFS.dir(opt.address)
                 }
                 else {
                     if (current.children[part] == undefined && !last) return new IBFSError('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" does not exist.`, null, { path, ...x })
-                    current.children[part] = VFS.dir(x.address)
+                    current.children[part] = VFS.dir(opt.address)
                 }
 
                 current = current.children[part] as TDirectory
-                perm.progress(current.perms[x.asUser])
+                perm.progress(current.perms[asUser])
 
             }
             
@@ -167,12 +181,19 @@ export default class VFS {
         }
     }
 
-    public mkFile(path: string, x: TMakeFile): T.XEavS<'L2_VFS_MKDIR'|'L2_VFS_NO_PERM'> {
+
+    /**
+     * Makes a new virtual directory.
+     * @param path Path to the directory.
+     * @param asUser User making the directory.
+     * @param opt Make options
+     */
+    public mkFile(path: string, asUser: string, opt: TMakeFile): T.XEavS<'L2_VFS_MKDIR'|'L2_VFS_NO_PERM'> {
         try {
             
             let current: TDirectory = this._vfs
             const parts = VFS.normalizePath(path).split('/')
-            const perm = VFS.createPermCascade(this._vfs.perms[x.asUser] || 0)
+            const perm = VFS.createPermCascade(this._vfs.perms[asUser] || 0)
 
             for (let i = 0; i < parts.length; i++) {
                 
@@ -184,14 +205,13 @@ export default class VFS {
 
                 if (last) {
                     if (current.children[part]) return new IBFSError('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" already exists.`, null, { path, ...x })
-                    current.children[part] = VFS.file(x.address)
+                    current.children[part] = VFS.file(opt.address)
                 }
                 else {
                     if (current.children[part] == undefined) return new IBFSError('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" does not exist.`, null, { path, ...x })
                     current = current.children[part] as TDirectory
-                    perm.progress(current.perms[x.asUser])
+                    perm.progress(current.perms[asUser])
                 }
-
 
             }
 
@@ -208,10 +228,10 @@ const x = new VFS()
 
 console.log('\n\n')
 
-console.log(x.mkDir('/test',      { address: 123, asUser: 'user' }))
-console.log(x.mkDir('/test/a/b',  { address: 123, recursive: true, asUser: 'user' }))
-console.log(x.mkDir('/test/a/c',  { address: 123, recursive: true, asUser: 'admin' }))
-console.log(x.mkFile('/test/a/d', { address: 123, size: 10, asUser: 'user' }))
+console.log(x.mkDir('/test',     'user',  { address: 123 }))
+console.log(x.mkDir('/test/a/b', 'user',  { address: 123, recursive: true }))
+console.log(x.mkDir('/test/a/c', 'admin', { address: 123, recursive: true }))
+console.log(x.mkFile('/test/a/d', 'user', { address: 123 }))
 console.dir(x, { depth: null })
 
 console.log('\n\n')
