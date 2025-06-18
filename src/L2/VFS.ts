@@ -3,7 +3,7 @@
 import { normalize } from "node:path"
 
 import type * as T from "../../types.js"
-import IBFSError from "../errors/IBFSError.ts"
+import IBFSError from "../errors/IBFSError.js"
 import type { TPermLevel } from "../L1/directory/DirectoryTables.js"
 
 // Types ===============================================================================================================
@@ -16,6 +16,10 @@ interface TDirectory {
     /** Children files and subdirectories.            */ children:  Record<string, TNode>
 }
 
+interface TSafeDIrectory extends Omit<TDirectory, 'children' | 'perms'> {
+    /** Children files and subdirectories.            */ children:  string[]
+}
+
 interface TFile {
     /** Type of the file structure.                   */ type:      'FILE'
     /** Total size of the file's contents.            */ size:      number
@@ -23,6 +27,7 @@ interface TFile {
 }
 
 type TNode = TDirectory | TFile
+type TSafeNode = TSafeDIrectory | TFile
 
 // Method types --------------------------------------------------------------------------------------------------------
 
@@ -69,8 +74,8 @@ export default class VFS {
         let permLevel = rootLevel
         return {
             progress: (newPerm?: TPermLevel) => {
+                if (permLevel === 3) return                             // Admin always has full permissions
                 if (newPerm === undefined) return                       // Inherit perm level if not overwritten
-                if (newPerm === 3) return                               // Admin always has full permissions
                 permLevel = Math.min(newPerm, permLevel) as TPermLevel  // Inherit same level or drop it
             },
             get canRead() { return permLevel >= 1 },       
@@ -78,6 +83,21 @@ export default class VFS {
             get canManage() { return permLevel >= 3 },
             get permLevel() { return permLevel }
         }
+    }
+
+    private static toSafeNode(node: TNode): TSafeNode {
+        return node.type === 'DIR' 
+            ? {
+                type: 'DIR',
+                size: node.size,
+                address: node.address,
+                children: Object.keys(node.children)
+            }
+            :{
+                type: 'FILE',
+                size: node.size,
+                address: node.address
+            }
     }
 
     // Initial ---------------------------------------------------------------------------------------------------------
@@ -99,14 +119,17 @@ export default class VFS {
      * @param asUser User making the request
      * @returns [Error?, Node?]
      */
-    public resolvePathUnsafe(path: string, asUser?: string): T.XEav<TNode, "L2_VFS_MISDIR"|'L2_VFS_NO_PERM'> {
+    public resolvePathUnsafe(path: string, asUser?: string): T.XEav<{ node: TNode, perm: TPermLevel }, "L2_VFS_MISDIR"|'L2_VFS_NO_PERM'> {
         try {
-
-            if (path === '/' || path === '') return [null, this._vfs]
 
             let current: TNode = this._vfs
             const parts = VFS.normalizePath(path).split('/')
             const perm = VFS.createPermCascade(this._vfs.perms[asUser!] || 0)
+
+            if (path === '/' || path === '') {
+                if (perm.canRead) return [null, { node: current, perm: perm.permLevel }]
+                return IBFSError.eav('L2_VFS_NO_PERM', null, null, x)
+            }
 
             for (let i = 0; i < parts.length; i++) {
                 
@@ -122,7 +145,7 @@ export default class VFS {
 
             }
 
-            return [null, current]
+            return [null, { node: current, perm: perm.permLevel }]
             
         } 
         catch (error) {
@@ -136,9 +159,12 @@ export default class VFS {
      * @param asUser User making the request
      * @returns [Error?, Node?]
      */
-    public resolvePath(path: string, asUser: string): T.XEav<TNode, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
+    public resolvePath(path: string, asUser: string): T.XEav<{ node: TSafeNode, perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
         if (!asUser) return IBFSError.eav('L2_VFS_NO_PERM', 'Undefined user ID passed to VFS.resolvePath(path, -> asUser <-)', null, x)
-        return this.resolvePathUnsafe(path, asUser)
+        const [error, resolved] = this.resolvePathUnsafe(path, asUser)
+        return error
+            ? [error, null]
+            : [null, { node: VFS.toSafeNode(resolved.node), perm: resolved.perm }]
     }
 
     /**
@@ -181,7 +207,6 @@ export default class VFS {
         }
     }
 
-
     /**
      * Makes a new virtual directory.
      * @param path Path to the directory.
@@ -200,7 +225,7 @@ export default class VFS {
                 const part = parts[i]!
                 const last = i === parts.length - 1
 
-                if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, ...x})
+                if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, ... x})
                 if (current.children[part] && current.children[part]?.type !== 'DIR') return new IBFSError('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" is not a directory.`, null, { path, ...x })
 
                 if (last) {
@@ -221,6 +246,37 @@ export default class VFS {
         }
     }
 
+    public rename(oldPath: string, newPath: string, asUser: string): T.XEavS<'L2_VFS_RENAME'|'L2_VFS_NO_PERM'> {
+        try {
+
+            oldPath = VFS.normalizePath(oldPath)
+            newPath = VFS.normalizePath(newPath)
+
+            if (oldPath === '' || newPath === '') return new IBFSError('L2_VFS_RENAME', `Can't rename form/to empty path`, null, { oldPath, newPath, ...x })
+
+            const _oldPathParts = oldPath.split('/')
+            const oldPathItem = _oldPathParts.pop()!
+            const oldPathDir = _oldPathParts.join('/')
+            
+            const _newPathParts = newPath.split('/')
+            const newPathItem = _newPathParts.pop()!
+            const newPathDir = _newPathParts.join('/')
+
+            const [err1, oldDir] = this.resolvePathUnsafe(oldPathDir, asUser)
+            const [err2, newDir] = this.resolvePathUnsafe(newPathDir, asUser)
+
+            if (err1 || err2) return new IBFSError('L2_VFS_RENAME', null, err1 || err2, { oldPath, newPath })
+
+            if (oldDir.perm < 2) return new IBFSError('L2_VFS_NO_PERM', null, null, { oldPath, newPath, ...x })
+            if (newDir.perm < 2) return new IBFSError('L2_VFS_NO_PERM', null, null, { oldPath, newPath, ...x })
+
+
+        } 
+        catch (error) {
+            return new IBFSError('L2_VFS_RENAME', null, error as Error, { oldPath, newPath })
+        }
+    }
+
 }
 
 
@@ -235,3 +291,6 @@ console.log(x.mkFile('/test/a/d', 'user', { address: 123 }))
 console.dir(x, { depth: null })
 
 console.log('\n\n')
+
+import fs from 'node:fs/promises'
+fs.rename

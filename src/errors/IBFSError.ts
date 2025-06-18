@@ -229,7 +229,10 @@ const errorCodes = {
     L2_VFS_MISDIR:                  'Provided file path does not point to a resource.',
     L2_VFS_MKDIR:                   'Failed to create a new directory entry.',
     L2_VFS_MKFILE:                  'Failed to create a new file entry.',
-    
+    L2_VFS_RENAME:                  'Failed to rename the file/directory.',
+    L2_VFS_ACCESS:                  'Failed to verify access permissions of a file/directory.',
+
     L2_VFS_NO_PERM:                 'The user does not have permission to perform the requested operation.',
+    
 
 }
