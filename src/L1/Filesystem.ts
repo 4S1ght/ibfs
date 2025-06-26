@@ -94,8 +94,10 @@ export default class Filesystem {
             const dataError = await volume.writeDataBlock({
                 address: rootDirectoryDataAddress,
                 aesKey: init.aesKey,
-                data: DirectoryTable.serializeDRTable({
-                    ch: {}, usr: {}, md: {}
+                data: DirectoryTable.serialize({
+                    children: {},
+                    users: {},
+                    meta: {}
                 })
             })
 
@@ -206,9 +208,9 @@ export default class Filesystem {
                     const closeError = await close()
                     if (closeError) return closeError
                 
-                    for (const filename in dir.ch) {
-                        if (Object.prototype.hasOwnProperty.call(dir.ch, filename)) {
-                            await scan(dir.ch[filename]!)
+                    for (const filename in dir.children) {
+                        if (Object.prototype.hasOwnProperty.call(dir.children, filename)) {
+                            await scan(dir.children[filename]!)
                         }
                     }
 
@@ -328,7 +330,7 @@ export default class Filesystem {
 
             const dataBody = options.type === 'FILE'
                 ? Buffer.alloc(0)
-                : DirectoryTable.serializeDRTable({ ch: {}, usr: {}, md: {} })
+                : DirectoryTable.serialize({ children: {}, users: {}, meta: {} })
 
             const dataError = await this.volume.writeDataBlock({
                 data: dataBody,

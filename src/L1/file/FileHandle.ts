@@ -324,7 +324,7 @@ export default class FileHandle extends EventEmitter {
             for await (const chunk of stream) memory.write(chunk)
 
             const buffer = memory.readFilled()
-            const dir = DirectoryTable.deserializeDRTable(buffer)
+            const dir = DirectoryTable.deserialize(buffer)
             return [null, dir]
             
         } 
@@ -344,7 +344,7 @@ export default class FileHandle extends EventEmitter {
             if (!this._write) return new IBFSError('L1_FH_WRITE_MODE')
             if (this._isBusy()) return new IBFSError('L1_FH_BUSY')
 
-            const data = DirectoryTable.serializeDRTable(dir)
+            const data = DirectoryTable.serialize(dir)
 
             const [lenError, fileLength] = await this.getFileLength()
             if (lenError) return new IBFSError('L1_FH_DIR_WRITE', null, lenError)

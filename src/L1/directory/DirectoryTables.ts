@@ -4,14 +4,23 @@ import Memory from "../../L0/Memory.js"
 
 // Types ===============================================================================================================
 
-export type TPermLevel = 0 | 1 | 2 | 3
+/**
+ * User permissions levels.
+ * 0 - No access
+ * 1 - Read
+ * 2 - Write
+ * 3 - Manage (local) - User can manage children of this directory, but not parents.
+ * 4 - Admin (global) - User can manage everything. Set globally at root.
+ */
+export type TPermLevel = 0 | 1 | 2 | 3 | 4
+
 export interface TDirectory {
     /** Directory's children items. */
-    ch: Record<string, number>,
-    /** Defines directory read permissions for each user - none/read/write/exec (cascading). */
-    usr: Record<string, TPermLevel>,
+    children: Record<string, number>,
+    /** Defines directory read permissions for each user. */
+    users: Record<string, TPermLevel>,
     /** Directory's metadata. */
-    md: Record<string, string>
+    meta: Record<string, string>
 }
 
 // Exports =============================================================================================================
@@ -58,7 +67,7 @@ export default class DirectoryTable {
         --------------------------------------------------------
         
      */
-    public static serializeDRTable(dir: TDirectory) {
+    public static serialize(dir: TDirectory) {
 
         let bufSize = this.DIR_ITEM_COUNT + this.USER_PERM_COUNT + this.MD_FIELD_COUNT
         let childFields = 0
@@ -68,23 +77,23 @@ export default class DirectoryTable {
         // Pass #1 (calculate buffer size) --------------------------
 
         // Directory items
-        for (const key in dir.ch) {
-            if (Object.prototype.hasOwnProperty.call(dir.ch, key)) {
+        for (const key in dir.children) {
+            if (Object.prototype.hasOwnProperty.call(dir.children, key)) {
                 bufSize += this.DIR_NAME_LENGTH + Buffer.byteLength(key) + this.DIR_ADDRESS
                 childFields++
             }
         }
         // User permissions
-        for (const key in dir.usr) {
-            if (Object.prototype.hasOwnProperty.call(dir.usr, key)) {
+        for (const key in dir.users) {
+            if (Object.prototype.hasOwnProperty.call(dir.users, key)) {
                 bufSize += this.USER_PERM_ID + this.USER_PERM_LEVEL
                 permFields++
             }
         }
         // Metadata
-        for (const key in dir.md) {
-            if (Object.prototype.hasOwnProperty.call(dir.md, key)) {
-                const value = dir.md[key]!
+        for (const key in dir.meta) {
+            if (Object.prototype.hasOwnProperty.call(dir.meta, key)) { 
+                const value = dir.meta[key]!
                 bufSize += this.MD_KEY_LENGTH + Buffer.byteLength(key) + this.MD_VALUE_LENGTH + Buffer.byteLength(value)                
                 metaFields++
             }
@@ -96,26 +105,26 @@ export default class DirectoryTable {
 
         // Directory items
         mem.writeInt16(childFields)
-        for (const key in dir.ch) {
-            if (Object.prototype.hasOwnProperty.call(dir.ch, key)) {
+        for (const key in dir.children) {
+            if (Object.prototype.hasOwnProperty.call(dir.children, key)) {
                 mem.writeInt16(Buffer.byteLength(key))
                 mem.writeString(key)
-                mem.writeInt64(dir.ch[key]!)
+                mem.writeInt64(dir.children[key]!)
             }
         }
         // User permissions
         mem.writeInt16(permFields)
-        for (const key in dir.usr) {
-            if (Object.prototype.hasOwnProperty.call(dir.usr, key)) {
+        for (const key in dir.users) {
+            if (Object.prototype.hasOwnProperty.call(dir.users, key)) {
                 mem.writeInt32(parseInt(key, 16))
-                mem.writeInt8(dir.usr[key]!)
+                mem.writeInt8(dir.users[key]!)
             }
         }
         // Metadata
         mem.writeInt8(metaFields)
-        for (const key in dir.md) {
-            if (Object.prototype.hasOwnProperty.call(dir.md, key)) {
-                const value = dir.md[key]!
+        for (const key in dir.meta) {
+            if (Object.prototype.hasOwnProperty.call(dir.meta, key)) {
+                const value = dir.meta[key]!
                 mem.writeInt8(Buffer.byteLength(key))
                 mem.writeString(key)
                 mem.writeInt8(Buffer.byteLength(value))
@@ -127,24 +136,24 @@ export default class DirectoryTable {
 
     }
 
-    public static deserializeDRTable(buf: Buffer) {
+    public static deserialize(buf: Buffer) {
 
         const mem = Memory.wrap(buf)
-        const dir: TDirectory = { ch: {}, usr: {}, md: {} }
+        const dir: TDirectory = { children: {}, users: {}, meta: {} }
 
         let childFields = mem.readInt16()
         for (let i = 0; i < childFields; i++) {
             const nameLength = mem.readInt16()
             const name       = mem.readString(nameLength)
             const address    = mem.readInt64()
-            dir.ch[name]     = address
+            dir.children[name]     = address
         }
 
         let permFields = mem.readInt16()
         for (let i = 0; i < permFields; i++) {
             const id    = mem.readInt32().toString(16).padStart(6, '0')
             const perm  = mem.readInt8()
-            dir.usr[id] = perm as TPermLevel
+            dir.users[id] = perm as TPermLevel
         }
 
         let metaFields = mem.readInt8()
@@ -153,7 +162,7 @@ export default class DirectoryTable {
             const key         = mem.readString(keyLength)
             const valueLength = mem.readInt8()
             const value       = mem.readString(valueLength)
-            dir.md[key]       = value
+            dir.meta[key]       = value
         }
 
         return dir
