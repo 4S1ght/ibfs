@@ -363,7 +363,7 @@ export default class FileBlockMap {
     }
 
     /**
-     * Yields all the addresses stored inside the FBM including the index blocks.  
+     * Yields all the addresses stored inside the FBM including those of the index blocks.  
      * Addresses are returned in order of:      
      * ```text
      * 1. FBM starting head block address

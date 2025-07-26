@@ -23,9 +23,9 @@ describe('Filesystem', () => {
 
         const dir = await uniformAsync(file.readAsDir())
         expect(dir).toStrictEqual<TDirectory>({
-            ch: {},
-            usr: {},
-            md: {}
+            children: {},
+            users: {},
+            meta: {}
         })
 
     })
@@ -36,16 +36,16 @@ describe('Filesystem', () => {
         const file = await uniformAsync(fs.open({ fileAddress: fs.volume.root.fsRoot, mode: 'rw' }))
 
         const dir: TDirectory = {
-            ch: {
+            children: {
                 'Movies': 0x123,
                 'Music': 0x456
             },
-            usr: {
+            users: {
                 'f89422': 1,
                 'f89423': 2,
                 'f89424': 3
             },
-            md: {
+            meta: {
                 'comment': 'Custom comment on a directory.'
             }
         }

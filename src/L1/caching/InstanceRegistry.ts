@@ -43,12 +43,12 @@ export default class InstanceRegistry<Key, Ref extends object> {
                 gray(
                     `An object was garbage-collected without proper cleanup. This can and probably\n`+
                     `already HAS caused loss of uncommitted in-flight data and/or corruption.\n\n`+
-                    `Make sure to ALWAYS close open file handles, streams and any other open\n`+
-                    `resources explicitly by calling close()/end() or with the "using" keyword if supported.\n\n`
+                    `Make sure to ALWAYS close file handles, streams and any other open resources explicitly\n`+
+                    `by calling close()/end() or with the "using" keyword if supported.\n\n`
                 ) +
                 red(
                     `Note that due to JS garbage collection's nondeterministic behavior, this message\n`+
-                    `may have been emitted way after the object has actually been garbage-collected.\n`+
+                    `may have been emitted long after the object has actually been garbage-collected.\n`+
                     `This message is here strictly to signify that this program's design does not guarantee\n`+
                     `data safety.\n\n`
                 ) +

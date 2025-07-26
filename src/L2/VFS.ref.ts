@@ -25,6 +25,12 @@ interface TFile {
 }
 
 type TNode = TDirectory | TFile
+type TSafeNode = Omit<TNode, 'perms'|'children'>
+
+
+export interface TSafeDirectory extends Omit<TDirectory, 'perms'|'children'> {
+    /** Children files and subdirectories.            */ children: Record<string, TSafeNode>
+}
 
 // Method types --------------------------------------------------------------------------------------------------------
 
@@ -44,6 +50,19 @@ export default class VFS {
         }
     }
 
+    private static toSafeDir(dir: TDirectory): TSafeDirectory {
+        return {
+            type: 'DIR',
+            size: dir.size,
+            address: dir.address,
+            children: Object.fromEntries(Object.entries(dir.children).map(([nodeName, node]) => [nodeName, {
+                type: node.type,
+                size: node.size,
+                address: node.address
+            }]))
+        }
+    }
+
     private static file(address: number, size = 0): TNode {
         return {
             type: 'FILE',
@@ -60,18 +79,12 @@ export default class VFS {
     }
 
     private static split(path: string): { parts: string[], last: string | undefined } {
-
         const parts = this.normalizePath(path).split('/')
-
-        if (parts.length === 1 && ['', '.', undefined].includes(parts[0]!)) {
-            return { parts: [], last: undefined }
-        }
-
+        if (parts.length === 1 && ['', '.', undefined].includes(parts[0]!)) return { parts: [], last: undefined }
         return {
             parts,
             last: parts.pop()
         }
-
     }
 
     private static createPermCascade(rootLevel: TPermLevel) {
@@ -82,6 +95,7 @@ export default class VFS {
                 if (permLevel === 3) return // Inherit same manage level all the way down directory tree
                 if (permLevel === 0) return // Inherit denied access if any parent denies it.
                 if (!newLevel)       return // Inherit perm level if not overwritten
+                if (newLevel === 4)  return // Reassignment of admin (likely corrupted data) - Deny permission.
                 permLevel === newLevel      // Freely swap between read/write permissions depending on directory depth & perms set
 
             },
@@ -108,7 +122,7 @@ export default class VFS {
     // Create a standalone class/object "browser" that itself handles going down the directory tree
     // while checking permissions transparently.
 
-    public readDirUnsafe(path: string, user?: string): T.XEav<{ node: TNode, perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
+    public readDirUnsafe(path: string, user?: string): T.XEav<TDirectory & { perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
         try {
 
             let current: TNode = this._vfs
@@ -125,12 +139,19 @@ export default class VFS {
                 perm.progress(current.perms[user!])
             }
             
-            return [null, { node: current, perm: perm.permLevel }]
+            return [null, { ...current, perm: perm.permLevel }]
 
         } 
         catch (error) {
             return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })
         }
+    }
+
+    public readDir(path: string, user: string): T.XEav<{ node: TSafeNode, perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
+        const [error, resolved] = this.readDirUnsafe(path, user)
+        return error
+            ? [error, null]
+            : [null, { node: VFS.toSafeNode(resolved.node), perm: resolved.perm }]
     }
 
 

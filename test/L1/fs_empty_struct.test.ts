@@ -2,8 +2,6 @@ import { describe, test, expect } from "vitest"
 import { uniform, uniformAsync, uniformSA } from "../libs/uniform.js"
 import { emptyFilesystem } from "../libs/empty-filesystem.js"
 import BlockAESContext from "../../src/L0/BlockAES.js"
-import { Readable, Writable } from "stream"
-import crypto from 'crypto'
 
 describe('Filesystem', () => {
 
@@ -35,9 +33,9 @@ describe('Filesystem', () => {
         const fh = await uniformAsync(fs.open({ fileAddress: address, mode: 'rw' }))
         const data = await uniformAsync(fh.readAsDir())
         expect(data).toStrictEqual({
-            ch: {},
-            usr: {},
-            md: {},
+            children: {},
+            users: {},
+            meta: {},
         })
 
     })
