@@ -55,47 +55,64 @@ export default class Memory {
         return this.buffer.subarray(this.bytesRead, this.length)
     }
 
+    /**
+     * Resets the internal read/write heads allowing for reuse of the buffer.
+     * This method is intended primarily to allow easy reuse of the same buffer 
+     * instance inside write streams.
+     */
+    public reset() {
+        this.bytesRead = 0
+        this.bytesWritten = 0
+    }
+
+    /** 
+     * How much space is available left for writing from the current position.
+     */
+    public get spaceLeft(): number {
+        return this.length - this.bytesWritten
+    }
+
     // Sequential input =============================================
 
     /** Sequentially writes an 8-bit integer. */
     public writeInt8(value: number, index?: number) {
          this.buffer.writeUInt8(value, index || this.bytesWritten)
-        if (!index) this.bytesWritten += 1
+        if (index === undefined) this.bytesWritten += 1
     }
     /** Sequentially writes a 16-bit integer. */
     public writeInt16(value: number, index?: number) {
         this.buffer.writeUInt16LE(value, index || this.bytesWritten)
-        if (!index) this.bytesWritten += 2
+        if (index === undefined) this.bytesWritten += 2
     }
     /** Sequentially writes a 32-bit integer. */
     public writeInt32(value: number, index?: number) {
         this.buffer.writeUInt32LE(value, index || this.bytesWritten)
-        if (!index) this.bytesWritten += 4
+        if (index === undefined) this.bytesWritten += 4
     }
     /** Sequentially writes a 64-bit integer. (Limited to 52 bits due to float64 / IEEE-754 maximum integer value)  */
     public writeInt64(value: number, index?: number) {
         this.buffer.writeBigInt64LE(BigInt(value), index || this.bytesWritten)
-        if (!index) this.bytesWritten += 8
+        if (index === undefined) this.bytesWritten += 8
     }
     /** Sequentially writes a 64-bit integer. (Limited to 52 bits due to float64 / IEEE-754 maximum integer value)  */
     public writeInt64B(value: bigint, index?: number) {
         this.buffer.writeBigInt64LE(value, index || this.bytesWritten)
-        if (!index) this.bytesWritten += 8
+        if (index === undefined) this.bytesWritten += 8
     }
     /** Sequentially writes a bitwise 0/1 8-bit integer. */
     public writeBool(value: boolean, index?: number) {
         this.buffer.writeUInt8(value ? 1 : 0, index || this.bytesWritten)
-        if (!index) this.bytesWritten += 1
+        if (index === undefined) this.bytesWritten += 1
     }
     /** Sequentially writes a UTF-8 string. */
     public writeString(value: string, index?: number) {
         const shift = this.buffer.write(value, index || this.bytesWritten, 'utf-8')
-        if (!index) this.bytesWritten += shift
+        if (index === undefined) this.bytesWritten += shift
     }
     /** Sequentially writes raw data. */
     public write(value: Buffer, index?: number) {
         value.copy(this.buffer, index || this.bytesWritten)
-        if (!index) this.bytesWritten += value.length
+        if (index === undefined) this.bytesWritten += value.length
     }
     /** 
      * Copies N amount of bytes to another `Memory` instance.
@@ -123,44 +140,44 @@ export default class Memory {
     /** Sequentially reads an 8-bit integer. */
     public readInt8(index?: number) {
         const data = this.buffer.readUint8(index || this.bytesRead)
-        if (!index) this.bytesRead += 1
+        if (index === undefined) this.bytesRead += 1
         return data
     }
     /** Sequentially reads a 16-bit integer. */
     public readInt16(index?: number) {
         const data = this.buffer.readUint16LE(index || this.bytesRead)
-        if (!index) this.bytesRead += 2
+        if (index === undefined) this.bytesRead += 2
         return data
     }
     /** Sequentially reads a 32-bit integer. */
     public readInt32(index?: number) {
         const data = this.buffer.readUint32LE(index || this.bytesRead)
-        if (!index) this.bytesRead += 4
+        if (index === undefined) this.bytesRead += 4
         return data
     }
     /** Sequentially reads a 64-bit integer. */
     public readInt64B(index?: number) {
         const data = this.buffer.readBigInt64LE(index || this.bytesRead)
-        if (!index) this.bytesRead += 8
+        if (index === undefined) this.bytesRead += 8
         return data
     }
     /** Sequentially reads a 64-bit integer. */
     public readInt64(index?: number) {
         const data = this.buffer.readBigInt64LE(index || this.bytesRead)
-        if (!index) this.bytesRead += 8
+        if (index === undefined) this.bytesRead += 8
         return Number(data)
     }
     /** Sequentially reads an 8-bit bitwise 1/0 integer - Boolean. */
     public readBool(index?: number) {
         const data = this.buffer.readUInt8(index || this.bytesRead)
-        if (!index) this.bytesRead += 1
+        if (index === undefined) this.bytesRead += 1
         return Boolean(data)
     }
     /** Sequentially reads a UTF-8 string. */
     public readString(length: number, index?: number) {
         const start = index || this.bytesRead
         const data = this.buffer.subarray(start, start+length).toString('utf-8')
-        if (!index) this.bytesRead += length
+        if (index === undefined) this.bytesRead += length
         return data
     }
     /** 
@@ -171,7 +188,7 @@ export default class Memory {
     public read(length: number, index?: number) {
         const start = index || this.bytesRead
         const data = this.buffer.subarray(start, start+length)
-        if (!index) this.bytesRead += length
+        if (index === undefined) this.bytesRead += length
         return data
     }
 

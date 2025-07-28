@@ -2,18 +2,21 @@
 // Layer on top of the underlying address bitmap that keeps track
 // of resource allocation inside the volume.
 
-// Imports ========================================================================================
+// Imports =============================================================================================================
 
-import IBFSError from "../../errors/IBFSError.js"
-import AddressMap, { TAddressMapInit } from "./AddressMap.js"
+import * as T                           from "../../../types.js"
+import fsExists                         from "../../misc/fsExists.js"
 
-// Types ==========================================================================================
+import IBFSError                        from "../../errors/IBFSError.js"
+import AddressMap, { TAddressMapInit }  from "./AddressMap.js"
+
+// Types ===============================================================================================================
 
 export interface TAddressSpaceInit extends TAddressMapInit {
     /** The number of addresses cached at a time. */ cacheSize: number
 }
 
-// Exports ========================================================================================
+// Exports =============================================================================================================
 
 export default class AddressSpace extends AddressMap {
 
@@ -29,6 +32,8 @@ export default class AddressSpace extends AddressMap {
         this.replRegions = Math.ceil(init.size / init.cacheSize)
         this.replCycle = AddressSpace.createCycle(this.replRegions)
     }
+
+    // Primary API -----------------------------------------------------------------------------------------------------
 
     /**
      * Allocates an address.  
@@ -53,6 +58,8 @@ export default class AddressSpace extends AddressMap {
         this.markFree(address)
     }
 
+    // Internals -------------------------------------------------------------------------------------------------------
+
     /**
      * Replenishes the cache using a quick replenish strategy.
      * 
@@ -71,7 +78,7 @@ export default class AddressSpace extends AddressMap {
         const start = region * this.cache.length
         const end = Math.min(start + this.cache.length, this.size) - 1
 
-        for (let i = start; i <= end; i++) {
+        for (let i = end; i >= start; i--) {
 
             const address = i + this.offset
             if (this.isTaken(address)) continue
@@ -100,7 +107,7 @@ export default class AddressSpace extends AddressMap {
         const start = this.offset
         const end = this.size -1
 
-        for (let i = start; i <= end; i++) {
+        for (let i = end; i >= start; i--) {
             
             const address = i
             if (this.isTaken(address)) continue
@@ -129,6 +136,34 @@ export default class AddressSpace extends AddressMap {
         while (true) {
             yield current
             current = (current + 1) % range
+        }
+    }
+
+    // Caching ---------------------------------------------------------------------------------------------------------
+    // This section is used solely for loading and saving the address space bitmap to the disk
+    // To speed up subsequent startups.
+
+    public async loadBitmap(filePath: string): T.XEavSA<"L1_AS_BITMAP_LOAD"|"L1_AS_BITMAP_LOAD_NOTFOUND"> {
+        try {
+
+            if (await fsExists(filePath) == false) {
+                return new IBFSError('L1_AS_BITMAP_LOAD_NOTFOUND', null, new Error('Cache file not found'))
+            }
+
+            
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_AS_BITMAP_LOAD', null, error as Error)
+        }
+    }
+
+    public async saveBitmap(filePath: string): T.XEavSA<"L1_AS_BITMAP_SAVE"> {
+        try {
+            
+        } 
+        catch (error) {
+            return new IBFSError('L1_AS_BITMAP_SAVE', null, error as Error)
         }
     }
 

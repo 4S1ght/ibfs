@@ -1,5 +1,6 @@
 node_modules/
 tests/temp/
+test/temp/
 dist/
 
 .DS_Store
@@ -8,3 +9,4 @@ dist/
 old/
 *-old
 *-old.*
+tests/misc/*

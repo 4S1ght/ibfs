@@ -15,6 +15,9 @@ export const MB_8   = 8388608
 export const MB_16  = 16777216
 
 export const VOLUME_EXT_NAME = '.ibfs'
+export const ADSPACE_EXT_NAME = '.adspace'
 
 export const SPEC_MAJOR = 2
 export const SPEC_MINOR = 0
+
+export const DEFAULT_ADDRESS_MAP_CACHE_SIZE = 2048

@@ -13,6 +13,7 @@ import * as C from "../Constants.js"
 // Serialization & memory
 import Memory from "./Memory.js"
 import BlockAESContext, { TAESCipher, TAESConfig } from "./BlockAES.js"
+import UUID from '../misc/uuid.js'
 
 // Types ===============================================================================================================
 
@@ -23,47 +24,53 @@ export interface TBlockSerializeConfig {
 // Blocks --------------------------------------------------------------------------------------------------------------
 
 export interface TRootBlock {
-    /** Specification version (major)                    */ specMajor:      number
-    /** Specification version (minor)                    */ specMinor:      number
-    /** Root block address                               */ fsRoot:         number
-    /** AES cipher used                                  */ aesCipher:      TAESCipher
-    /** AES initialization vector                        */ aesIV:          Buffer
-    /** 0-filled buffer encrypted with the original key  */ aesKeyCheck:    Buffer
-    /** Crypto tweak emulation compatibility mode        */ compatibility:  boolean
-    /** Block size (levels 1-15)                         */ blockSize:      keyof typeof BlockSerializationContext.BLOCK_SIZES
-    /** Number of blocks in the volume                   */ blockCount:     number
+    /** Specification version (major)                    */ specMajor:              number
+    /** Specification version (minor)                    */ specMinor:              number
+    /** Root directory address                           */ fsRoot:                 number
+    /** AES cipher used                                  */ aesCipher:              TAESCipher
+    /** AES initialization vector                        */ aesIV:                  Buffer
+    /** 0-filled buffer encrypted with the original key  */ aesKeyCheck:            Buffer
+    /** Crypto tweak emulation compatibility mode        */ compatibility:          boolean
+    /** Block size (levels 1-15)                         */ blockSize:              keyof typeof BlockSerializationContext.BLOCK_SIZES
+    /** Number of blocks in the volume                   */ blockCount:             number
+    /** Volume UUID                                      */ uuid:                   string
 }
 
 // Metadata blocks -----------------------------------------------------------------------------------------------------
 
 export interface TMetaCluster {
-    /** JSON-formatted volume metadata                   */ metadata:       { [scope: string]: Record<string, number|string|boolean|null> }
+    /** JSON-formatted volume metadata                   */ metadata:               { ibfs: TMetaClusterProps }
 }
 export interface TMetadataWriteMeta {
-    /** Block size (levels 1-15)                         */ blockSize:      keyof typeof BlockSerializationContext.BLOCK_SIZES
+    /** Block size (levels 1-15)                         */ blockSize:              keyof typeof BlockSerializationContext.BLOCK_SIZES
+}
+
+interface TMetaClusterProps {
+    /** Version of the driver used to crate the volume   */ originalDriverVersion:  string
+    /** Size of the address space cache                  */ adSpaceCacheSize:       number | undefined
 }
 
 // Head blocks ---------------------------------------------------------------------------------------------------------
 
 export interface THeadBlock {
-    /** Timestamp when the block was created             */ created:        number
-    /** Timestamp when the block was last modified       */ modified:       number
-    /** Resource type (used for recovery)                */ resourceType:   'FILE' | 'DIR'
-    /** Next block address (0: final block)              */ next:           number
-    /** Block body data                                  */ data:           Buffer
+    /** Timestamp when the block was created             */ created:                number
+    /** Timestamp when the block was last modified       */ modified:               number
+    /** Resource type (used for recovery)                */ resourceType:           'FILE' | 'DIR'
+    /** Next block address (0: final block)              */ next:                   number
+    /** Block body data                                  */ data:                   Buffer
 }
 
 // Link blocks ---------------------------------------------------------------------------------------------------------
 
 export interface TLinkBlock {
-    /** Next block's address (0: final block)            */ next:           number
-    /** block body data                                  */ data:           Buffer
+    /** Next block's address (0: final block)            */ next:                   number
+    /** block body data                                  */ data:                   Buffer
 }
 
 // Data blocks ---------------------------------------------------------------------------------------------------------
 
 export interface TDataBlock {
-    /** Block body data                                  */ data:           Buffer
+    /** Block body data                                  */ data:                   Buffer
 }
 export interface TDataBlockReadMeta {
     /** 
@@ -98,6 +105,10 @@ export interface TIndexBlockManage {
      * Number of addresses stored inside the body.
      */
     length: number
+    /**
+     * `true` if the block is full
+     */
+    isFull: boolean
 }
 
 // Common block I/O metadata -------------------------------------------------------------------------------------------
@@ -182,7 +193,7 @@ export default class BlockSerializationContext {
         12    | 1B   | Int8   | AES cipher used (0: none, 1: 128Bit, 2: 256Bit)
         13    | 16B  | Buffer | AES IV
         29    | 16B  | Buffer | AES key check
-        45    | 1B   | Int8   | Compatibility mode (0: off, 1: on)
+        45    | 1B   | Int8   | AES compatibility mode (0: off, 1: on)
         46    | 1B   | Int8   | Block size
         47    | 8B   | Int64  | Block count
      */
@@ -200,6 +211,7 @@ export default class BlockSerializationContext {
             block.writeBool(blockData.compatibility)
             block.writeInt8(blockData.blockSize)
             block.writeInt64(blockData.blockCount)
+            block.write(UUID.fromString(blockData.uuid))
 
             return [null, block.buffer]
 
@@ -227,6 +239,7 @@ export default class BlockSerializationContext {
             data.compatibility  = block.readBool()
             data.blockSize      = block.readInt8() as keyof typeof BlockSerializationContext.BLOCK_SIZES
             data.blockCount     = block.readInt64()
+            data.uuid           = UUID.toString(block.read(16))
 
             return [null, data as TRootBlock]
 
@@ -294,7 +307,7 @@ export default class BlockSerializationContext {
         13    | 8B   | Int64  | Creation date (Unix timestamp - seconds)
         21    | 8B   | Int64  | Modification date (Unix timestamp - seconds)
         25    | 4B   | Int32  | Number of addresses stored
-        26    | 1B   | Int8   | Resource type
+        26    | 1B   | Int8   | Resource type (FILE or DIR)
         27-63 | ---- | ------ | ------------------ Reserved -------------------
         64    | N    | Body   | Block body
 
@@ -351,6 +364,7 @@ export default class BlockSerializationContext {
         T.XEav<THeadBlock & TCommonReadMeta & TIndexBlockManage, 'L0_DS_HEAD'|'L0_DS_HEAD_CORRUPT'> {
         try {
             
+            const self = this
             const src = Memory.wrap(blockBuffer)
  
             const blockType     = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
@@ -383,6 +397,9 @@ export default class BlockSerializationContext {
                 },
                 get length() { 
                     return addresses 
+                },
+                get isFull() {
+                    return addresses === self.HEAD_ADDRESS_SPACE
                 },
                 get: (index: number) => {
                     return index < addresses 
@@ -478,6 +495,7 @@ export default class BlockSerializationContext {
         T.XEav<TLinkBlock & TCommonReadMeta & TIndexBlockManage, 'L0_DS_LINK'|'L0_DS_LINK_CORRUPT'> {
         try {
 
+            const self = this
             const src = Memory.wrap(blockBuffer)
 
             const blockType     = BlockSerializationContext.BLOCK_TYPES[src.readInt8() as 1|2|3]
@@ -504,6 +522,9 @@ export default class BlockSerializationContext {
                 },
                 get length() {
                     return addresses
+                },
+                get isFull() {
+                    return addresses === self.LINK_ADDRESS_SPACE
                 },
                 get: (index: number) => {
                     return index < addresses 
