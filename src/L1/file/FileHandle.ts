@@ -14,6 +14,7 @@ import InstanceRegistry                     from '../caching/InstanceRegistry.js
 
 import ssc                                  from '../../misc/safeShallowCopy.js'
 import streamFinish                         from '../../misc/streamFinish.js'
+import Filesystem from '../Filesystem.js'
 
 // Types ===============================================================================================================
 
@@ -39,15 +40,16 @@ export default class FileHandle extends EventEmitter {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** File's top-level block map.                        */ public declare readonly   fbm:                FileBlockMap
-    /** Original length of the file data.                  */ public declare readonly   originalLength:     number 
+    /** File's top-level block map.                        */ public declare readonly   fbm:                  FileBlockMap
+    /** Original length of the file data.                  */ public declare readonly   originalLength:       number
+    /** Containing filesystem.                             */ public declare readonly   containingFilesystem: Filesystem
 
-    /** Whether the file is currently open for reading.    */ private declare readonly _read:               boolean
-    /** Whether the file is currently open for writing.    */ private declare readonly _write:              boolean
-    /** Whether writes be appended to the end of the file. */ private declare readonly _append:             boolean
-    /** Whether the file should be truncated on open.      */ private declare readonly _truncate:           boolean
-    /** Misc counter used for the instance registry.       */ private                  _ctr                 = 0
-    /** Whether the file is currently open.                */ private                  _isOpen              = false
+    /** Whether the file is currently open for reading.    */ private declare readonly _read:                 boolean
+    /** Whether the file is currently open for writing.    */ private declare readonly _write:                boolean
+    /** Whether writes be appended to the end of the file. */ private declare readonly _append:               boolean
+    /** Whether the file should be truncated on open.      */ private declare readonly _truncate:             boolean
+    /** Misc counter used for the instance registry.       */ private                  _ctr                   = 0
+    /** Whether the file is currently open.                */ private                  _isOpen                = false
     
     /** References read streams open on this file.         */ private _rs = new InstanceRegistry<number, FileReadStream>()
     /** References write streams open on this file.        */ private _ws = new InstanceRegistry<'stream', FileWriteStream>()
@@ -74,6 +76,8 @@ export default class FileHandle extends EventEmitter {
             ;(self as any)._append         = options.append   || false
             ;(self as any)._truncate       = options.truncate || false
 
+            ;(self as any).containingFilesystem = options.containingFilesystem
+
             // Load FBM ---------------------------
             const [fbmError, fbm] = await FileBlockMap.open(options)
             if (fbmError) return IBFSError.eav('L1_FH_OPEN', null, fbmError, ssc(options, ['containingFilesystem']))
@@ -94,6 +98,9 @@ export default class FileHandle extends EventEmitter {
 
             // Set open flags ---------------------
             self._isOpen = true
+
+            // Cache file handle ------------------
+            // TODO: Cache the file handle
 
             return [null, self]
             
@@ -119,6 +126,11 @@ export default class FileHandle extends EventEmitter {
             if (!this._isOpen) return new IBFSError('L1_FH_CLOSE', 'The handle is already closed')
             if (this._isBusy()) return new IBFSError('L1_FH_CLOSE', `Can't close the handle because it's busy. Wait for`
                 +` all read/write activity to finish or close all active streams before closing.`)
+
+            // FIXME: The handle does not account for handle caching.
+            // Solution: Close the handle immediately only when in write-enabled mode, as these are guaranteed to be
+            // exclusive. In read-only handles recheck the cache and decrease the reference counter, close only if it 
+            // hits zero.
 
             this.emit('close')
             this._isOpen = false

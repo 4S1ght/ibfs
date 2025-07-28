@@ -5,12 +5,12 @@ import Memory from "../../L0/Memory.js"
 // Types ===============================================================================================================
 
 /**
- * User permissions levels.
- * 0 - No access
- * 1 - Read
- * 2 - Write
- * 3 - Manage (local) - User can manage children of this directory, but not parents.
- * 4 - Admin (global) - User can manage everything. Set globally at root.
+ * User permissions levels.  
+ * 0 - No access   
+ * 1 - Read.  
+ * 2 - Write.  
+ * 3 - Manage (local) - User can manage children of this directory, but not parents.  
+ * 4 - Admin (global) - User can manage everything. Set globally at root.  
  */
 export type TPermLevel = 0 | 1 | 2 | 3 | 4
 

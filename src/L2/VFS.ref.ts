@@ -27,7 +27,6 @@ interface TFile {
 type TNode = TDirectory | TFile
 type TSafeNode = Omit<TNode, 'perms'|'children'>
 
-
 export interface TSafeDirectory extends Omit<TDirectory, 'perms'|'children'> {
     /** Children files and subdirectories.            */ children: Record<string, TSafeNode>
 }
@@ -39,6 +38,15 @@ export interface TSafeDirectory extends Omit<TDirectory, 'perms'|'children'> {
 export default class VFS {
 
     // Static ----------------------------------------------------------------------------------------------------------
+
+
+    private static file(address: number, size = 0): TNode {
+        return {
+            type: 'FILE',
+            size,
+            address
+        }
+    }
 
     private static dir(address: number, size = 0): TNode {
         return {
@@ -63,14 +71,6 @@ export default class VFS {
         }
     }
 
-    private static file(address: number, size = 0): TNode {
-        return {
-            type: 'FILE',
-            size,
-            address
-        }
-    }
-
     private static normalizePath = (path: string): string => {
         path = normalize(path)
         if (path.endsWith('/')) path = path.slice(0, -1)
@@ -87,16 +87,16 @@ export default class VFS {
         }
     }
 
-    private static createPermCascade(rootLevel: TPermLevel) {
-        let permLevel = rootLevel
+    private static createPermCascade(rootLevel?: TPermLevel) {
+        let permLevel: TPermLevel = rootLevel || 0
         return {
             progress (newLevel?: TPermLevel) {
-                if (permLevel === 4) return // Admin always has full permissions
-                if (permLevel === 3) return // Inherit same manage level all the way down directory tree
+                if (permLevel === 4) return // Admin always has full permissions.
+                if (permLevel === 3) return // Inherit same manage level all the way down directory tree.
                 if (permLevel === 0) return // Inherit denied access if any parent denies it.
-                if (!newLevel)       return // Inherit perm level if not overwritten
+                if (!newLevel)       return // Inherit previous perm level if not overwritten.
                 if (newLevel === 4)  return // Reassignment of admin (likely corrupted data) - Deny permission.
-                permLevel === newLevel      // Freely swap between read/write permissions depending on directory depth & perms set
+                permLevel === newLevel      // Freely swap between read/write permissions depending on directory depth & perms set.
 
             },
             get canRead()       { return permLevel >= 1 },       
@@ -116,18 +116,19 @@ export default class VFS {
         perms: {},
         children: {}
     }
+
     // Methods ---------------------------------------------------------------------------------------------------------
     
     // IDEA
     // Create a standalone class/object "browser" that itself handles going down the directory tree
     // while checking permissions transparently.
 
-    public readDirUnsafe(path: string, user?: string): T.XEav<TDirectory & { perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
+    public readDirUnsafe(path: string, user?: string): T.XEav<{ node: TDirectory, perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
         try {
 
             let current: TNode = this._vfs
             const parts = VFS.normalizePath(path).split('/')
-            const perm = VFS.createPermCascade(this._vfs.perms[user!] || 0)
+            const perm = VFS.createPermCascade(this._vfs.perms[user!])
 
             for (const part of parts) {
 
@@ -139,7 +140,7 @@ export default class VFS {
                 perm.progress(current.perms[user!])
             }
             
-            return [null, { ...current, perm: perm.permLevel }]
+            return [null, { node: current, perm: perm.permLevel }]
 
         } 
         catch (error) {
@@ -147,12 +148,60 @@ export default class VFS {
         }
     }
 
-    public readDir(path: string, user: string): T.XEav<{ node: TSafeNode, perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
+    public $readDir(path: string, user: string): T.XEav<{ node: TSafeNode, perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
         const [error, resolved] = this.readDirUnsafe(path, user)
         return error
             ? [error, null]
-            : [null, { node: VFS.toSafeNode(resolved.node), perm: resolved.perm }]
+            : [null, { node: VFS.toSafeDir(resolved.node), perm: resolved.perm }]
     }
+
+    public $makeDir(path: string, address: number, user?: string): T.XEav<TDirectory, 'L2_VFS_NO_PERM'|'L2_VFS_MKDIR'|'L2_VFS_NO_PERM'> {
+        try {
+            
+            let current: TNode = this._vfs
+            const { parts, last } = VFS.split(path)
+            const perm = VFS.createPermCascade(this._vfs.perms[user!])
+
+            for (let i = 0; i < parts.length; i++) {
+
+                const part = parts[i]!
+                const parent = i === parts.length - 1
+
+                if (user && !perm.canRead)  return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })
+                if (!current)               return IBFSError.eav('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" does not exist.`, null, { path, user })
+                if (current.type !== 'DIR') return IBFSError.eav('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" is not a directory.`, null, { path, user })
+
+                if (parent) {
+                    if (current.children[last!]) return IBFSError.eav('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" already exists.`, null, { path, user })
+                    current.children[last!] = VFS.dir(address)
+                }
+
+            }
+
+            return [null, current.children[last!] as TDirectory]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })    
+        }
+    }
+
+    // Refactor to use methods that do not modify the VFS cache in order to check permissions
+    // during write operations:
+
+    // Directories -----------------------------------------------------------------------------------------------------
+
+    public canReadDir(path: string, user: string) {}
+    public readDir   (path: string) {}
+
+    public canMakeDir(path: string, user: string) {}
+    public makeDir   (path: string, address: number) {}
+
+    public canRenameDir(src: string, dst: string, user: string) {}
+    public renameDir   (src: string, dst: string) {}
+
+    public canDeleteDir(path: string, user: string) {}
+    public deleteDir   (path: string) {}
 
 
 }
