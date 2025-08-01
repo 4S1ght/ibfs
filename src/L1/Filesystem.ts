@@ -222,7 +222,7 @@ export default class Filesystem {
 
             }
 
-            await scan(this.volume.root.fsRoot)
+            return await scan(this.volume.root.fsRoot)
 
         } 
         catch (error) {
