@@ -27,6 +27,7 @@ import * as C                           from '../Constants.js'
 import ssc                              from '../misc/safeShallowCopy.js'
 import getPackage                       from '../misc/package.js'
 import retry                            from '../misc/retry.js'
+import { environment }                  from '../misc/environment.js'
 
 // Types ===============================================================================================================
 
@@ -83,6 +84,11 @@ export default class Volume {
 
         let file: fs.FileHandle
         let ws: WriteStream
+
+        const finish = async () => {
+            if (ws) await new Promise<void>((resolve, reject) => ws.close(error => error ? reject(error) : resolve()))
+            if (file && environment === 'node') await file.close()
+        }
 
         try {
          
@@ -168,7 +174,7 @@ export default class Volume {
             })
             if (rootError) throw rootError
 
-            await file.write(rootBlock, { position: 0 })
+            await file.write(rootBlock, 0, null, 0)
 
             // Metadata blocks --------------------------------------------------------------------
 
@@ -183,15 +189,13 @@ export default class Volume {
             })
             if (metaError) throw metaError
 
-            await file.write(metaCluster, { position: physicalBlockSize })
+            await file.write(metaCluster, 0, null, physicalBlockSize)
+            await finish()
 
         } 
         catch (error) {
+            try { await finish() } catch {} // Silence
             return new IBFSError('L0_VI_FAIL', null, error as Error, ssc(options, ['aesKey']))
-        }
-        finally {
-            if (ws!) ws.close()
-            if (file!) await file.close()
         }
         
     }

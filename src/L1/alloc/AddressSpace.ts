@@ -4,7 +4,7 @@
 
 // Imports =============================================================================================================
 
-import * as T                           from "../../../types.js"
+import type * as T                      from "../../../types.js"
 import fsExists                         from "../../misc/fsExists.js"
 
 import IBFSError                        from "../../errors/IBFSError.js"

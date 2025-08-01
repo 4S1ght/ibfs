@@ -1,4 +1,4 @@
-import { Readable, Writable } from "stream";
+import { Readable, Writable } from "node:stream";
 
 /**
  * Resolves after the stream is finished, rejects on stream error.

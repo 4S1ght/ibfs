@@ -1,5 +1,7 @@
 import type * as T from '../../types.js'
 
+// process.env.IBFS_ERR_TRACE_SIZE = '100'
+
 export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> extends Error {
 
     public readonly code: Code
@@ -17,8 +19,10 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
         
         Error.captureStackTrace(this, this.constructor)
 
+        const errorTrimSize = process.env.IBFS_ERROR_SIZE ? parseInt(process.env.IBFS_ERROR_SIZE) : undefined
+
         if (cause) {
-            IBFSError.trimErrorStack(cause)
+            IBFSError.trimErrorStack(cause, errorTrimSize)
             if (cause instanceof IBFSError) {
                 this.causes = [cause, ...cause.causes]
                 // @ts-ignore - Readonly only outside the error class.
@@ -226,13 +230,9 @@ const errorCodes = {
 
     L2_NS_SCAN_TREE:                'Failed to scan the filesystem directory tree.',
     
-    L2_VFS_MISDIR:                  'Provided file path does not point to a resource.',
-    L2_VFS_MKDIR:                   'Failed to create a new directory entry.',
-    L2_VFS_MKFILE:                  'Failed to create a new file entry.',
-    L2_VFS_RENAME:                  'Failed to rename the file/directory.',
-    L2_VFS_ACCESS:                  'Failed to verify access permissions of a file/directory.',
+    L2_VFS_BAD_PATH:                'The resource with the requested path was not found or the path is malformed.',
+    L2_VFS_NO_PERM:                 'The user does not have permission to access the requested resource.',
 
-    L2_VFS_NO_PERM:                 'The user does not have permission to perform the requested operation.',
-    
+    L2_VFS_READDIR:                 'Failed to read the directory',
 
 }
