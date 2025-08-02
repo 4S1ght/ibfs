@@ -102,7 +102,7 @@ export default class VFS {
             get canRead()       { return permLevel >= 1 },       
             get canWrite()      { return permLevel >= 2 },
             get canManage()     { return permLevel >= 3 },
-            get canAdminister() { return permLevel >= 4 },
+            get irRoot()        { return permLevel >= 4 },
             get permLevel()     { return permLevel }
         }
     }
@@ -119,89 +119,113 @@ export default class VFS {
 
     // Methods ---------------------------------------------------------------------------------------------------------
     
-    // IDEA
-    // Create a standalone class/object "browser" that itself handles going down the directory tree
-    // while checking permissions transparently.
+    // public readDirUnsafe(path: string, user?: string): T.XEav<{ node: TDirectory, perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
+    //     try {
 
-    public readDirUnsafe(path: string, user?: string): T.XEav<{ node: TDirectory, perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
-        try {
+    //         let current: TNode = this._vfs
+    //         const parts = VFS.normalizePath(path).split('/')
+    //         const perm = VFS.createPermCascade(this._vfs.perms[user!])
 
-            let current: TNode = this._vfs
-            const parts = VFS.normalizePath(path).split('/')
-            const perm = VFS.createPermCascade(this._vfs.perms[user!])
+    //         for (const part of parts) {
 
-            for (const part of parts) {
-
-                if (user && !perm.canRead)   return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })
-                if (!current)                return IBFSError.eav('L2_VFS_MISDIR', `Entry "${part}" inside "${path}" does not exist.`, null, { path, user })
-                if (current.type !== 'DIR')  return IBFSError.eav('L2_VFS_MISDIR', `Entry "${part}" inside "${path}" is not a directory.`, null, { path, user })
+    //             if (user && !perm.canRead)   return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })
+    //             if (!current)                return IBFSError.eav('L2_VFS_MISDIR', `Entry "${part}" inside "${path}" does not exist.`, null, { path, user })
+    //             if (current.type !== 'DIR')  return IBFSError.eav('L2_VFS_MISDIR', `Entry "${part}" inside "${path}" is not a directory.`, null, { path, user })
                 
-                current = current.children[part] as TDirectory
-                perm.progress(current.perms[user!])
-            }
+    //             current = current.children[part] as TDirectory
+    //             perm.progress(current.perms[user!])
+    //         }
             
-            return [null, { node: current, perm: perm.permLevel }]
+    //         return [null, { node: current, perm: perm.permLevel }]
 
-        } 
-        catch (error) {
-            return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })
-        }
-    }
+    //     } 
+    //     catch (error) {
+    //         return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })
+    //     }
+    // }
 
-    public $readDir(path: string, user: string): T.XEav<{ node: TSafeNode, perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
-        const [error, resolved] = this.readDirUnsafe(path, user)
-        return error
-            ? [error, null]
-            : [null, { node: VFS.toSafeDir(resolved.node), perm: resolved.perm }]
-    }
+    // public $readDir(path: string, user: string): T.XEav<{ node: TSafeNode, perm: TPermLevel }, 'L2_VFS_MISDIR'|'L2_VFS_NO_PERM'> {
+    //     const [error, resolved] = this.readDirUnsafe(path, user)
+    //     return error
+    //         ? [error, null]
+    //         : [null, { node: VFS.toSafeDir(resolved.node), perm: resolved.perm }]
+    // }
 
-    public $makeDir(path: string, address: number, user?: string): T.XEav<TDirectory, 'L2_VFS_NO_PERM'|'L2_VFS_MKDIR'|'L2_VFS_NO_PERM'> {
-        try {
+    // public $makeDir(path: string, address: number, user?: string): T.XEav<TDirectory, 'L2_VFS_NO_PERM'|'L2_VFS_MKDIR'|'L2_VFS_NO_PERM'> {
+    //     try {
             
-            let current: TNode = this._vfs
-            const { parts, last } = VFS.split(path)
-            const perm = VFS.createPermCascade(this._vfs.perms[user!])
+    //         let current: TNode = this._vfs
+    //         const { parts, last } = VFS.split(path)
+    //         const perm = VFS.createPermCascade(this._vfs.perms[user!])
 
-            for (let i = 0; i < parts.length; i++) {
+    //         for (let i = 0; i < parts.length; i++) {
 
-                const part = parts[i]!
-                const parent = i === parts.length - 1
+    //             const part = parts[i]!
+    //             const parent = i === parts.length - 1
 
-                if (user && !perm.canRead)  return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })
-                if (!current)               return IBFSError.eav('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" does not exist.`, null, { path, user })
-                if (current.type !== 'DIR') return IBFSError.eav('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" is not a directory.`, null, { path, user })
+    //             if (user && !perm.canRead)  return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })
+    //             if (!current)               return IBFSError.eav('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" does not exist.`, null, { path, user })
+    //             if (current.type !== 'DIR') return IBFSError.eav('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" is not a directory.`, null, { path, user })
 
-                if (parent) {
-                    if (current.children[last!]) return IBFSError.eav('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" already exists.`, null, { path, user })
-                    current.children[last!] = VFS.dir(address)
-                }
+    //             if (parent) {
+    //                 if (current.children[last!]) return IBFSError.eav('L2_VFS_MKDIR', `Entry "${part}" inside "${path}" already exists.`, null, { path, user })
+    //                 current.children[last!] = VFS.dir(address)
+    //             }
 
-            }
+    //         }
 
-            return [null, current.children[last!] as TDirectory]
+    //         return [null, current.children[last!] as TDirectory]
 
-        } 
-        catch (error) {
-            return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })    
-        }
-    }
+    //     } 
+    //     catch (error) {
+    //         return IBFSError.eav('L2_VFS_NO_PERM', null, null, { path, user })    
+    //     }
+    // }
 
     // Refactor to use methods that do not modify the VFS cache in order to check permissions
     // during write operations:
 
     // Directories -----------------------------------------------------------------------------------------------------
 
-    public canReadDir(path: string, user: string) {}
-    public readDir   (path: string) {}
+    /**
+     * Takes in a path, a user ID and evaluates whether the user has permission to read the directory.
+     * If the user doesn't have permission, an error is returned, if they do, the method returns `undefined`.  
+     * A range of errors is possible depending on the path and the user ID.
+     * @param path Resource path inside the filesystemolume.
+     * @param user ID of the user requesting the operation.
+     * @returns 
+     */
+    public canReadDir(path: string, user: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_READDIR'> {
+        try {
+
+            let current: TNode = this._vfs
+            const parts        = VFS.normalizePath(path).split('/')
+            const perm         = VFS.createPermCascade(this._vfs.perms[user])
+
+            for (const part of parts) {
+
+                if (!perm.canRead)          return new IBFSError('L2_VFS_NO_PERM',  null,                                              null, { path, user })
+                if (!current)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist`,     null, { path, user })
+                if (current.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory`, null, { path, user })
+
+                current = current.children[part] as TDirectory
+                perm.progress(current.perms[user])
+
+            }
+            
+            return undefined
+
+        } 
+        catch (error) {
+            return new IBFSError('L2_VFS_NO_PERM', null, null, { path, user })
+        }
+    }
 
     public canMakeDir(path: string, user: string) {}
-    public makeDir   (path: string, address: number) {}
 
     public canRenameDir(src: string, dst: string, user: string) {}
-    public renameDir   (src: string, dst: string) {}
 
     public canDeleteDir(path: string, user: string) {}
-    public deleteDir   (path: string) {}
 
 
 }
