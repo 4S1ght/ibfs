@@ -33,6 +33,11 @@ export interface TSafeDirectory extends Omit<TDirectory, 'perms'|'children'> {
 
 // Method types --------------------------------------------------------------------------------------------------------
 
+interface SplitParts {
+    parts: string[],
+    dest: string | undefined
+}
+
 // Exports =============================================================================================================
 
 export default class VFS {
@@ -78,12 +83,12 @@ export default class VFS {
         return path
     }
 
-    private static split(path: string): { parts: string[], last: string | undefined } {
-        const parts = this.normalizePath(path).split('/')
-        if (parts.length === 1 && ['', '.', undefined].includes(parts[0]!)) return { parts: [], last: undefined }
+    private static normalizeAndSplit(path: string): SplitParts {
+        const parts = VFS.normalizePath(path).split('/')
+        if (parts.length === 1 && ['', '.', undefined].includes(parts[0]!)) return { parts: [], dest: undefined }
         return {
             parts,
-            last: parts.pop()
+            dest: parts.pop()
         }
     }
 
@@ -182,18 +187,15 @@ export default class VFS {
     //     }
     // }
 
-    // Refactor to use methods that do not modify the VFS cache in order to check permissions
-    // during write operations:
-
     // Directories -----------------------------------------------------------------------------------------------------
 
     /**
      * Takes in a path, a user ID and evaluates whether the user has permission to read the directory.
      * If the user doesn't have permission, an error is returned, if they do, the method returns `undefined`.  
      * A range of errors is possible depending on the path and the user ID.
-     * @param path Resource path inside the filesystemolume.
+     * @param path Resource path inside the filesystem.
      * @param user ID of the user requesting the operation.
-     * @returns 
+     * @returns `IBFSError | undefined`
      */
     public canReadDir(path: string, user: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_READDIR'> {
         try {
@@ -213,7 +215,7 @@ export default class VFS {
 
             }
             
-            return undefined
+            return undefined // Allow action
 
         } 
         catch (error) {
@@ -221,7 +223,50 @@ export default class VFS {
         }
     }
 
-    public canMakeDir(path: string, user: string) {}
+    /**
+     * Takes a path, a user ID and evaluates whether the user has permission to create the directory.
+     * If the user doesn't have permission, an error is returned, if they do, the method returns `undefined`.  
+     * A range of errors is possible depending on the path and the user ID.
+     * @param path Resource path inside the filesystem.
+     * @param user ID of the user requesting the operation.
+     * @returns `IBFSError | undefined`
+     */
+    public canMakeDir(path: string, user: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_MKDIR'> {
+        try {
+            
+            let current: TNode      = this._vfs
+            const { parts, dest }   = VFS.normalizeAndSplit(path)
+            const perm              = VFS.createPermCascade(this._vfs.perms[user])
+
+            if (!dest) return new IBFSError('L2_VFS_BAD_PATH', `Can't create directory in an empty path.`, null, { path, user })
+
+            for (let i = 0; i < parts.length; i++) {
+
+                const part = parts[i]!
+                const last = i === parts.length - 1
+
+                // Main path
+                if (!perm.canRead)          return new IBFSError('L2_VFS_NO_PERM',  `No permission to read "${dest}" (inside "${path}")`,    null, { path, user })
+                if (!current)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist`,           null, { path, user })
+                if (current.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory`,       null, { path, user })
+
+                // Main parent of the new directory
+                if (last && !perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', `No permission to write to "${dest}" (inside "${path}")`, null, { path, user })
+
+                current = current.children[part] as TDirectory
+                perm.progress(current.perms[user])
+
+            }
+
+            if (current.children[dest]) return new IBFSError('L2_VFS_MKDIR', `Entry "${dest}" inside "${path}" already exists.`, null, { path, user })
+
+            return undefined // Allow action
+
+        } 
+        catch (error) {
+            return new IBFSError('L2_VFS_NO_PERM', null, null, { path, user })
+        }
+    }
 
     public canRenameDir(src: string, dst: string, user: string) {}
 

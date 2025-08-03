@@ -233,5 +233,6 @@ const errorCodes = {
     L2_VFS_NO_PERM:                 'The user does not have permission to access the requested resource.',
 
     L2_VFS_READDIR:                 'Failed to read the directory',
+    L2_VFS_MKDIR:                   'Failed to create the directory',
 
 }
