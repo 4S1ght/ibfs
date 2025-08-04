@@ -96,13 +96,12 @@ export default class VFS {
         let permLevel: TPermLevel = rootLevel || 0
         return {
             progress (newLevel?: TPermLevel) {
-                if (permLevel === 4) return // Admin always has full permissions.
-                if (permLevel === 3) return // Inherit same manage level all the way down directory tree.
-                if (permLevel === 0) return // Inherit denied access if any parent denies it.
-                if (!newLevel)       return // Inherit previous perm level if not overwritten.
-                if (newLevel === 4)  return // Reassignment of admin (likely corrupted data) - Deny permission.
-                permLevel === newLevel      // Freely swap between read/write permissions depending on directory depth & perms set.
-
+                if (permLevel === 4) return                 // Admin always has full permissions.
+                if (permLevel === 3) return                 // Inherit same manage level all the way down directory tree.
+                if (permLevel === 0) return                 // Inherit denied access if any parent denies it.
+                if (!newLevel)       return                 // Inherit previous perm level if not overwritten.
+                if (newLevel === 4)  return permLevel = 0   // Reassignment of admin (likely corrupted data) - Deny permission.
+                permLevel = newLevel                        // Freely swap between read/write permissions depending on directory depth & perms set.
             },
             get canRead()       { return permLevel >= 1 },       
             get canWrite()      { return permLevel >= 2 },
