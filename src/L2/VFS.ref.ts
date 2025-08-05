@@ -106,7 +106,7 @@ export default class VFS {
             get canRead()       { return permLevel >= 1 },       
             get canWrite()      { return permLevel >= 2 },
             get canManage()     { return permLevel >= 3 },
-            get irRoot()        { return permLevel >= 4 },
+            get isRoot()        { return permLevel >= 4 },
             get permLevel()     { return permLevel }
         }
     }
@@ -230,7 +230,7 @@ export default class VFS {
      * @param user ID of the user requesting the operation.
      * @returns `IBFSError | undefined`
      */
-    public canMakeDir(path: string, user: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_MKDIR'> {
+    public canMakeDir(path: string, user: string, recursive = false): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_MKDIR'> {
         try {
             
             let current: TNode      = this._vfs
@@ -243,6 +243,10 @@ export default class VFS {
 
                 const part = parts[i]!
                 const last = i === parts.length - 1
+
+                // Skip permission checks if in recursive mode and the current part of the path
+                // doesn't exist and the user has write access in the last existing parent.
+                if (recursive && !current && perm.canWrite) return
 
                 // Main path
                 if (!perm.canRead)          return new IBFSError('L2_VFS_NO_PERM',  `No permission to read "${dest}" (inside "${path}")`,    null, { path, user })
@@ -267,9 +271,10 @@ export default class VFS {
         }
     }
 
+    public canDeleteDir(path: string, user: string) {}
+
     public canRenameDir(src: string, dst: string, user: string) {}
 
-    public canDeleteDir(path: string, user: string) {}
 
 
 }

@@ -235,6 +235,9 @@ export default class Filesystem {
 
     // Methods ---------------------------------------------------------------------------------------------------------
 
+    // TODO: Allow multiple write handles to be used across the filesystem
+    // And only enforce handle write exclusivity per-file and not globally.
+    
     /**
      * Opens an IBFS file handle.  
      * Due to the filesystem's design, read-only handles are shared across multiple consumers.
