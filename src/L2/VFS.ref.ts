@@ -205,9 +205,9 @@ export default class VFS {
 
             for (const part of parts) {
 
-                if (!perm.canRead)          return new IBFSError('L2_VFS_NO_PERM',  null,                                              null, { path, user })
-                if (!current)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist`,     null, { path, user })
-                if (current.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory`, null, { path, user })
+                if (!perm.canRead)          return new IBFSError('L2_VFS_NO_PERM',  null,                                               null, { path, user })
+                if (!current)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, user })
+                if (current.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, user })
 
                 current = current.children[part] as TDirectory
                 perm.progress(current.perms[user])
@@ -218,7 +218,7 @@ export default class VFS {
 
         } 
         catch (error) {
-            return new IBFSError('L2_VFS_NO_PERM', null, null, { path, user })
+            return new IBFSError('L2_VFS_NO_PERM', null, error as Error, { path, user })
         }
     }
 
@@ -230,7 +230,7 @@ export default class VFS {
      * @param user ID of the user requesting the operation.
      * @returns `IBFSError | undefined`
      */
-    public canMakeDir(path: string, user: string, recursive = false): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_MKDIR'> {
+    public canMakeDir(path: string, user: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_MKDIR'> {
         try {
             
             let current: TNode      = this._vfs
@@ -244,17 +244,13 @@ export default class VFS {
                 const part = parts[i]!
                 const last = i === parts.length - 1
 
-                // Skip permission checks if in recursive mode and the current part of the path
-                // doesn't exist and the user has write access in the last existing parent.
-                if (recursive && !current && perm.canWrite) return
-
                 // Main path
-                if (!perm.canRead)          return new IBFSError('L2_VFS_NO_PERM',  `No permission to read "${dest}" (inside "${path}")`,    null, { path, user })
-                if (!current)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist`,           null, { path, user })
-                if (current.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory`,       null, { path, user })
+                if (!perm.canRead)          return new IBFSError('L2_VFS_NO_PERM',  `No permission to read "${dest}" in "${path}".`,    null, { path, user })
+                if (!current)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, user })
+                if (current.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, user })
 
                 // Main parent of the new directory
-                if (last && !perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', `No permission to write to "${dest}" (inside "${path}")`, null, { path, user })
+                if (last && !perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', `No permission to write to "${dest}" in "${path}".`, null, { path, user })
 
                 current = current.children[part] as TDirectory
                 perm.progress(current.perms[user])
@@ -267,14 +263,80 @@ export default class VFS {
 
         } 
         catch (error) {
-            return new IBFSError('L2_VFS_NO_PERM', null, null, { path, user })
+            return new IBFSError('L2_VFS_NO_PERM', null, error as Error, { path, user })
         }
     }
 
-    public canDeleteDir(path: string, user: string) {}
+    public canRemoveDir(path: string, user: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_RMDIR' | 'L2_VFS_NOT_EMPTY'> {
+        try {
 
-    public canRenameDir(src: string, dst: string, user: string) {}
+            let current: TNode      = this._vfs
+            const { parts, dest }   = VFS.normalizeAndSplit(path)
+            const perm              = VFS.createPermCascade(this._vfs.perms[user])
 
+            if (!dest) return new IBFSError('L2_VFS_BAD_PATH', `Can't delete the root directory.`, null, { path, user })
+
+            // Leading path permissions ---------------------------------------
+
+            for (let i = 0; i < parts.length; i++) {
+
+                const part = parts[i]!
+                const last = i === parts.length - 1
+
+                // Main path
+                if (!perm.canRead)          return new IBFSError('L2_VFS_NO_PERM',  `No permission to read "${dest}" in "${path}".`,    null, { path, user })
+                if (!current)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, user })
+                if (current.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, user })
+
+                // Check if the user has write access in the target's parent directory.
+                if (last && !perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', `No permission to write to "${dest}" in "${path}".`, null, { path, user })
+
+            }
+
+            const targetDir = current.children[dest]
+            
+            if (!targetDir)               return new IBFSError('L2_VFS_RMDIR', `Entry "${dest}" inside "${path}" does not exist.`,     null, { path, user })
+            if (targetDir.type !== 'DIR') return new IBFSError('L2_VFS_RMDIR', `Entry "${dest}" inside "${path}" is not a directory.`, null, { path, user })
+            
+            perm.progress(targetDir.perms[user])
+
+            if (!perm.canWrite)                             return new IBFSError('L2_VFS_NO_PERM',   `No permission to manage "${dest}" in "${path}".`, null, { path, user })
+            if (Object.keys(targetDir.children).length > 0) return new IBFSError('L2_VFS_NOT_EMPTY', `Directory "${path}" is not empty.`,               null, { path, user })
+
+            // Children permissions -------------------------------------------
+
+            let deniedChild: string | null = null
+
+            const scanChildrenPerms = (dir: TDirectory, pathChunks: string[] = []) => {
+                for (const entry in dir.children) {
+                    if (Object.prototype.hasOwnProperty.call(dir.children, entry)) {
+
+                        const child = dir.children[entry]!
+                        if (child.type !== 'DIR') continue
+
+                        perm.progress(child.perms[user])
+                        if (!perm.canWrite) {
+                            if (!deniedChild) deniedChild = `${path}/${pathChunks.join('/')}/${entry}`
+                            break
+                        }
+
+                        scanChildrenPerms(child, [...path, entry])
+
+                    }
+                }
+            }
+
+            scanChildrenPerms(targetDir)
+
+            return perm.canWrite
+                ? undefined // Allow action
+                : new IBFSError('L2_VFS_NO_PERM', `Directory "${path}" can't be deleted because the user doesn't have write permissions in "${deniedChild}" and/or other subdirectories.`, null, { path, user })
+
+        }
+        catch (error) {
+            return new IBFSError('L2_VFS_NO_PERM', null, error as Error, { path, user })
+        }
+    }
 
 
 }
