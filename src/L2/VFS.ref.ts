@@ -1,3 +1,6 @@
+// TODO: In some write methods return the reference to the target node (if it exists)
+// So that it can be locked
+
 // Imports =============================================================================================================
 
 import type * as T from "../../types.js"
@@ -21,13 +24,13 @@ interface TDirectory {
 interface TFile {
     /** Type of the file structure.                   */ type:      'FILE'
     /** Total size of the file's contents.            */ size:      number
-    /** Physical address of the file head block.      */ address:   number
+    /** Physical address of the file head block.      */ address:   Number
 }
 
 type TNode = TDirectory | TFile
-type TSafeNode = Omit<TNode, 'perms'|'children'>
+type TSafeNode = Omit<TNode, 'perms'|'children'|'locked'>
 
-export interface TSafeDirectory extends Omit<TDirectory, 'perms'|'children'> {
+export interface TSafeDirectory extends Omit<TDirectory, 'perms'|'children'|'locked'> {
     /** Children files and subdirectories.            */ children: Record<string, TSafeNode>
 }
 
@@ -267,7 +270,16 @@ export default class VFS {
         }
     }
 
-    public canRemoveDir(path: string, user: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_RMDIR' | 'L2_VFS_NOT_EMPTY'> {
+    /**
+     * Takes a path, a user ID and evaluates whether the user has permission to remove the directory.
+     * If the user doesn't have permission, an error is returned, if they do, the method returns `undefined`.
+     * This is the only action that requires deep recursive permission scan of the child nodes.
+     * Deleting a directory requires the user has at least write access to the directory and ALL its children.
+     * @param path Resource path inside the filesystem.
+     * @param user ID of the user requesting the operation.
+     * @returns `IBFSError | undefined`
+     */
+    public canRemoveDir(path: string, user: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_RMDIR' | 'L2_VFS_RMDIR_NOT_EMPTY'> {
         try {
 
             let current: TNode      = this._vfs
@@ -300,13 +312,15 @@ export default class VFS {
             
             perm.progress(targetDir.perms[user])
 
-            if (!perm.canWrite)                             return new IBFSError('L2_VFS_NO_PERM',   `No permission to manage "${dest}" in "${path}".`, null, { path, user })
-            if (Object.keys(targetDir.children).length > 0) return new IBFSError('L2_VFS_NOT_EMPTY', `Directory "${path}" is not empty.`,               null, { path, user })
+            if (!perm.canWrite)                             return new IBFSError('L2_VFS_NO_PERM',         `No permission to manage "${dest}" in "${path}".`, null, { path, user })
+            if (Object.keys(targetDir.children).length > 0) return new IBFSError('L2_VFS_RMDIR_NOT_EMPTY', `Directory "${path}" is not empty.`,               null, { path, user })
 
             // Children permissions -------------------------------------------
 
             let deniedChild: string | null = null
 
+            // Makes sure the user has write access to all children before allowing
+            // them to delete the parent directory.
             const scanChildrenPerms = (dir: TDirectory, pathChunks: string[] = []) => {
                 for (const entry in dir.children) {
                     if (Object.prototype.hasOwnProperty.call(dir.children, entry)) {
@@ -335,6 +349,24 @@ export default class VFS {
         }
         catch (error) {
             return new IBFSError('L2_VFS_NO_PERM', null, error as Error, { path, user })
+        }
+    }
+
+    public canRenameDir(source: string, destination: string, user: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_RENAME'> {
+        try {
+
+            const srcNode  = this._vfs
+            const destNode = this._vfs
+
+            const { parts: srcParts,  dest: srcFinal  } = VFS.normalizeAndSplit(source)
+            const { parts: destParts, dest: destFinal } = VFS.normalizeAndSplit(destination)
+
+            if (!srcFinal)  return new IBFSError('L2_VFS_BAD_PATH', `Can't rename the root directory.`,         null, { source, dest: srcNode,  user })
+            if (!destFinal) return new IBFSError('L2_VFS_BAD_PATH', `Can't rename directory to an empty path.`, null, { source, dest: destNode, user })
+        
+        } 
+        catch (error) {
+            return new IBFSError('L2_VFS_NO_PERM', null, error as Error, { source, destination, user })    
         }
     }
 

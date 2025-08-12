@@ -235,6 +235,7 @@ const errorCodes = {
     L2_VFS_READDIR:                 'Failed to read the directory',
     L2_VFS_MKDIR:                   'Failed to create the directory',
     L2_VFS_RMDIR:                   'Failed to remove the directory',
-    L2_VFS_NOT_EMPTY:               'Failed to perform the operation because the directory is not empty.',
+    L2_VFS_RMDIR_NOT_EMPTY:         'Failed to perform the operation because the directory is not empty.',
+    L2_VFS_RENAME:                  'Failed to rename the directory',
 
 }
