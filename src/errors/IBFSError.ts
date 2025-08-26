@@ -193,7 +193,7 @@ const errorCodes = {
     L1_FH_WRITE_STREAM_FIRST:       'An error occurred while loading the first affected write stream block.',
     L1_FH_WRITE_STREAM_OUTRANGE:    'The provided write offset is larger than the length of the file.',
     L1_FH_WRITE_STREAM_FINAL:       'An error occurred while finalizing the write stream.',
-    L1_FH_WRITE_STREAM_EXREF:       'Can not create a write stream while another read stream is in use.',
+    L1_FH_WRITE_STREAM_EXREF:       'Can not create a write stream while another stream is in use.',
     L1_FH_WRITE_FILE:               'Failed to write to the file.',
     L1_FH_WRITE_MODE:               'Can not write data to a file open in read-only mode.',
 
