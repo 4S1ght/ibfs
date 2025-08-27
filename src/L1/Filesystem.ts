@@ -304,7 +304,7 @@ export default class Filesystem {
      * Used to create initial empty structures in the filesystem.
      * 
      * `Filesystem.open()` is used to open existing files, but can not create them directly as it requires
-     * a valid file address. This method sets up the basic structures and returns the pointer which can then
+     * a valid file address. This method sets up the basic structure and returns the pointer which can then
      * in turn be used to open a file handle and begin writing or reading data.
      * 
      * **Note:** If the file type is set to `DIR` the internal directory structure will be created as well.

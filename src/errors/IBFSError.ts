@@ -231,11 +231,16 @@ const errorCodes = {
     
     L2_VFS_BAD_PATH:                'The resource with the requested path was not found or the path is malformed.',
     L2_VFS_NO_PERM:                 'The user does not have permission to access the requested resource.',
+    L2_VFS_ALREADY_EXISTS:          'The resource with the requested path already exists.',
 
-    L2_VFS_READDIR:                 'Failed to read the directory',
-    L2_VFS_MKDIR:                   'Failed to create the directory',
-    L2_VFS_RMDIR:                   'Failed to remove the directory',
-    L2_VFS_RMDIR_NOT_EMPTY:         'Failed to perform the operation because the directory is not empty.',
-    L2_VFS_RENAME:                  'Failed to rename the directory',
+    /* to be deleted */ L2_VFS_READDIR:                 'Failed to read the directory',
+    /* to be deleted */ L2_VFS_MKDIR:                   'Failed to create the directory',
+    /* to be deleted */ L2_VFS_RMDIR:                   'Failed to remove the directory',
+    /* to be deleted */ L2_VFS_RMDIR_NOT_EMPTY:         'Failed to perform the operation because the directory is not empty.',
+    /* to be deleted */ L2_VFS_RENAME:                  'Failed to rename the directory',
 
+
+    L2_VFS_CAN_MAKE_FILE: 'Failed to validate whether the user is allowed to create a file.',
+    L2_VFS_CAN_READ_FILE: 'Failed to validate whether the user is allowed to read the file.',
+    L2_VFS_CAN_WRITE_FILE: 'Failed to validate whether the user is allowed to write to the file.',
 }
