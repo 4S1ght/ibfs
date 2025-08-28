@@ -239,8 +239,5 @@ const errorCodes = {
     /* to be deleted */ L2_VFS_RMDIR_NOT_EMPTY:         'Failed to perform the operation because the directory is not empty.',
     /* to be deleted */ L2_VFS_RENAME:                  'Failed to rename the directory',
 
-
-    L2_VFS_CAN_MAKE_FILE: 'Failed to validate whether the user is allowed to create a file.',
-    L2_VFS_CAN_READ_FILE: 'Failed to validate whether the user is allowed to read the file.',
-    L2_VFS_CAN_WRITE_FILE: 'Failed to validate whether the user is allowed to write to the file.',
+    L2_VFS_CAN_MAKE_NODE:           'Failed to create a new node (file or directory)',
 }

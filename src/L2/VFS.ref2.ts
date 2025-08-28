@@ -76,61 +76,25 @@ export default class VFS {
 
     }
 
-    // private static createPermCascade(rootLevel?: TPermLevel) {
-    //     let permLevel: TPermLevel = rootLevel || 0
-    //     return {
-    //         progress (newLevel?: TPermLevel | undefined) {
-    //             if (permLevel === 4) return                 // Admin always has full permissions.
-    //             if (permLevel === 3) return                 // Inherit same manage level all the way down directory tree.
-    //             if (permLevel === 0) return                 // Inherit denied access if any parent denies it.
-    //             if (!newLevel)       return                 // Inherit previous perm level if not overwritten.
-    //             if (newLevel === 4)  return permLevel = 0   // Reassignment of admin (likely corrupted data) - Deny permission.
-    //             permLevel = newLevel                        // Freely swap between read/write permissions depending on directory depth & perms set.
-    //         },
-    //         get canRead()       { return permLevel >= 1 },       
-    //         get canWrite()      { return permLevel >= 2 },
-    //         get canManage()     { return permLevel >= 3 },
-    //         get isRoot()        { return permLevel >= 4 },
-    //         get permLevel()     { return permLevel }
-    //     }
-    // }
-
-    private static createPathCascade(rootDir: TDirectory, group: string) {
-
-        let currentNode: TNode | undefined = rootDir
-        let permLevel: TPermLevel = currentNode.perms[group] || 0
-
+    private static createPermCascade(rootLevel?: TPermLevel) {
+        let permLevel: TPermLevel = rootLevel || 0
         return {
-            progress(childName: string) {
-
-                // Previous node
-                if (!currentNode) return
-                if (currentNode.type === 'DIR') currentNode = currentNode.children[childName]
-
-                // Next node
-                if (currentNode && currentNode.type === 'DIR') {
-                    const newLevel = currentNode.perms[group] || 0
-                    if (permLevel === 4) return                 // Admin always has full permissions.
-                    if (permLevel === 3) return                 // Inherit same manage level all the way down directory tree.
-                    if (permLevel === 0) return                 // Inherit denied access if any parent denies it.
-                    if (!newLevel)       return                 // Inherit previous perm level if not overwritten.
-                    if (newLevel === 4)  return permLevel = 0   // Reassignment of admin (likely corrupted data) - Deny permission.
-                    permLevel = newLevel                        // Freely swap between read/write permissions depending on directory depth & perms set.
-                }
-
+            progress (newLevel?: TPermLevel | undefined) {
+                if (permLevel === 4) return                 // Admin always has full permissions.
+                if (permLevel === 3) return                 // Inherit same manage level all the way down directory tree.
+                if (permLevel === 0) return                 // Inherit denied access if any parent denies it.
+                if (!newLevel)       return                 // Inherit previous perm level if not overwritten.
+                if (newLevel === 4)  return permLevel = 0   // Reassignment of admin (likely corrupted data) - Deny permission.
+                permLevel = newLevel                        // Freely swap between read/write permissions depending on directory depth & perms set.
             },
-            // Node
-            get node()      { return currentNode    },
-            // Node perms
-            get canRead()   { return permLevel >= 1 },       
-            get canWrite()  { return permLevel >= 2 },
-            get canManage() { return permLevel >= 3 },
-            get isRoot()    { return permLevel >= 4 },
-            get permLevel() { return permLevel      }
+            get canRead()       { return permLevel >= 1 },       
+            get canWrite()      { return permLevel >= 2 },
+            get canManage()     { return permLevel >= 3 },
+            get isRoot()        { return permLevel >= 4 },
+            get permLevel()     { return permLevel }
         }
-
     }
-
+    
     // Initial state ---------------------------------------------------------------------------------------------------
 
     private _vfs: TDirectory = {
@@ -143,55 +107,44 @@ export default class VFS {
 
     // Methods ---------------------------------------------------------------------------------------------------------
 
-    
-    public canMakeFile_(path: string, group: string): T.XEavS<'L2_VFS_CAN_MAKE_FILE' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM'> {
+
+    public canMakeNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_CAN_MAKE_NODE'> {
         try {
+        
+            let current              = this._vfs
+            const { parts, dest }    = VFS.normalizeAndSplit(path)
+            const perm               = VFS.createPermCascade(this._vfs.perms[group] || 0)
 
-            let current: TNode | undefined    = this._vfs
-            const { parts, dest } = VFS.normalizeAndSplit(path)
-            const perm            = VFS.createPermCascade(this._vfs.perms[group] || 0)
-
-            /* Empty path */ if (!dest) return new IBFSError('L2_VFS_BAD_PATH', `Can't create file in an empty path.`, null, { path, group })
-            /* Root dir   */ if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create file in an empty path.`, null, { path, group })
+            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
 
             for (let i = 0; i < parts.length; i++) {
                 
                 const part = parts[i]!
                 const last = i === parts.length - 1
+                const newCurrent = (current as TDirectory).children[part]
 
-                if (!perm.canRead)          return new IBFSError('L2_VFS_NO_PERM',  null,                                               null, { path, group })
-                if (!current)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
-                if (current.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
 
-                // Direct parent of the new file
-                if (last && !perm.canWrite) return new IBFSError('L2_VFS_NO_PERM',  null,                                               null, { path, group })
-
-                current = current.children[part] as TDirectory
-                perm.progress(current.perms[group])
-
+                perm.progress(newCurrent.perms[group])
+                if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                    
+                current = newCurrent
+                
             }
 
-            const target = current.children[dest!]
-            if (target) return new IBFSError('L2_VFS_ALREADY_EXISTS', `Entry "${dest}" in "${path}" already exists.`, null, { path, group })
+            // After loop is finished, check if direct parent has write perms:
+            if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                
+            const newCurrent = current.children[dest]
+            if (newCurrent) return new IBFSError('L2_VFS_ALREADY_EXISTS', `Entry "${dest}" in "${path}" already exists.`, null, { path, group })
 
             return undefined // Allow access
-            
+
         } 
         catch (error) {
-            return new IBFSError('L2_VFS_CAN_MAKE_FILE', null, error as Error, { path, group })
-        }
-    }
-
-
-    public canMakeFile(path: string, group: string): T.XEavS<'L2_VFS_CAN_MAKE_FILE' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM'> {
-        try {
-
-            const cascade = VFS.createPathCascade(this._vfs, group)
-
-            
-        } 
-        catch (error) {
-            return new IBFSError('L2_VFS_CAN_MAKE_FILE', null, error as Error, { path, group })
+            return new IBFSError('L2_VFS_CAN_MAKE_NODE', null, error as Error, { path, group })
         }
     }
 
