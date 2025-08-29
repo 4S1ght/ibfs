@@ -107,21 +107,24 @@ export default class VFS {
 
     // Methods ---------------------------------------------------------------------------------------------------------
 
-
+    /**
+     * Checks if a new node can be created in the VFS.
+     * @param path Path to the node to be created.
+     * @param group Group that is creating the node.
+     * @returns `undefined` if the node can be created, or an `IBFSError` if not.
+     */
     public canMakeNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_CAN_MAKE_NODE'> {
         try {
         
-            let current              = this._vfs
-            const { parts, dest }    = VFS.normalizeAndSplit(path)
-            const perm               = VFS.createPermCascade(this._vfs.perms[group] || 0)
+            let current             = this._vfs
+            const { parts, dest }   = VFS.normalizeAndSplit(path)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
 
-            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create file in an empty path.`, null, { path, group })
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
 
-            for (let i = 0; i < parts.length; i++) {
+            for (const part of parts) {
                 
-                const part = parts[i]!
-                const last = i === parts.length - 1
                 const newCurrent = (current as TDirectory).children[part]
 
                 if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
@@ -145,6 +148,98 @@ export default class VFS {
         } 
         catch (error) {
             return new IBFSError('L2_VFS_CAN_MAKE_NODE', null, error as Error, { path, group })
+        }
+    }
+
+    /**
+     * Checks if a node can be read in the VFS.
+     * @param path Path to the node to be read.
+     * @param group Group that is reading the node.
+     * @returns `undefined` if the node can be read, or an `IBFSError` if not.
+     */
+    public canReadNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_READ_NODE'> {
+        try {
+            
+            let current             = this._vfs
+            const { parts, dest }   = VFS.normalizeAndSplit(path)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't read item on an empty path.`, null, { path, group })
+            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+
+            for (const part of parts) {
+
+                const newCurrent = (current as TDirectory).children[part]
+
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+
+                perm.progress(newCurrent.perms[group])
+                if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                    
+                current = newCurrent
+
+            }
+
+            const newCurrent = current.children[dest]
+            if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" does not exist.`, null, { path, group })
+
+            // If reading a directory, don't just check read perms on the leading path like 
+            // with files, but check read perms inside the target directory as well.
+            if (newCurrent.type === 'DIR') {
+                perm.progress(newCurrent.perms[group])
+                if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+            }
+
+            return undefined // Allow access
+
+        } 
+        catch (error) {
+            return new IBFSError('L2_VFS_CAN_READ_NODE', null, error as Error, { path, group })
+        }
+    }
+
+    /**
+     * Checks if an existing node can be written to in the VFS.
+     * @param path Path to the node to be written to.
+     * @param group Group that is writing the node.
+     * @returns `undefined` if the node can be written, or an `IBFSError` if not.
+     */
+    public canWriteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_WRITE_NODE'> {
+        try {
+        
+            let current             = this._vfs
+            const { parts, dest }   = VFS.normalizeAndSplit(path)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
+            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+
+            for (const part of parts) {
+                
+                const newCurrent = (current as TDirectory).children[part]
+
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+
+                perm.progress(newCurrent.perms[group])
+                if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                    
+                current = newCurrent
+                
+            }
+
+            // After loop is finished, check if direct parent has write perms:
+            if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                
+            const newCurrent = current.children[dest]
+            if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" already exists.`, null, { path, group })
+
+            return undefined // Allow access
+
+        } 
+        catch (error) {
+            return new IBFSError('L2_VFS_CAN_WRITE_NODE', null, error as Error, { path, group })
         }
     }
 

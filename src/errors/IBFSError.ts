@@ -233,11 +233,7 @@ const errorCodes = {
     L2_VFS_NO_PERM:                 'The user does not have permission to access the requested resource.',
     L2_VFS_ALREADY_EXISTS:          'The resource with the requested path already exists.',
 
-    /* to be deleted */ L2_VFS_READDIR:                 'Failed to read the directory',
-    /* to be deleted */ L2_VFS_MKDIR:                   'Failed to create the directory',
-    /* to be deleted */ L2_VFS_RMDIR:                   'Failed to remove the directory',
-    /* to be deleted */ L2_VFS_RMDIR_NOT_EMPTY:         'Failed to perform the operation because the directory is not empty.',
-    /* to be deleted */ L2_VFS_RENAME:                  'Failed to rename the directory',
-
     L2_VFS_CAN_MAKE_NODE:           'Failed to create a new node (file or directory)',
+    L2_VFS_CAN_READ_NODE:           'Failed to read a node (file or directory)',
+    L2_VFS_CAN_WRITE_NODE:          'Failed to write to a node (file or directory)',
 }
