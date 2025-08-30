@@ -35,7 +35,19 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
             }
         } 
 
-    } 
+    }
+    
+    /**
+     * Returns `true` if the error or one of it's causes contains the specified code.
+     * @returns boolean
+     */
+    public has(code: Code) {
+        if (this.code === code) return true
+        for (const cause of this.causes) {
+            if (cause instanceof IBFSError && cause.code === code) return true
+        }
+        return false
+    }
 
     /**
      * Constructs a new IBFSError instance in an Eav (error-as-value) format. 
@@ -57,8 +69,6 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
             ...traceLines.slice(0, limit)
         ].join('\n') + (traceLines.length > limit ? ' ...' : '')
     }
-
-
 
 }
 
