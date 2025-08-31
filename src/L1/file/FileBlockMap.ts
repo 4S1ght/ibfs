@@ -31,7 +31,6 @@ type TChangeMetadata = Partial<
         THeadBlock,
         | 'created'
         | 'modified'
-        | 'resourceType'
     >
 >
 
