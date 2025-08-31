@@ -129,10 +129,10 @@ export default class FileBlockMap {
         try {
 
             if (addresses.length === 0) return
-
             const startingBlock = this.items.at(-1)!
 
             for (let i = 0; i < addresses.length; i++) {
+
                 const address = addresses[i]!
 
                 // Append address if there's space for it
@@ -147,8 +147,11 @@ export default class FileBlockMap {
                 else {
                     const growError = await this.grow()
                     if (growError) return new IBFSError('L1_FBM_APPEND', null, growError, { iteration })
-                    return await this.append(addresses.slice(i), iteration++)
+
+                    const nestedError =  await this.append(addresses.slice(i), iteration++)
+                    if (nestedError) return new IBFSError('L1_FBM_APPEND', null, nestedError, { iteration })
                 }
+
             }
 
             // Save the last block onto disk if it hasn't been saved yet.
