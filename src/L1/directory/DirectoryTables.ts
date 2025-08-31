@@ -9,15 +9,15 @@ import Memory from "../../L0/Memory.js"
  * 0 - No access   
  * 1 - Read.  
  * 2 - Write.  
- * 3 - Manage (local) - User can manage children of this directory, but not parents.  
- * 4 - Admin (global) - User can manage everything. Set globally at root.  
+ * 3 - Manage (local) - User/group can manage children of this directory, but not parents.  
+ * 4 - Admin (global) - User/group can manage everything. Set globally at root.  
  */
 export type TPermLevel = 0 | 1 | 2 | 3 | 4
 
 export interface TDirectory {
     /** Directory's children items. */
     children: Record<string, number>,
-    /** Defines directory read permissions for each user. */
+    /** Defines directory read permissions for each user/group. */
     users: Record<string, TPermLevel>,
     /** Directory's metadata. */
     meta: Record<string, string>
@@ -51,9 +51,9 @@ export default class DirectoryTable {
         --------------------------------------------------------
 
         --------------------------------------------------------
-        Int16  | User permissions item count
+        Int16  | Group permissions item count
         -------|------------------------------------------------
-        Int32  | User ID (parsed to a HEX code)
+        Int32  | Group ID (parsed to a HEX code)
         Int8   | Permission level
         --------------------------------------------------------
 

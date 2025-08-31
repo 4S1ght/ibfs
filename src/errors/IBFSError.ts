@@ -100,7 +100,7 @@ const errorCodes = {
     L0_SR_HEAD_SEGFAULT:            'Provided body data is too large to fit within a head block.',
     L0_SR_HEAD_ADDR_REMAINDER:      'Provided link block body length is not a multiple of 8 (required for BigInt addresses).',
     L0_DS_HEAD:                     'Failed to deserialize a head block.',
-    L0_DS_HEAD_CORRUPT:             'The head block is corrupted, `addressCount` meta-tag does not reflect a proper block address count.',
+    // L0_DS_HEAD_CORRUPT:             'The head block is corrupted, `addressCount` meta-tag does not reflect a proper block address count.',
 
     // Link blocks
     L0_SR_LINK:                     'Failed to serialize a link block.',
@@ -241,9 +241,14 @@ const errorCodes = {
     
     L2_VFS_BAD_PATH:                'The resource with the requested path was not found or the path is malformed.',
     L2_VFS_NO_PERM:                 'The user does not have permission to access the requested resource.',
-    L2_VFS_ALREADY_EXISTS:          'The resource with the requested path already exists.',
+    L2_VFS_ALREADY_EXISTS:          'The resource with the specified path/name already exists.',
 
-    L2_VFS_CAN_MAKE_NODE:           'Failed to create a new node (file or directory)',
-    L2_VFS_CAN_READ_NODE:           'Failed to read a node (file or directory)',
-    L2_VFS_CAN_WRITE_NODE:          'Failed to write to a node (file or directory)',
+    L2_VFS_CAN_MAKE_NODE:           'Can not create a new node',
+    L2_VFS_CAN_READ_NODE:           'Can not read a node',
+    L2_VFS_CAN_WRITE_NODE:          'Can not write to a node.',
+    L2_VFS_CAN_RENAME_NODE:         'Can not rename a node to the specified name.',
+    L2_VFS_CAN_MOVE_NODE:           'Can not move a node from the source directory to the target directory.',
+    L2_VFS_CAN_DELETE_NODE:         'Can not delete a node.',
+    L2_VFS_CAN_MANAGE_NODE:         'The group has no permission to manage this node.',
+
 }

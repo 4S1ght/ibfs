@@ -243,6 +243,83 @@ export default class VFS {
         }
     }
 
+    /**
+     * Checks if a node can be renamed in the VFS on the specified `path` by a given `group`.
+     * @param path Path to the node to be renamed.
+     * @param newName The new name the node should have.
+     * @param group Group that is renaming the node.
+     * @returns `undefined` if the node can be renamed, or an `IBFSError` if not.
+     */
+    public canRenameNode(path: string, newName: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_RENAME_NODE' | 'L2_VFS_ALREADY_EXISTS'> {
+        try {
+
+            let current             = this._vfs
+            const { parts, dest }   = VFS.normalizeAndSplit(path)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't rename item on an empty path.`, null, { path, group })
+            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+
+            for (const part of parts) {
+                
+                const newCurrent = (current as TDirectory).children[part]
+
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+
+                perm.progress(newCurrent.perms[group])
+                if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                    
+                current = newCurrent
+                
+            }
+
+            // After loop is finished, check if direct parent has write perms:
+            if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+
+            // Check if source item exists
+            const srcNamedItem = current.children[dest]
+            if (!srcNamedItem) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" does not exist.`, null, { path, group })
+
+            // Check if the target name isn't taken
+            const destNamedItem = current.children[newName]
+            if (destNamedItem) return new IBFSError('L2_VFS_ALREADY_EXISTS', `Entry "${newName}" in "${path}" already exists.`, null, { path, group })
+            
+            return undefined // Allow access
+            
+        } 
+        catch (error) {
+            return new IBFSError('L2_VFS_CAN_RENAME_NODE', null, error as Error, { path, group })    
+        }
+    }
+
+    public canMoveNode(path: string, newParent: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MOVE_NODE'> {
+        try {
+            
+        } 
+        catch (error) {
+            return new IBFSError('L2_VFS_CAN_MOVE_NODE', null, error as Error, { path, group })    
+        }
+    }
+
+    public canDeleteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE'> {
+        try {
+            
+        } 
+        catch (error) {
+            return new IBFSError('L2_VFS_CAN_DELETE_NODE', null, error as Error, { path, group })    
+        }
+    }
+
+    public canManageNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MANAGE_NODE'> {
+        try {
+            
+        } 
+        catch (error) {
+            return new IBFSError('L2_VFS_CAN_MANAGE_NODE', null, error as Error, { path, group })    
+        }
+    }
+
     public canReadFile(path: string, group: string) {}
     public canWriteFile(path: string, group: string) {}
     public canRenameFile(path: string, group: string) {}
