@@ -256,6 +256,12 @@ export default class VFS {
      * @param newName The new name the node should have.
      * @param group Group that is renaming the node.
      * @returns `undefined` if the node can be renamed, or an `IBFSError` if not.
+     * @example
+     * ```text
+     * path    =  /path/to/ny/file.txt
+     * newName =  newFile.txt
+     * result  -> /path-to/my/newFile.txt
+     * ```
      */
     public canRenameNode(path: string, newName: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_RENAME_NODE' | 'L2_VFS_ALREADY_EXISTS'> {
         try {
@@ -300,6 +306,19 @@ export default class VFS {
         }
     }
 
+    /**
+     * Checks if a node can be moved from it's parent directory to a new parent directory.
+     * @param path Path to the node that's to be moved.
+     * @param newParent Path to the direct parent to which the node should be moved.
+     * @param group The group issuing the action.
+     * @returns `undefined` if the node can be moved, or an `IBFSError` if not.
+     * @example
+     * ```text
+     * path      =  /path/to/my/file.txt
+     * newParent =  /new/path/
+     * result    -> /new/path/file.txt
+     * ```
+     */
     public canMoveNode(path: string, newParent: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MOVE_NODE'> {
         try {
 
