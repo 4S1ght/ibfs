@@ -235,6 +235,13 @@ export default class VFS {
             const newCurrent = current.children[dest]
             if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" already exists.`, null, { path, group })
 
+            // If writing a directory, don't just check read perms on the leading path like 
+            // with files, but check read perms inside the target directory as well.
+            if (newCurrent.type === 'DIR') {
+                perm.progress(newCurrent.perms[group])
+                if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+            }
+
             return undefined // Allow access
 
         } 
@@ -287,7 +294,7 @@ export default class VFS {
             
             return undefined // Allow access
             
-        } 
+        }  
         catch (error) {
             return new IBFSError('L2_VFS_CAN_RENAME_NODE', null, error as Error, { path, group })    
         }
@@ -295,6 +302,68 @@ export default class VFS {
 
     public canMoveNode(path: string, newParent: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MOVE_NODE'> {
         try {
+
+            let current = this._vfs
+
+            // Source path ----------------------------------------------------
+
+            const { parts: srcParts, dest: srcFinal } = VFS.normalizeAndSplit(path)
+            const srcPerm                             = VFS.createPermCascade(this._vfs.perms[group] || 0)
+
+            if (!srcFinal) return new IBFSError('L2_VFS_BAD_PATH', `Can't move item on an empty path.`, null, { path, group })
+            if (!srcPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+
+            for (const part of srcParts) {
+
+                const newCurrent = (current as TDirectory).children[part]
+
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+
+                srcPerm.progress(newCurrent.perms[group])
+                if (!srcPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+
+                current = newCurrent
+                
+            }
+
+            // After loop is finished, check if direct source parent has write perms:
+            if (!srcPerm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+
+            const sourceItem = current.children[srcFinal]
+            if (!sourceItem) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${srcFinal}" in "${path}" doesn't exists.`, null, { path, group })
+
+            // Destination path -----------------------------------------------
+
+            current = this._vfs
+
+            const { parts: destParts, dest: destFinal } = VFS.normalizeAndSplit(newParent)
+            const destPerm                              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+
+            if (!destFinal) return new IBFSError('L2_VFS_BAD_PATH', `Can't move item on an empty path.`, null, { path, group })
+            if (!destPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+
+            for (const part of destParts) {
+
+                const newCurrent = (current as TDirectory).children[part]
+
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${newParent}" does not exist.`,     null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${newParent}" is not a directory.`, null, { path, group })
+
+                destPerm.progress(newCurrent.perms[group])
+                if (!destPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+
+                current = newCurrent
+                
+            }
+
+            // After loop is finished, check if direct destination parent has write perms:
+            if (!destPerm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+
+            const destItem = current.children[destFinal]
+            if (destItem) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${destFinal}" in "${newParent}" already exists.`, null, { path, group })
+
+            return undefined            
             
         } 
         catch (error) {
