@@ -118,11 +118,10 @@ export default class VFS {
         
             let current             = this._vfs
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group])
 
-            // FIXME: need to swap the order of dest/read check in every method
-            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
 
             for (const part of parts) {
                 
@@ -163,10 +162,10 @@ export default class VFS {
             
             let current             = this._vfs
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group])
 
-            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't read item on an empty path.`, null, { path, group })
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't read item on an empty path.`, null, { path, group })
 
             for (const part of parts) {
 
@@ -211,10 +210,10 @@ export default class VFS {
         
             let current             = this._vfs
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group])
 
-            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
 
             for (const part of parts) {
                 
@@ -269,10 +268,10 @@ export default class VFS {
 
             let current             = this._vfs
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group])
 
-            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't rename item on an empty path.`, null, { path, group })
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't rename item on an empty path.`, null, { path, group })
 
             for (const part of parts) {
                 
@@ -308,7 +307,7 @@ export default class VFS {
     }
 
     /**
-     * Checks if a node can be moved from it's parent directory to a new parent directory.
+     * Checks if a node can be moved from it's current parent directory to a new parent directory.
      * @param path Path to the node that's to be moved.
      * @param newParent Path to the direct parent to which the node should be moved.
      * @param group The group issuing the action.
@@ -328,10 +327,10 @@ export default class VFS {
             // Source path ----------------------------------------------------
 
             const { parts: srcParts, dest: srcFinal } = VFS.normalizeAndSplit(path)
-            const srcPerm                             = VFS.createPermCascade(this._vfs.perms[group] || 0)
+            const srcPerm                             = VFS.createPermCascade(this._vfs.perms[group])
 
-            if (!srcFinal) return new IBFSError('L2_VFS_BAD_PATH', `Can't move item on an empty path.`, null, { path, group })
             if (!srcPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+            if (!srcFinal) return new IBFSError('L2_VFS_BAD_PATH', `Can't move item on an empty path.`, null, { path, group })
 
             for (const part of srcParts) {
 
@@ -358,7 +357,7 @@ export default class VFS {
             current = this._vfs
 
             const { parts: destParts, dest: destFinal } = VFS.normalizeAndSplit(newParent)
-            const destPerm                              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+            const destPerm                              = VFS.createPermCascade(this._vfs.perms[group])
 
             if (!destFinal) return new IBFSError('L2_VFS_BAD_PATH', `Can't move item on an empty path.`, null, { path, group })
             if (!destPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -391,12 +390,18 @@ export default class VFS {
         }
     }
 
+    /**
+     * Checks if a node can be deleted.
+     * @param path Path to the node to be deleted.
+     * @param group The group issuing the action.
+     * @returns `undefined` if the node can be deleted, or an `IBFSError` if not.
+     */
     public canDeleteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE'> {
         try {
 
             let current             = this._vfs
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group])
 
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
             if (!dest) return new IBFSError('L2_VFS_BAD_PATH', `Can't delete an empty path.`, null, { path, group })
@@ -421,9 +426,9 @@ export default class VFS {
             const newCurrent = current.children[dest]
             if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" doesn't exist.`, null, { path, group })
 
-            // Perform extra nested checks if the deleted item is a directory
-            // Require write perms to every subdirectory and file recursively
-            // to avoid any partial operations
+            // Perform extra nested checks if the deleted item is a directory.
+            // Deleting a directory requires write perms to every subdirectory
+            // and file recursively to avoid any partial operations.
             if (newCurrent.type === 'DIR') {
 
                 perm.progress(newCurrent.perms[group])
@@ -462,26 +467,52 @@ export default class VFS {
         }
     }
 
+    /**
+     * Checks if a node can be managed by a specific user group.
+     * @param path Path to the node to be managed.
+     * @param group Group that attempting to manage the node.
+     * @returns `undefined` if the node can be managed, or an `IBFSError` if not.
+     */
     public canManageNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MANAGE_NODE'> {
         try {
+
+            let current             = this._vfs
+            const { parts, dest }   = VFS.normalizeAndSplit(path)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group])
+
+            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't manage an empty path.`, null, { path, group })
+
+            for (const part of parts) {
+                
+                const newCurrent = (current as TDirectory).children[part]
+
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+
+                perm.progress(newCurrent.perms[group])
+                if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                
+                current = newCurrent
+
+            }
+
+            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                
+            const newCurrent = current.children[dest]
+            if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" doesn't exist.`, null, { path, group })
             
+            if (newCurrent.type === 'DIR') {
+                perm.progress(newCurrent.perms[group])
+                if (!perm.canManage) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+            }
+
+            return undefined
+
         } 
         catch (error) {
             return new IBFSError('L2_VFS_CAN_MANAGE_NODE', null, error as Error, { path, group })    
         }
     }
-
-    public canReadFile(path: string, group: string) {}
-    public canWriteFile(path: string, group: string) {}
-    public canRenameFile(path: string, group: string) {}
-    public canMoveFile(path: string, group: string) {}
-    public canDeleteFile(path: string, group: string) {}
-
-    public canMakeDir(path: string, group: string) {}
-    public canReadDir(path: string, group: string) {}
-    public canWriteDir(path: string, group: string) {}
-    public canRenameDir(path: string, group: string) {}
-    public canMoveDir(path: string, group: string) {}
-    public canDeleteDir(path: string, group: string) {}
 
 }
