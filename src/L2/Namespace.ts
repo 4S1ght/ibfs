@@ -3,7 +3,7 @@
 import type * as T from '../../types.js'
 import IBFSError from '../errors/IBFSError.js'
 import Filesystem, { TFSInit } from '../L1/Filesystem.js'
-import VFS from './VFS.js'
+import VFS from './VirtualFilesystem.js'
 
 // Types ===============================================================================================================
 

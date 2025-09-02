@@ -41,7 +41,7 @@ export default class VFS {
 
     // Static ----------------------------------------------------------------------------------------------------------
 
-    private static file(address: number, size = 0): TNode {
+    public static file(address: number, size = 0): TNode {
         return {
             type: 'FILE',
             size,
@@ -49,7 +49,7 @@ export default class VFS {
         }
     }
 
-    private static dir(address: number, size = 0): TNode {
+    public static dir(address: number, size = 0): TNode {
         return {
             type: 'DIR',
             size,
@@ -80,12 +80,12 @@ export default class VFS {
         let permLevel: TPermLevel = rootLevel || 0
         return {
             progress (newLevel?: TPermLevel | undefined) {
-                if (permLevel === 4) return                 // Admin always has full permissions.
-                if (permLevel === 3) return                 // Inherit same manage level all the way down directory tree.
-                if (permLevel === 0) return                 // Inherit denied access if any parent denies it.
-                if (!newLevel)       return                 // Inherit previous perm level if not overwritten.
-                if (newLevel === 4)  return permLevel = 0   // Reassignment of admin (likely corrupted data) - Deny permission.
-                permLevel = newLevel                        // Freely swap between read/write permissions depending on directory depth & perms set.
+                if (permLevel === 4)        return                  // Admin always has full permissions.
+                if (permLevel === 3)        return                  // Inherit same manage level all the way down directory tree.
+                if (permLevel === 0)        return                  // Inherit denied access if any parent denies it.
+                if (newLevel === undefined) return                  // Inherit previous perm level if not overwritten.
+                if (newLevel === 4)         return permLevel = 0    // Reassignment of admin (likely corrupted data) - Deny permission.
+                permLevel = newLevel                                // Freely swap between read/write permissions depending on directory depth & perms set.
             },
             get canRead()       { return permLevel >= 1 },       
             get canWrite()      { return permLevel >= 2 },
@@ -97,7 +97,7 @@ export default class VFS {
     
     // Initial state ---------------------------------------------------------------------------------------------------
 
-    private _vfs: TDirectory = {
+    public readonly tree: TDirectory = {
         type: 'DIR',
         size: 0,
         address: 0,
@@ -116,9 +116,9 @@ export default class VFS {
     public canMakeNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_CAN_MAKE_NODE'> {
         try {
         
-            let current             = this._vfs
+            let current             = this.tree
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group])
+            const perm              = VFS.createPermCascade(this.tree.perms[group])
 
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
             if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
@@ -160,12 +160,12 @@ export default class VFS {
     public canReadNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_READ_NODE'> {
         try {
             
-            let current             = this._vfs
+            let current             = this.tree
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group])
+            const perm              = VFS.createPermCascade(this.tree.perms[group])
 
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
-            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't read item on an empty path.`, null, { path, group })
+            if (!dest)         return undefined // No dest means empty path and a root directory as the target.
 
             for (const part of parts) {
 
@@ -208,9 +208,9 @@ export default class VFS {
     public canWriteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_WRITE_NODE'> {
         try {
         
-            let current             = this._vfs
+            let current             = this.tree
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group])
+            const perm              = VFS.createPermCascade(this.tree.perms[group])
 
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
             if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
@@ -266,9 +266,9 @@ export default class VFS {
     public canRenameNode(path: string, newName: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_RENAME_NODE' | 'L2_VFS_ALREADY_EXISTS'> {
         try {
 
-            let current             = this._vfs
+            let current             = this.tree
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group])
+            const perm              = VFS.createPermCascade(this.tree.perms[group])
 
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
             if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't rename item on an empty path.`, null, { path, group })
@@ -322,12 +322,12 @@ export default class VFS {
     public canMoveNode(path: string, newParent: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MOVE_NODE'> {
         try {
 
-            let current = this._vfs
+            let current = this.tree
 
             // Source path ----------------------------------------------------
 
             const { parts: srcParts, dest: srcFinal } = VFS.normalizeAndSplit(path)
-            const srcPerm                             = VFS.createPermCascade(this._vfs.perms[group])
+            const srcPerm                             = VFS.createPermCascade(this.tree.perms[group])
 
             if (!srcPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
             if (!srcFinal) return new IBFSError('L2_VFS_BAD_PATH', `Can't move item on an empty path.`, null, { path, group })
@@ -354,10 +354,10 @@ export default class VFS {
 
             // Destination path -----------------------------------------------
 
-            current = this._vfs
+            current = this.tree
 
             const { parts: destParts, dest: destFinal } = VFS.normalizeAndSplit(newParent)
-            const destPerm                              = VFS.createPermCascade(this._vfs.perms[group])
+            const destPerm                              = VFS.createPermCascade(this.tree.perms[group])
 
             if (!destFinal) return new IBFSError('L2_VFS_BAD_PATH', `Can't move item on an empty path.`, null, { path, group })
             if (!destPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -399,9 +399,9 @@ export default class VFS {
     public canDeleteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE'> {
         try {
 
-            let current             = this._vfs
+            let current             = this.tree
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group])
+            const perm              = VFS.createPermCascade(this.tree.perms[group])
 
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
             if (!dest) return new IBFSError('L2_VFS_BAD_PATH', `Can't delete an empty path.`, null, { path, group })
@@ -476,9 +476,9 @@ export default class VFS {
     public canManageNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MANAGE_NODE'> {
         try {
 
-            let current             = this._vfs
+            let current             = this.tree
             const { parts, dest }   = VFS.normalizeAndSplit(path)
-            const perm              = VFS.createPermCascade(this._vfs.perms[group])
+            const perm              = VFS.createPermCascade(this.tree.perms[group])
 
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
             if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't manage an empty path.`, null, { path, group })

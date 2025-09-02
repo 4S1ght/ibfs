@@ -41,7 +41,7 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
      * Returns `true` if the error or one of it's causes contains the specified code.
      * @returns boolean
      */
-    public has(code: Code) {
+    public has(code: IBFSErrorCode) {
         if (this.code === code) return true
         for (const cause of this.causes) {
             if (cause instanceof IBFSError && cause.code === code) return true
@@ -49,6 +49,18 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
         return false
     }
 
+    /**
+     * Returns `true` if the error or one of it's causes contains any of the specified error codes.
+     * @returns boolean
+     */
+    public hasAny(...codes: IBFSErrorCode[]) {
+        for (const code of codes) {
+            if (this.has(code)) return true
+        }
+        return true
+    }
+
+    
     /**
      * Constructs a new IBFSError instance in an Eav (error-as-value) format. 
      * @returns [IBFSError, null]
@@ -100,7 +112,7 @@ const errorCodes = {
     L0_SR_HEAD_SEGFAULT:            'Provided body data is too large to fit within a head block.',
     L0_SR_HEAD_ADDR_REMAINDER:      'Provided link block body length is not a multiple of 8 (required for BigInt addresses).',
     L0_DS_HEAD:                     'Failed to deserialize a head block.',
-    // L0_DS_HEAD_CORRUPT:             'The head block is corrupted, `addressCount` meta-tag does not reflect a proper block address count.',
+    L0_DS_HEAD_CORRUPT:             'The head block is corrupted, `addressCount` meta-tag does not reflect a proper block address count.',
 
     // Link blocks
     L0_SR_LINK:                     'Failed to serialize a link block.',
