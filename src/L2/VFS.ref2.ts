@@ -120,6 +120,7 @@ export default class VFS {
             const { parts, dest }   = VFS.normalizeAndSplit(path)
             const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
 
+            // FIXME: need to swap the order of dest/read check in every method
             if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
 
@@ -235,8 +236,8 @@ export default class VFS {
             const newCurrent = current.children[dest]
             if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" already exists.`, null, { path, group })
 
-            // If writing a directory, don't just check read perms on the leading path like 
-            // with files, but check read perms inside the target directory as well.
+            // If writing a directory, don't just check write perms on the leading path like 
+            // with files, but check write perms inside the target directory as well.
             if (newCurrent.type === 'DIR') {
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -392,6 +393,68 @@ export default class VFS {
 
     public canDeleteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE'> {
         try {
+
+            let current             = this._vfs
+            const { parts, dest }   = VFS.normalizeAndSplit(path)
+            const perm              = VFS.createPermCascade(this._vfs.perms[group] || 0)
+
+            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+            if (!dest) return new IBFSError('L2_VFS_BAD_PATH', `Can't delete an empty path.`, null, { path, group })
+
+            for (const part of parts) {
+                
+                const newCurrent = (current as TDirectory).children[part]
+
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+
+                perm.progress(newCurrent.perms[group])
+                if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                
+                current = newCurrent
+
+            }
+
+            // After loop is finished, check if direct parent has write perms:
+            if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                
+            const newCurrent = current.children[dest]
+            if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" doesn't exist.`, null, { path, group })
+
+            // Perform extra nested checks if the deleted item is a directory
+            // Require write perms to every subdirectory and file recursively
+            // to avoid any partial operations
+            if (newCurrent.type === 'DIR') {
+
+                perm.progress(newCurrent.perms[group])
+                if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                
+                let deniedChild: string | null = null
+
+                const scanChildPerms = (dir: TDirectory, pathChunks: string[] = []) => {
+                    for (const entry in dir.children) {
+                        if (Object.prototype.hasOwnProperty.call(dir.children, entry)) {
+                            
+                            const child = dir.children[entry]!
+                            if (child.type !== 'DIR') continue
+
+                            perm.progress(child.perms[group])
+                            if (!perm.canWrite) {
+                                if (!deniedChild) deniedChild = pathChunks.join('/') 
+                                break
+                            }
+
+                            scanChildPerms(child, [...pathChunks, entry])
+
+                        }
+                    }
+                }
+
+                scanChildPerms(newCurrent, [...parts, dest])
+
+            }
+
+            return undefined // Allow access
             
         } 
         catch (error) {
