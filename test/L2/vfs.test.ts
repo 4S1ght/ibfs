@@ -74,9 +74,98 @@ describe('Virtual Filesystem', () => {
         
     })
 
+    test('VFS.canWriteNode', () => {
+
+        vfs.tree.perms = { group1: 1, group2: 2 }
+        vfs.tree.children = {
+            'file1.txt': {
+                type: 'FILE',
+                size: 1400,
+                address: 10,
+            },
+            'folder1': {
+                type: 'DIR',
+                size: 0,
+                address: 20,
+                perms: { group1: 2, group2: 0 },
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                    }
+                }
+            }
+        }
+
+        // Root directory
+        expect(vfs.canWriteNode('/', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canWriteNode('/', 'group2')).toBe(undefined)
+
+        // File directly in root
+        expect(vfs.canWriteNode('/file1.txt',    'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canWriteNode('/not-existent', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canWriteNode('/file1.txt',    'group2')).toBe(undefined)
+
+        // Nested file
+        expect(vfs.canWriteNode('/folder1/file2.txt', 'group1')).toBe(undefined)
+
+        // Nested file with denied parent
+        expect(vfs.canWriteNode('/folder1/file2.txt', 'group2')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+    })
+
+    test('VFS.canMakeNode', () => {
+
+        vfs.tree.perms = { group1: 1, group2: 4, group3: 0 }
+        vfs.tree.children = {
+            'file1.txt': {
+                type: 'FILE',
+                size: 1400,
+                address: 10,
+            },
+            'folder1': {
+                type: 'DIR',
+                size: 0,
+                address: 20,
+                perms: { group1: 3, group3: 3 },
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                    }
+                }
+            },
+        }
+
+        // Root directory
+        expect(vfs.canMakeNode('/', 'group1')!.has('L2_VFS_BAD_PATH')).toBe(true)
+        expect(vfs.canMakeNode('/', 'group2')!.has('L2_VFS_BAD_PATH')).toBe(true)
+
+        // File directly in root
+        expect(vfs.canMakeNode('/item', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canMakeNode('/item', 'group2')).toBe(undefined)
+        expect(vfs.canMakeNode('/item', 'group3')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+        // Make file that already exists
+        expect(vfs.canMakeNode('/file1.txt', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canMakeNode('/file1.txt', 'group2')!.has('L2_VFS_ALREADY_EXISTS')).toBe(true)
+
+        // Make folder that already exists
+        expect(vfs.canMakeNode('/folder1', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canMakeNode('/folder1', 'group2')!.has('L2_VFS_ALREADY_EXISTS')).toBe(true)
+
+        // Nested file with denied parent
+        expect(vfs.canMakeNode('/folder1/file3.txt', 'group2')).toBe(undefined)
+        expect(vfs.canMakeNode('/folder1/file3.txt', 'group3')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+
+    })
+
     test('VFS.canManageNode', () => {
 
-        vfs.tree.perms = { group1: 1, group2: 4, group3: 0}
+        vfs.tree.perms = { group1: 1, group2: 4, group3: 0 }
         vfs.tree.children = {
             'file1.txt': {
                 type: 'FILE',

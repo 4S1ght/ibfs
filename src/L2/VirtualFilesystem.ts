@@ -164,7 +164,7 @@ export default class VFS {
             const { parts, dest }   = VFS.normalizeAndSplit(path)
             const perm              = VFS.createPermCascade(this.tree.perms[group])
 
-            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
+            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
             if (!dest)         return undefined // No dest means empty path and a root directory as the target.
 
             for (const part of parts) {
@@ -212,8 +212,12 @@ export default class VFS {
             const { parts, dest }   = VFS.normalizeAndSplit(path)
             const perm              = VFS.createPermCascade(this.tree.perms[group])
 
-            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
-            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
+            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+
+            if (!dest) {
+                if (perm.canWrite) return undefined // Allow writer users to write to the root directory.
+                else               return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+            }
 
             for (const part of parts) {
                 
