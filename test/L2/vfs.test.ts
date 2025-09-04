@@ -204,5 +204,52 @@ describe('Virtual Filesystem', () => {
 
     })
     
+    test('VFS.canRenameNode', () => {
+
+        vfs.tree.perms = { group1: 1, group2: 4, group3: 0 }
+        vfs.tree.children = {
+            'file1.txt': {
+                type: 'FILE',
+                size: 1400,
+                address: 10,
+            },
+            'folder1': {
+                type: 'DIR',
+                size: 0,
+                address: 20,
+                perms: { group1: 3, group3: 3 },
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                    }
+                }
+            },
+        }
+
+        // Rename root directory
+        expect(vfs.canRenameNode('/', '/test', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canRenameNode('/', '/test', 'group2')!.has('L2_VFS_BAD_PATH')).toBe(true)
+
+        // Rename direct child of a level-2 access directory
+        expect(vfs.canRenameNode('/folder1/file2.txt', 'new-name', 'group1')).toBe(undefined)
+        expect(vfs.canRenameNode('/folder1/file2.txt', 'new-name', 'group0')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+        // Rename non-existent file
+        expect(vfs.canRenameNode('/folder1/non-existent', 'new-name', 'group1')!.has('L2_VFS_BAD_PATH')).toBe(true)
+
+        // Rename to an already taken name
+        expect(vfs.canRenameNode('file1.txt', 'folder1', 'group2')!.has('L2_VFS_ALREADY_EXISTS')).toBe(true)
+        
+    })
+
+    test('VFS.canMoveNode', () => {
+        
+    })
+
+    test('VFS.canDeleteNode', () => {
+        
+    })
     
 })

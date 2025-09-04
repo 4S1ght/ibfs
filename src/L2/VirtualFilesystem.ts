@@ -274,8 +274,12 @@ export default class VFS {
             const { parts, dest }   = VFS.normalizeAndSplit(path)
             const perm              = VFS.createPermCascade(this.tree.perms[group])
 
-            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
-            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't rename item on an empty path.`, null, { path, group })
+            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+            
+            if (!dest) {
+                if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                else                return new IBFSError('L2_VFS_BAD_PATH', `Can't rename root directory`, null, { path, group })
+            }
 
             for (const part of parts) {
                 
