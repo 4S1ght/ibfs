@@ -481,7 +481,11 @@ export default class VFS {
             const perm              = VFS.createPermCascade(this.tree.perms[group])
 
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
-            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't manage an empty path.`, null, { path, group })
+
+            if (!dest) {
+                if (perm.isRoot) return undefined // Allow root users to manage the root directory directly.
+                else             return new IBFSError('L2_VFS_NO_PERM', `Can't manage the root directory as non-root.`, null, { path, group })
+            }
 
             for (const part of parts) {
                 
@@ -497,7 +501,9 @@ export default class VFS {
 
             }
 
-            if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+            // // Check if the direct parent of the "dest" item gives the user manage permissions.
+            // // Management level directories only allow management of their own children.
+            // if (!perm.canManage) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
                 
             const newCurrent = current.children[dest]
             if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" doesn't exist.`, null, { path, group })
@@ -506,12 +512,15 @@ export default class VFS {
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canManage) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
             }
+            else {
+                return new IBFSError('L2_VFS_BAD_PATH', `Can not manage non-directories. (entry /${parts.join('/')}/<${dest}>)`, null, { path, group })
+            }
 
             return undefined
 
         } 
         catch (error) {
-            return new IBFSError('L2_VFS_CAN_MANAGE_NODE', null, error as Error, { path, group })    
+            return new IBFSError('L2_VFS_CAN_MANAGE_NODE', null, error as Error, { path, group })
         }
     }
 
