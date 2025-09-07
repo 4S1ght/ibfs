@@ -246,9 +246,120 @@ describe('Virtual Filesystem', () => {
 
     test('VFS.canMoveNode', () => {
         
+        vfs.tree.perms = { group1: 1, group2: 4, group3: 0 }
+        vfs.tree.children = {
+            'file1.txt': {
+                type: 'FILE',
+                size: 1400,
+                address: 10,
+            },
+            'folder1': {
+                type: 'DIR',
+                size: 0,
+                address: 20,
+                perms: { group1: 3 },
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                    },
+                    'file4.txt': {
+                        type: 'FILE',
+                        size: 400,
+                        address: 60,
+                    }
+                }
+            },
+            'folder2': {
+                type: 'DIR',
+                size: 0,
+                address: 40,
+                perms: { group1: 1 },
+                children: {
+                    'file3.txt': {
+                        type: 'FILE',
+                        size: 300,
+                        address: 50,
+                    },
+                    'file4.txt': {
+                        type: 'FILE',
+                        size: 400,
+                        address: 60,
+                    }
+                }
+            }
+        }
+
+        // Move root directory
+        expect(vfs.canMoveNode('/', '/test', 'group1')!.has('L2_VFS_BAD_PATH')).toBe(true)
+        expect(vfs.canMoveNode('/', '/test', 'group2')!.has('L2_VFS_BAD_PATH')).toBe(true)
+
+        // Move item from write-enabled dir to a read-only dir
+        expect(vfs.canMoveNode('/folder1/file2.txt', '/folder2', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canMoveNode('/folder1/file2.txt', '/folder2', 'group2')).toBe(undefined)
+
+        // Move item from read-only dir to a write-enabled dir
+        expect(vfs.canMoveNode('/folder2/file3.txt', '/folder1', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canMoveNode('/folder2/file3.txt', '/folder1', 'group2')).toBe(undefined)
+        
+        // Move item to a directory with an item of the same name
+        expect(vfs.canMoveNode('/folder1/file4.txt', '/folder2', 'group2')!.has('L2_VFS_ALREADY_EXISTS')).toBe(true)
+
     })
 
     test('VFS.canDeleteNode', () => {
+
+        vfs.tree.perms = { group1: 1, group2: 2 }
+        vfs.tree.children = {
+            'file1.txt': {
+                type: 'FILE',
+                size: 1400,
+                address: 10,
+            },
+            'folder1': {
+                type: 'DIR',
+                size: 0,
+                address: 20,
+                perms: { group2: 2 },
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                    },
+                    'folder2': {
+                        type: 'DIR',
+                        size: 0,
+                        address: 40,
+                        perms: { group2: 1 },
+                        children: {}
+                    }
+                }
+            }
+        }
+
+        // Delete root directory
+        expect(vfs.canDeleteNode('/', 'group1')!.has('L2_VFS_BAD_PATH')).toBe(true)
+        expect(vfs.canDeleteNode('/', 'group2')!.has('L2_VFS_BAD_PATH')).toBe(true)
+
+        // Delete existing item
+        expect(vfs.canDeleteNode('/file1.txt', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canDeleteNode('/file1.txt', 'group2')).toBe(undefined)
+
+        // Delete non-existent item
+        expect(vfs.canDeleteNode('/non-existent', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canDeleteNode('/non-existent', 'group2')!.has('L2_VFS_BAD_PATH')).toBe(true)
+
+        // Delete item in read-only dir
+        expect(vfs.canDeleteNode('/folder1/file2.txt', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+        // Delete read-only dir
+        expect(vfs.canDeleteNode('/folder1', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+        // Delete folder with children the user doesn't have write access to
+        expect(vfs.canDeleteNode('/folder1', 'group2')!.has('L2_VFS_NO_PERM_NESTED')).toBe(true)
+
         
     })
     

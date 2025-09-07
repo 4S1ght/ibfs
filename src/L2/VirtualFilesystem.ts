@@ -3,7 +3,7 @@
 import type * as T from '../../types.js'
 import type { TPermLevel  } from '../L1/directory/DirectoryTables.js'
 
-import { normalize } from 'node:path'
+import np from 'node:path'
 import IBFSError from '../errors/IBFSError.js'
 
 // Types ===============================================================================================================
@@ -60,7 +60,7 @@ export default class VFS {
     }
 
     private static normalizePath(path: string): string{
-        path = normalize(path)
+        path = np.normalize(path)
         if (path.endsWith('/')) path = path.slice(0, -1)
         if (path.startsWith('/')) path = path.slice(1)
         return path
@@ -327,7 +327,7 @@ export default class VFS {
      * result    -> /new/path/file.txt
      * ```
      */
-    public canMoveNode(path: string, newParent: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MOVE_NODE'> {
+    public canMoveNode(path: string, newParent: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MOVE_NODE' | 'L2_VFS_ALREADY_EXISTS'> {
         try {
 
             let current = this.tree
@@ -364,7 +364,7 @@ export default class VFS {
 
             current = this.tree
 
-            const { parts: destParts, dest: destFinal } = VFS.normalizeAndSplit(newParent)
+            const { parts: destParts, dest: destFinal } = VFS.normalizeAndSplit(np.join(newParent, srcFinal))
             const destPerm                              = VFS.createPermCascade(this.tree.perms[group])
 
             if (!destFinal) return new IBFSError('L2_VFS_BAD_PATH', `Can't move item on an empty path.`, null, { path, group })
@@ -388,7 +388,7 @@ export default class VFS {
             if (!destPerm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
 
             const destItem = current.children[destFinal]
-            if (destItem) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${destFinal}" in "${newParent}" already exists.`, null, { path, group })
+            if (destItem) return new IBFSError('L2_VFS_ALREADY_EXISTS', `Entry "${destFinal}" in "${newParent}" already exists.`, null, { path, group })
 
             return undefined            
             
@@ -404,7 +404,7 @@ export default class VFS {
      * @param group The group issuing the action.
      * @returns `undefined` if the node can be deleted, or an `IBFSError` if not.
      */
-    public canDeleteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE'> {
+    public canDeleteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE' | 'L2_VFS_NO_PERM_NESTED'> {
         try {
 
             let current             = this.tree
@@ -441,7 +441,7 @@ export default class VFS {
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
-                
+
                 let deniedChild: string | null = null
 
                 const scanChildPerms = (dir: TDirectory, pathChunks: string[] = []) => {
@@ -464,6 +464,8 @@ export default class VFS {
                 }
 
                 scanChildPerms(newCurrent, [...parts, dest])
+
+                if (deniedChild) return new IBFSError('L2_VFS_NO_PERM_NESTED', null, null, { path: deniedChild, group })
 
             }
 

@@ -253,6 +253,7 @@ const errorCodes = {
     
     L2_VFS_BAD_PATH:                'The resource with the requested path was not found or the path is malformed.',
     L2_VFS_NO_PERM:                 'The user does not have permission to access the requested resource.',
+    L2_VFS_NO_PERM_NESTED:          `The user does not have permission to access/modify the requested resource because they don't have the permission to access one or more of its children`,
     L2_VFS_ALREADY_EXISTS:          'The resource with the specified path/name already exists.',
 
     L2_VFS_CAN_MAKE_NODE:           'Can not create a new node',
