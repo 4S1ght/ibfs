@@ -7,7 +7,7 @@ import Memory                                       from '../L0/Memory.js'
 import Volume, { THeadBlockRead, TVolumeInit }      from '../L0/Volume.js'
 import BlockSerializationContext, { THeadBlock }    from '../L0/BlockSerialization.js'
 import AddressSpace                                 from './alloc/AddressSpace.js'
-import FileHandle, { TFHOpenOptions }               from './file/FileHandle.js'
+import FileHandle, { FINALIZE_HANDLE_CLOSE, TFHOpenOptions }               from './file/FileHandle.js'
 import DirectoryTable                               from './directory/DirectoryTables.js'
 import InstanceRegistry                             from './caching/InstanceRegistry.js'
 
@@ -42,7 +42,7 @@ export default class Filesystem {
     public declare aesKey:  Buffer
 
     private readonly _rh = new InstanceRegistry<number, FileHandle>()
-    private readonly _wh = new InstanceRegistry<'handle', FileHandle>()
+    private readonly _wh = new InstanceRegistry<number, FileHandle>()
 
     private constructor() {}
 
@@ -234,9 +234,6 @@ export default class Filesystem {
     }
 
     // Methods ---------------------------------------------------------------------------------------------------------
-
-    // TODO: Allow multiple write handles to be used across the filesystem
-    // And only enforce handle write exclusivity per-file and not globally.
     
     /**
      * Opens an IBFS file handle.  
@@ -253,10 +250,9 @@ export default class Filesystem {
                 containingFilesystem: this
             })
 
-            // Check if there is a write-enable handle
-            const wh = this._wh.getRef('handle')
-            const whr = wh ? wh.ref.deref() : undefined
-            if (whr) return IBFSError.eav('L1_FS_OPEN_EXREF')
+            // Check if there is a write-enabled handle
+            const wh = this._wh.getRef(options.fileAddress)
+            if (wh && wh.ref.deref()) return IBFSError.eav('L1_FS_OPEN_EXREF')
 
             // Attempt to reuse read-only handles and only 
             // create new ones if necessary.
@@ -269,7 +265,12 @@ export default class Filesystem {
                 if (openError) return IBFSError.eav('L1_FS_OPEN_FILE', null, openError, options)
 
                 this._rh.addRef(options.fileAddress, handle)
-                handle.once('close', () => this._rh.removeRef(options.fileAddress))
+
+                handle.once('requests-close', () => {
+                    const hasNoRemainingRefs = this._rh.removeRef(options.fileAddress)
+                    if (hasNoRemainingRefs) handle[FINALIZE_HANDLE_CLOSE]()
+                })
+
                 return [null, handle]
 
             }
@@ -277,7 +278,8 @@ export default class Filesystem {
             // Create new write or read/write handle (exclusive access)
             else {
 
-                const cache = this._wh.getRef('handle')
+                // Make sure no other handle is using this file
+                const cache = this._rh.getRef(options.fileAddress)
                 const instance = cache && cache.ref.deref()
                 if (instance) return IBFSError.eav(
                     'L1_FS_OPEN_EXREF',
@@ -287,8 +289,13 @@ export default class Filesystem {
                 const [openError, handle] = await createHandle()
                 if (openError) return IBFSError.eav('L1_FS_OPEN_FILE', null, openError, options)
 
-                this._wh.addRef('handle', handle)
-                handle.once('close', () => this._wh.removeRef('handle'))
+                this._wh.addRef(options.fileAddress, handle)
+
+                // No need to check for remaining refs as the handle is guaranteed to be exclusive
+                handle.once('requests-close', () => {
+                    this._wh.removeRef(options.fileAddress)
+                    handle[FINALIZE_HANDLE_CLOSE]()
+                })
 
                 return [null, handle]
 

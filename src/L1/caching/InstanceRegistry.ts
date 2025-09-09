@@ -89,6 +89,7 @@ export default class InstanceRegistry<Key, Ref extends object> {
      * but its reference count decreased, and only removed when the count 
      * reaches zero or is garbage-collected.
      * @param key Key used to access the object.
+     * @returns True if the reference was removed, false otherwise.
      */
     public removeRef(key: Key): boolean {
 

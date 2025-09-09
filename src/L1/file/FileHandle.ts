@@ -29,10 +29,13 @@ export interface TFHOpenOptions extends TFBMOpenOptions {
 
 // Exports =============================================================================================================
 
+export const FINALIZE_HANDLE_CLOSE = Symbol('finalize_handle_close')
+
+type Events = 'requests-close' | 'final-close'
 export default interface FileHandle extends EventEmitter {
-    once(event: 'close', listener: () => void): this
-    on  (event: 'close', listener: () => void): this
-    emit(event: 'close'): boolean
+    once(event: Events, listener: () => void): this
+    on  (event: Events, listener: () => void): this
+    emit(event: Events): boolean
 }
 export default class FileHandle extends EventEmitter {
 
@@ -42,7 +45,6 @@ export default class FileHandle extends EventEmitter {
 
     /** File's top-level block map.                        */ public declare readonly   fbm:                  FileBlockMap
     /** Original length of the file data.                  */ public declare readonly   originalLength:       number
-    /** Containing filesystem.                             */ public declare readonly   containingFilesystem: Filesystem
 
     /** Whether the file is currently open for reading.    */ private declare readonly _read:                 boolean
     /** Whether the file is currently open for writing.    */ private declare readonly _write:                boolean
@@ -75,8 +77,6 @@ export default class FileHandle extends EventEmitter {
             ;(self as any)._write          = ['rw', 'w'].includes(options.mode)
             ;(self as any)._append         = options.append   || false
             ;(self as any)._truncate       = options.truncate || false
-
-            ;(self as any).containingFilesystem = options.containingFilesystem
 
             // Load FBM ---------------------------
             const [fbmError, fbm] = await FileBlockMap.open(options)
@@ -125,20 +125,19 @@ export default class FileHandle extends EventEmitter {
             // Fail silently if the file is already closed or is still busy.
             if (!this._isOpen) return new IBFSError('L1_FH_CLOSE', 'The handle is already closed')
             if (this._isBusy()) return new IBFSError('L1_FH_CLOSE', `Can't close the handle because it's busy. Wait for`
-                +` all read/write activity to finish or close all active streams before closing.`)
+                +` all read/write activity to finish or terminate all active streams before closing.`)
 
-            // FIXME: The handle does not account for handle caching.
-            // Solution: Close the handle immediately only when in write-enabled mode, as these are guaranteed to be
-            // exclusive. In read-only handles recheck the cache and decrease the reference counter, close only if it 
-            // hits zero.
-
-            this.emit('close')
-            this._isOpen = false
+            this.emit('requests-close')
 
         } 
         catch (error) {
             return new IBFSError('L1_FH_CLOSE', null, error as Error)
         }
+    }
+
+    public [FINALIZE_HANDLE_CLOSE]() {
+        this._isOpen = false
+        this.emit('final-close')
     }
 
     // I/O methods -----------------------------------------------------------------------------------------------------
