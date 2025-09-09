@@ -53,26 +53,12 @@ export default class Namespace {
             const [fsError, fs] = await Filesystem.open(image, aesKey)
             if (fsError) return IBFSError.eav('L2_NS_OPEN', null, fsError)
             self.fs = fs
-        
-            const treeScanError = await self.scanFilesystemTree()
-            if (treeScanError) return IBFSError.eav('L2_NS_OPEN', null, treeScanError)
-
-            
 
             return [null, self]
 
         } 
         catch (error) {
             return IBFSError.eav('L2_NS_OPEN', null, error as Error)
-        }
-    }
-
-    private async scanFilesystemTree(): T.XEavSA<'L2_NS_SCAN_TREE'> {
-        try {
-            
-        } 
-        catch (error) {
-            return new IBFSError('L2_NS_SCAN_TREE', null, error as Error)
         }
     }
 

@@ -23,6 +23,8 @@ describe('Filesystem', () => {
         const data = await uniformAsync(fh.readFile())
         expect(data).toStrictEqual(Buffer.from([]))
 
+        await uniformSA(fh.close())
+        
     })
 
     test('fs.createEmptyStructure (file)', async () => {
@@ -37,6 +39,8 @@ describe('Filesystem', () => {
             users: {},
             meta: {},
         })
+        
+        await uniformSA(fh.close())
 
     })
 

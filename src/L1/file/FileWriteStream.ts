@@ -1,12 +1,13 @@
 // Imports =============================================================================================================
 
-import type * as T from "../../../types.js"
-import { Writable } from "node:stream"
-import FileHandle from "./FileHandle.js"
-import Memory from "../../L0/Memory.js"
-import IBFSError from "../../errors/IBFSError.js"
-import { createBufferMultiview } from "../../misc/bufferMultiView.js"
-import { KB_64 } from "../../Constants.js"
+import type * as T                  from "../../../types.js"
+
+import { Writable }                 from "node:stream"
+import FileHandle                   from "./FileHandle.js"
+import Memory                       from "../../L0/Memory.js"
+import IBFSError                    from "../../errors/IBFSError.js"
+import { createBufferMultiview }    from "../../misc/bufferMultiView.js"
+import { KB_64 }                    from "../../Constants.js"
 
 // Types ===============================================================================================================
 
@@ -277,7 +278,7 @@ export default class FileWriteStream extends Writable {
                 const block = Memory.alloc(this._blockSize)
 
                 const incomingData = this.longCache.readFilled()
-                let   existingData = Buffer.alloc(0)
+                let   existingData = Buffer.alloc(0) as Buffer
                 
                 if (shouldMerge) {
                     const [readError, finalBlock] = await fs.volume.readDataBlock(address, fs.aesKey)

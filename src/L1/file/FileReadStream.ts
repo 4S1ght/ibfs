@@ -1,10 +1,11 @@
 // Imports =============================================================================================================
 
-import type * as T from "../../../types.js"
+import type * as T  from "../../../types.js"
+
 import { Readable } from "node:stream";
-import { KB_64 } from "../../Constants.js";
-import FileHandle from "./FileHandle.js";
-import IBFSError from "../../errors/IBFSError.js";
+import { KB_64 }    from "../../Constants.js";
+import FileHandle   from "./FileHandle.js";
+import IBFSError    from "../../errors/IBFSError.js";
 
 // Types ===============================================================================================================
 

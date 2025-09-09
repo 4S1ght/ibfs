@@ -14,7 +14,6 @@ import InstanceRegistry                     from '../caching/InstanceRegistry.js
 
 import ssc                                  from '../../misc/safeShallowCopy.js'
 import streamFinish                         from '../../misc/streamFinish.js'
-import Filesystem from '../Filesystem.js'
 
 // Types ===============================================================================================================
 

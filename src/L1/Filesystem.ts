@@ -1,19 +1,20 @@
 // Imports =============================================================================================================
 
-import type * as T                                  from '../../types.js'
-import * as C                                       from '../Constants.js'
+import type * as T                                              from '../../types.js'
+import * as C                                                   from '../Constants.js'
 
-import Memory                                       from '../L0/Memory.js'
-import Volume, { THeadBlockRead, TVolumeInit }      from '../L0/Volume.js'
-import BlockSerializationContext, { THeadBlock }    from '../L0/BlockSerialization.js'
-import AddressSpace                                 from './alloc/AddressSpace.js'
-import FileHandle, { FINALIZE_HANDLE_CLOSE, TFHOpenOptions }               from './file/FileHandle.js'
-import DirectoryTable                               from './directory/DirectoryTables.js'
-import InstanceRegistry                             from './caching/InstanceRegistry.js'
+import Memory                                                   from '../L0/Memory.js'
+import Volume, { THeadBlockRead, TVolumeInit }                  from '../L0/Volume.js'
+import BlockSerializationContext, { THeadBlock }                from '../L0/BlockSerialization.js'
+import AddressSpace                                             from './alloc/AddressSpace.js'
+import FileHandle, { FINALIZE_HANDLE_CLOSE, TFHOpenOptions }    from './file/FileHandle.js'
+import DirectoryTable                                           from './directory/DirectoryTables.js'
+import InstanceRegistry                                         from './caching/InstanceRegistry.js'
 
-import IBFSError                                    from '../errors/IBFSError.js'
-import Time                                         from '../misc/time.js'
-import ssc                                          from '../misc/safeShallowCopy.js'
+import IBFSError                                                from '../errors/IBFSError.js'
+import Time                                                     from '../misc/time.js'
+import ssc                                                      from '../misc/safeShallowCopy.js'
+import { EventEmitter } from 'node:stream'
 
 // Types ===============================================================================================================
 
@@ -185,7 +186,7 @@ export default class Filesystem {
 
         try {
             
-            const scan = async (address: number) => {
+            const scan = async (address: number, segments: string[]) => {
 
                 // Open file handle and scan it
                 const [openError, fh] = await this.open({ fileAddress: address, mode: 'r' })
@@ -210,7 +211,7 @@ export default class Filesystem {
                 
                     for (const filename in dir.children) {
                         if (Object.prototype.hasOwnProperty.call(dir.children, filename)) {
-                            await scan(dir.children[filename]!)
+                            await scan(dir.children[filename]!, [...segments, filename])
                         }
                     }
 
@@ -222,7 +223,7 @@ export default class Filesystem {
 
             }
 
-            return await scan(this.volume.root.fsRoot)
+            return await scan(this.volume.root.fsRoot, [])
 
         } 
         catch (error) {

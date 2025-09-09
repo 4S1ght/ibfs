@@ -26,7 +26,7 @@ describe('Filesystem', () => {
         for await (const chunk of stream) chunks.push(chunk)
 
         expect(Buffer.concat(chunks)).toStrictEqual(Buffer.from([0, 0, 0, 0, 0]))
-
+        
         await uniformSA(file.close())
 
     })

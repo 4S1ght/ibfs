@@ -28,6 +28,8 @@ describe('Filesystem', () => {
             meta: {}
         })
 
+        await uniformSA(file.close())
+
     })
 
     test('handle.writeDir', async () => {
@@ -54,6 +56,7 @@ describe('Filesystem', () => {
         const dirRead = await uniformAsync(file.readAsDir())
 
         expect(dirRead).toStrictEqual(dir)
+        await uniformSA(file.close())
 
     })
 

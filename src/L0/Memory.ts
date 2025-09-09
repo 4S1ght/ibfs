@@ -43,7 +43,7 @@ export default class Memory {
      * Creates a subarray reference of the data that's already been written to the internal buffer.  
      * Depends on the value of the `Memory.bytesWritten` property which can be changed by the user!
      */
-    public readFilled() {
+    public readFilled(): Buffer {
         return this.buffer.subarray(0, this.bytesWritten)
     }
 
