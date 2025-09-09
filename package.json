@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "FORCE_COLOR=1 NODE_OPTIONS=\"--no-warnings\" vitest --color",
+    "test:ci": "vitest run",
     "debug": "vitest --color --test-timeout=0 --no-file-parallelism",
     "dev": "tsc -w"
   },
