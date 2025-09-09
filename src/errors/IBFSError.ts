@@ -1,5 +1,7 @@
 import type * as T from '../../types.js'
 
+// process.env.IBFS_ERR_TRACE_SIZE = '100'
+
 export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> extends Error {
 
     public readonly code: Code
@@ -17,8 +19,10 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
         
         Error.captureStackTrace(this, this.constructor)
 
+        const errorTrimSize = process.env.IBFS_ERROR_SIZE ? parseInt(process.env.IBFS_ERROR_SIZE) : undefined
+
         if (cause) {
-            IBFSError.trimErrorStack(cause)
+            IBFSError.trimErrorStack(cause, errorTrimSize)
             if (cause instanceof IBFSError) {
                 this.causes = [cause, ...cause.causes]
                 // @ts-ignore - Readonly only outside the error class.
@@ -31,8 +35,32 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
             }
         } 
 
-    } 
+    }
+    
+    /**
+     * Returns `true` if the error or one of it's causes contains the specified code.
+     * @returns boolean
+     */
+    public has(code: IBFSErrorCode) {
+        if (this.code === code) return true
+        for (const cause of this.causes) {
+            if (cause instanceof IBFSError && cause.code === code) return true
+        }
+        return false
+    }
 
+    /**
+     * Returns `true` if the error or one of it's causes contains any of the specified error codes.
+     * @returns boolean
+     */
+    public hasAny(...codes: IBFSErrorCode[]) {
+        for (const code of codes) {
+            if (this.has(code)) return true
+        }
+        return true
+    }
+
+    
     /**
      * Constructs a new IBFSError instance in an Eav (error-as-value) format. 
      * @returns [IBFSError, null]
@@ -53,8 +81,6 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
             ...traceLines.slice(0, limit)
         ].join('\n') + (traceLines.length > limit ? ' ...' : '')
     }
-
-
 
 }
 
@@ -189,7 +215,7 @@ const errorCodes = {
     L1_FH_WRITE_STREAM_FIRST:       'An error occurred while loading the first affected write stream block.',
     L1_FH_WRITE_STREAM_OUTRANGE:    'The provided write offset is larger than the length of the file.',
     L1_FH_WRITE_STREAM_FINAL:       'An error occurred while finalizing the write stream.',
-    L1_FH_WRITE_STREAM_EXREF:       'Can not create a write stream while another read stream is in use.',
+    L1_FH_WRITE_STREAM_EXREF:       'Can not create a write stream while another stream is in use.',
     L1_FH_WRITE_FILE:               'Failed to write to the file.',
     L1_FH_WRITE_MODE:               'Can not write data to a file open in read-only mode.',
 
@@ -218,5 +244,24 @@ const errorCodes = {
     L1_FS_OPEN_FILE:                'Failed to open a file.',
     L1_FS_OPEN_EXREF:               'Could not open this file because it is already in use by another consumer in a write-enabled mode.',
     L1_FS_ADSPACE_LOAD:             'Failed to load the address space.',
+
+    // Level 2 =========================================================================================================
+
+    L2_NS_CREATE:                   'Failed to create the filesystem namespace.',
+    L2_NS_OPEN:                     'Failed to open the filesystem namespace.',
+    L2_NS_SCAN_TREE:                'Failed to scan the filesystem directory tree.',
+    
+    L2_VFS_BAD_PATH:                'The resource with the requested path was not found or the path is malformed.',
+    L2_VFS_NO_PERM:                 'The user does not have permission to access the requested resource.',
+    L2_VFS_NO_PERM_NESTED:          `The user does not have permission to access/modify the requested resource because they don't have the permission to access one or more of its children`,
+    L2_VFS_ALREADY_EXISTS:          'The resource with the specified path/name already exists.',
+
+    L2_VFS_CAN_MAKE_NODE:           'Can not create a new node',
+    L2_VFS_CAN_READ_NODE:           'Can not read a node',
+    L2_VFS_CAN_WRITE_NODE:          'Can not write to a node.',
+    L2_VFS_CAN_RENAME_NODE:         'Can not rename a node to the specified name.',
+    L2_VFS_CAN_MOVE_NODE:           'Can not move a node from the source directory to the target directory.',
+    L2_VFS_CAN_DELETE_NODE:         'Can not delete a node.',
+    L2_VFS_CAN_MANAGE_NODE:         'The group has no permission to manage this node.',
 
 }

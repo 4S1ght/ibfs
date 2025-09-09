@@ -316,7 +316,7 @@ export default class BlockSerializationContext {
         try {
 
             if (blockData.data.length > this.HEAD_CONTENT_SIZE) return IBFSError.eav('L0_SR_HEAD_SEGFAULT', null, null, blockData)
-            if (blockData.data.length & 7) return IBFSError.eav('L0_SR_HEAD_ADDR_REMAINDER', null, null, blockData)
+            if (blockData.data.length & 7)                      return IBFSError.eav('L0_SR_HEAD_ADDR_REMAINDER', null, null, blockData)
             
             const hSize = BlockSerializationContext.HEAD_BLOCK_HEADER_SIZE
             const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)
@@ -451,7 +451,7 @@ export default class BlockSerializationContext {
         try {
 
             if (blockData.data.length > this.LINK_CONTENT_SIZE) return IBFSError.eav('L0_SR_LINK_SEGFAULT', null, null, blockData)
-            if (blockData.data.length & 7) return IBFSError.eav('L0_SR_LINK_ADDR_REMAINDER', null, null, blockData)
+            if (blockData.data.length & 7)                      return IBFSError.eav('L0_SR_LINK_ADDR_REMAINDER', null, null, blockData)
 
             const hSize = BlockSerializationContext.LINK_BLOCK_HEADER_SIZE
             const dist  = Memory.allocUnsafe(this.BLOCK_SIZE)

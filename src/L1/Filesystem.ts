@@ -1,24 +1,24 @@
 // Imports =============================================================================================================
 
-import type * as T                      from '../../types.js'
-import * as C                           from '../Constants.js'
+import type * as T                                  from '../../types.js'
+import * as C                                       from '../Constants.js'
 
-import Memory                           from '../L0/Memory.js'
-import Volume, { THeadBlockRead, TVolumeInit }          from '../L0/Volume.js'
-import BlockSerializationContext, { THeadBlock }        from '../L0/BlockSerialization.js'
-import AddressSpace                     from './alloc/AddressSpace.js'
-import FileHandle, { TFHOpenOptions }   from './file/FileHandle.js'
-import DirectoryTable                   from './directory/DirectoryTables.js'
-import InstanceRegistry                 from '../caching/InstanceRegistry.js'
+import Memory                                       from '../L0/Memory.js'
+import Volume, { THeadBlockRead, TVolumeInit }      from '../L0/Volume.js'
+import BlockSerializationContext, { THeadBlock }    from '../L0/BlockSerialization.js'
+import AddressSpace                                 from './alloc/AddressSpace.js'
+import FileHandle, { FINALIZE_HANDLE_CLOSE, TFHOpenOptions }               from './file/FileHandle.js'
+import DirectoryTable                               from './directory/DirectoryTables.js'
+import InstanceRegistry                             from './caching/InstanceRegistry.js'
 
-import IBFSError                        from '../errors/IBFSError.js'
-import Time                             from '../misc/time.js'
-import ssc                              from '../misc/safeShallowCopy.js'
+import IBFSError                                    from '../errors/IBFSError.js'
+import Time                                         from '../misc/time.js'
+import ssc                                          from '../misc/safeShallowCopy.js'
 
 // Types ===============================================================================================================
 
 export interface TFSInit extends TVolumeInit {
-    /** Whether to omit integrity checks when creating the volume & filesystem. */ initialIntegrity?: boolean
+
 }
 
 export interface TFSOpenFile extends Omit<TFHOpenOptions, 'headAddress' | 'containingFilesystem'> {
@@ -42,7 +42,7 @@ export default class Filesystem {
     public declare aesKey:  Buffer
 
     private readonly _rh = new InstanceRegistry<number, FileHandle>()
-    private readonly _wh = new InstanceRegistry<'handle', FileHandle>()
+    private readonly _wh = new InstanceRegistry<number, FileHandle>()
 
     private constructor() {}
 
@@ -57,7 +57,7 @@ export default class Filesystem {
             // Create volume ---------------------------------------------
 
             const volumeCreateError = await Volume.createEmptyVolume(init)
-            const [openError, $volume] = await Volume.open(init.fileLocation, init.initialIntegrity)
+            const [openError, $volume] = await Volume.open(init.fileLocation)
 
             if (volumeCreateError) return new IBFSError('L1_FS_CREATE', null, volumeCreateError, ssc(init, ['aesKey']))
             if (openError)         return new IBFSError('L1_FS_CREATE', null, openError, ssc(init, ['aesKey']))
@@ -94,8 +94,10 @@ export default class Filesystem {
             const dataError = await volume.writeDataBlock({
                 address: rootDirectoryDataAddress,
                 aesKey: init.aesKey,
-                data: DirectoryTable.serializeDRTable({
-                    ch: {}, usr: {}, md: {}
+                data: DirectoryTable.serialize({
+                    children: {},
+                    users: {},
+                    meta: {}
                 })
             })
 
@@ -206,9 +208,9 @@ export default class Filesystem {
                     const closeError = await close()
                     if (closeError) return closeError
                 
-                    for (const filename in dir.ch) {
-                        if (Object.prototype.hasOwnProperty.call(dir.ch, filename)) {
-                            await scan(dir.ch[filename]!)
+                    for (const filename in dir.children) {
+                        if (Object.prototype.hasOwnProperty.call(dir.children, filename)) {
+                            await scan(dir.children[filename]!)
                         }
                     }
 
@@ -220,7 +222,7 @@ export default class Filesystem {
 
             }
 
-            await scan(this.volume.root.fsRoot)
+            return await scan(this.volume.root.fsRoot)
 
         } 
         catch (error) {
@@ -232,7 +234,7 @@ export default class Filesystem {
     }
 
     // Methods ---------------------------------------------------------------------------------------------------------
-
+    
     /**
      * Opens an IBFS file handle.  
      * Due to the filesystem's design, read-only handles are shared across multiple consumers.
@@ -248,10 +250,9 @@ export default class Filesystem {
                 containingFilesystem: this
             })
 
-            // Check if there is a write-enable handle
-            const wh = this._wh.getRef('handle')
-            const whr = wh ? wh.ref.deref() : undefined
-            if (whr) return IBFSError.eav('L1_FS_OPEN_EXREF')
+            // Check if there is a write-enabled handle
+            const wh = this._wh.getRef(options.fileAddress)
+            if (wh && wh.ref.deref()) return IBFSError.eav('L1_FS_OPEN_EXREF')
 
             // Attempt to reuse read-only handles and only 
             // create new ones if necessary.
@@ -264,7 +265,12 @@ export default class Filesystem {
                 if (openError) return IBFSError.eav('L1_FS_OPEN_FILE', null, openError, options)
 
                 this._rh.addRef(options.fileAddress, handle)
-                handle.once('close', () => this._rh.removeRef(options.fileAddress))
+
+                handle.once('requests-close', () => {
+                    const hasNoRemainingRefs = this._rh.removeRef(options.fileAddress)
+                    if (hasNoRemainingRefs) handle[FINALIZE_HANDLE_CLOSE]()
+                })
+
                 return [null, handle]
 
             }
@@ -272,7 +278,8 @@ export default class Filesystem {
             // Create new write or read/write handle (exclusive access)
             else {
 
-                const cache = this._wh.getRef('handle')
+                // Make sure no other handle is using this file
+                const cache = this._rh.getRef(options.fileAddress)
                 const instance = cache && cache.ref.deref()
                 if (instance) return IBFSError.eav(
                     'L1_FS_OPEN_EXREF',
@@ -282,8 +289,13 @@ export default class Filesystem {
                 const [openError, handle] = await createHandle()
                 if (openError) return IBFSError.eav('L1_FS_OPEN_FILE', null, openError, options)
 
-                this._wh.addRef('handle', handle)
-                handle.once('close', () => this._wh.removeRef('handle'))
+                this._wh.addRef(options.fileAddress, handle)
+
+                // No need to check for remaining refs as the handle is guaranteed to be exclusive
+                handle.once('requests-close', () => {
+                    this._wh.removeRef(options.fileAddress)
+                    handle[FINALIZE_HANDLE_CLOSE]()
+                })
 
                 return [null, handle]
 
@@ -299,7 +311,7 @@ export default class Filesystem {
      * Used to create initial empty structures in the filesystem.
      * 
      * `Filesystem.open()` is used to open existing files, but can not create them directly as it requires
-     * a valid file address. This method sets up the basic structures and returns the pointer which can then
+     * a valid file address. This method sets up the basic structure and returns the pointer which can then
      * in turn be used to open a file handle and begin writing or reading data.
      * 
      * **Note:** If the file type is set to `DIR` the internal directory structure will be created as well.
@@ -328,7 +340,7 @@ export default class Filesystem {
 
             const dataBody = options.type === 'FILE'
                 ? Buffer.alloc(0)
-                : DirectoryTable.serializeDRTable({ ch: {}, usr: {}, md: {} })
+                : DirectoryTable.serialize({ children: {}, users: {}, meta: {} })
 
             const dataError = await this.volume.writeDataBlock({
                 data: dataBody,

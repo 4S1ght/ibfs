@@ -10,10 +10,11 @@ import FileBlockMap, { TFBMOpenOptions }    from './FileBlockMap.js'
 import FileReadStream, { TFRSOptions }      from './FileReadStream.js'
 import FileWriteStream, { TFWSOptions }     from './FileWriteStream.js'
 import DirectoryTable, { TDirectory }       from '../directory/DirectoryTables.js'
-import InstanceRegistry                     from '../../caching/InstanceRegistry.js'
+import InstanceRegistry                     from '../caching/InstanceRegistry.js'
 
 import ssc                                  from '../../misc/safeShallowCopy.js'
 import streamFinish                         from '../../misc/streamFinish.js'
+import Filesystem from '../Filesystem.js'
 
 // Types ===============================================================================================================
 
@@ -28,10 +29,13 @@ export interface TFHOpenOptions extends TFBMOpenOptions {
 
 // Exports =============================================================================================================
 
+export const FINALIZE_HANDLE_CLOSE = Symbol('finalize_handle_close')
+
+type Events = 'requests-close' | 'final-close'
 export default interface FileHandle extends EventEmitter {
-    once(event: 'close', listener: () => void): this
-    on  (event: 'close', listener: () => void): this
-    emit(event: 'close'): boolean
+    once(event: Events, listener: () => void): this
+    on  (event: Events, listener: () => void): this
+    emit(event: Events): boolean
 }
 export default class FileHandle extends EventEmitter {
 
@@ -39,15 +43,15 @@ export default class FileHandle extends EventEmitter {
 
     // Initial ---------------------------------------------------------------------------------------------------------
 
-    /** File's top-level block map.                        */ public declare readonly   fbm:                FileBlockMap
-    /** Original length of the file data.                  */ public declare readonly   originalLength:     number 
+    /** File's top-level block map.                        */ public declare readonly   fbm:                  FileBlockMap
+    /** Original length of the file data.                  */ public declare readonly   originalLength:       number
 
-    /** Whether the file is currently open for reading.    */ private declare readonly _read:               boolean
-    /** Whether the file is currently open for writing.    */ private declare readonly _write:              boolean
-    /** Whether writes be appended to the end of the file. */ private declare readonly _append:             boolean
-    /** Whether the file should be truncated on open.      */ private declare readonly _truncate:           boolean
-    /** Misc counter used for the instance registry.       */ private                  _ctr                 = 0
-    /** Whether the file is currently open.                */ private                  _isOpen              = false
+    /** Whether the file is currently open for reading.    */ private declare readonly _read:                 boolean
+    /** Whether the file is currently open for writing.    */ private declare readonly _write:                boolean
+    /** Whether writes be appended to the end of the file. */ private declare readonly _append:               boolean
+    /** Whether the file should be truncated on open.      */ private declare readonly _truncate:             boolean
+    /** Misc counter used for the instance registry.       */ private                  _ctr                   = 0
+    /** Whether the file is currently open.                */ private                  _isOpen                = false
     
     /** References read streams open on this file.         */ private _rs = new InstanceRegistry<number, FileReadStream>()
     /** References write streams open on this file.        */ private _ws = new InstanceRegistry<'stream', FileWriteStream>()
@@ -95,6 +99,9 @@ export default class FileHandle extends EventEmitter {
             // Set open flags ---------------------
             self._isOpen = true
 
+            // Cache file handle ------------------
+            // TODO: Cache the file handle
+
             return [null, self]
             
         } 
@@ -118,15 +125,19 @@ export default class FileHandle extends EventEmitter {
             // Fail silently if the file is already closed or is still busy.
             if (!this._isOpen) return new IBFSError('L1_FH_CLOSE', 'The handle is already closed')
             if (this._isBusy()) return new IBFSError('L1_FH_CLOSE', `Can't close the handle because it's busy. Wait for`
-                +` all read/write activity to finish or close all active streams before closing.`)
+                +` all read/write activity to finish or terminate all active streams before closing.`)
 
-            this.emit('close')
-            this._isOpen = false
+            this.emit('requests-close')
 
         } 
         catch (error) {
             return new IBFSError('L1_FH_CLOSE', null, error as Error)
         }
+    }
+
+    public [FINALIZE_HANDLE_CLOSE]() {
+        this._isOpen = false
+        this.emit('final-close')
     }
 
     // I/O methods -----------------------------------------------------------------------------------------------------
@@ -324,7 +335,7 @@ export default class FileHandle extends EventEmitter {
             for await (const chunk of stream) memory.write(chunk)
 
             const buffer = memory.readFilled()
-            const dir = DirectoryTable.deserializeDRTable(buffer)
+            const dir = DirectoryTable.deserialize(buffer)
             return [null, dir]
             
         } 
@@ -344,7 +355,7 @@ export default class FileHandle extends EventEmitter {
             if (!this._write) return new IBFSError('L1_FH_WRITE_MODE')
             if (this._isBusy()) return new IBFSError('L1_FH_BUSY')
 
-            const data = DirectoryTable.serializeDRTable(dir)
+            const data = DirectoryTable.serialize(dir)
 
             const [lenError, fileLength] = await this.getFileLength()
             if (lenError) return new IBFSError('L1_FH_DIR_WRITE', null, lenError)

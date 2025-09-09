@@ -29,7 +29,7 @@
         // Emit
         "outDir": "./dist",
         "sourceMap": true,
-        "declaration": true,
+        "declaration": true
     },
 
 }
