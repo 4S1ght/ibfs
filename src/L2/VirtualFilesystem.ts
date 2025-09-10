@@ -8,7 +8,7 @@ import IBFSError from '../errors/IBFSError.js'
 
 // Types ===============================================================================================================
 
-interface TDirectory {
+export interface TDirectory {
     /** Type of the directory structure.              */ type:      'DIR'
     /** Total size of the directory's contents.       */ size:      number
     /** Physical address of the directory head block. */ address:   number
@@ -16,13 +16,13 @@ interface TDirectory {
     /** Children files and subdirectories.            */ children:  Record<string, TNode>
 }
 
-interface TFile {
+export interface TFile {
     /** Type of the file structure.                   */ type:      'FILE'
     /** Total size of the file's contents.            */ size:      number
     /** Physical address of the file head block.      */ address:   Number
 }
 
-type TNode = TDirectory | TFile
+export type TNode = TDirectory | TFile
 
 // Method types --------------------------------------------------------------------------------------------------------
 
@@ -97,7 +97,7 @@ export default class VFS {
     
     // Initial state ---------------------------------------------------------------------------------------------------
 
-    public readonly tree: TDirectory = {
+    public tree: TDirectory = {
         type: 'DIR',
         size: 0,
         address: 0,

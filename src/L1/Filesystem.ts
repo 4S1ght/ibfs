@@ -8,13 +8,14 @@ import Volume, { THeadBlockRead, TVolumeInit }                  from '../L0/Volu
 import BlockSerializationContext, { THeadBlock }                from '../L0/BlockSerialization.js'
 import AddressSpace                                             from './alloc/AddressSpace.js'
 import FileHandle, { FINALIZE_HANDLE_CLOSE, TFHOpenOptions }    from './file/FileHandle.js'
-import DirectoryTable                                           from './directory/DirectoryTables.js'
+import DirectoryTables                                          from './directory/DirectoryTables.js'
 import InstanceRegistry                                         from './caching/InstanceRegistry.js'
+
+import VFS, { TDirectory, TNode }                               from '../L2/VirtualFilesystem.js'
 
 import IBFSError                                                from '../errors/IBFSError.js'
 import Time                                                     from '../misc/time.js'
 import ssc                                                      from '../misc/safeShallowCopy.js'
-import { EventEmitter } from 'node:stream'
 
 // Types ===============================================================================================================
 
@@ -95,7 +96,7 @@ export default class Filesystem {
             const dataError = await volume.writeDataBlock({
                 address: rootDirectoryDataAddress,
                 aesKey: init.aesKey,
-                data: DirectoryTable.serialize({
+                data: DirectoryTables.serialize({
                     children: {},
                     users: {},
                     meta: {}
@@ -116,7 +117,7 @@ export default class Filesystem {
 
     // Lifecycle -------------------------------------------------------------------------------------------------------
 
-    public static async open(image: string, aesKey: Buffer): T.XEavA<Filesystem, 'L1_FS_OPEN'> {
+    public static async open(image: string, aesKey: Buffer, finish?: (dirTree: TNode) => void): T.XEavA<Filesystem, 'L1_FS_OPEN'> {
         try {
 
             const self = new this()
@@ -132,11 +133,10 @@ export default class Filesystem {
                 cacheSize: self.volume.meta.ibfs.adSpaceCacheSize || C.DEFAULT_ADDRESS_MAP_CACHE_SIZE
             })
 
-            // TODO: Scan the volume to initialize the address space
-            // or load the address space from a cached file.
-            const adSpaceError = await self.loadAddressSpace()
-            if (adSpaceError) return IBFSError.eav('L1_FS_OPEN', null, adSpaceError, { image })
+            const [scanError, dirTree] = await self.traverseAndLoad()
+            if (scanError) return IBFSError.eav('L1_FS_OPEN', null, scanError, { image })
 
+            if (finish) finish(dirTree)
             return [null, self]
 
         } 
@@ -146,88 +146,71 @@ export default class Filesystem {
     }
 
     /**
-     * Loads the address space from disk into memory.  
-     * It is done either by scanning the volume and mapping out all allocated blocks
-     * or by loading ab already composed bitmap residing next to the volume.
-     */
-    private async loadAddressSpace(): T.XEavSA<"L1_FS_ADSPACE_LOAD"> {
-        try {
-
-            const bmpName = this.volume.host.replace(C.VOLUME_EXT_NAME, C.ADSPACE_EXT_NAME)
-            const loadError = await this.adSpace.loadBitmap(bmpName)
-
-            // Address space loaded from cache
-            if (!loadError) return
-
-            // Cache file not found - scan the volume
-            if (loadError.code === 'L1_AS_BITMAP_LOAD_NOTFOUND') {
-                const scanError = await this.scanForOccupancy()
-                if (scanError) return new IBFSError('L1_FS_ADSPACE_LOAD', null, scanError)
-            }
-            // Unknown error - Propagate
-            else {
-                return new IBFSError('L1_FS_ADSPACE_LOAD', null, loadError)
-            }
-            
-        } 
-        catch (error) {
-            return new IBFSError('L1_FS_ADSPACE_LOAD', null, error as Error)
-        }
-    }
-
-    /**
      * Scans the filesystem's entire file tree and maps out all allocated blocks.
-     * This is a potentially heavy and long task and should only be done if the
-     * cache is missing.
      */
-    private async scanForOccupancy(): T.XEavSA<"L1_FS_ADSPACE_SCAN"> {
+    private async traverseAndLoad(): T.XEavA<TNode, "L1_FS_ADSPACE_SCAN"> {
 
         let handle: FileHandle
 
         try {
-            
-            const scan = async (address: number, segments: string[]) => {
 
-                // Open file handle and scan it
+            const scan = async (address: number): T.XEavA<TNode, "L1_FS_ADSPACE_SCAN"> => {
+
+                // Open file handle
                 const [openError, fh] = await this.open({ fileAddress: address, mode: 'r' })
-                if (openError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, openError)
+                if (openError) return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, openError)
                 handle = fh
 
-                const close = async () => {
-                    const closeError = await fh.close()
-                    if (closeError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, closeError)
-                }
-
+                // Scan addresses
                 for (const address of fh.fbm.allAddresses()) this.adSpace.markAllocated(address)
 
-                // Scan subdirectories & files
-                if (fh.type === 'DIR') {
+                // Get file size
+                const [sizeError, size] = await fh.getFileLength()
+                if (sizeError) { 
+                    await fh.close(); 
+                    return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, sizeError) 
+                }
 
-                    const [readError, dir] = await fh.readAsDir()
-                    if (readError) return new IBFSError('L1_FS_ADSPACE_SCAN', null, readError)
+                if (fh.type === 'FILE') {
 
-                    const closeError = await close()
-                    if (closeError) return closeError
-                
-                    for (const filename in dir.children) {
-                        if (Object.prototype.hasOwnProperty.call(dir.children, filename)) {
-                            await scan(dir.children[filename]!, [...segments, filename])
-                        }
-                    }
+                    const closeError = await fh.close()
+                    if (closeError) return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, closeError)
+
+                    return [null, VFS.file(address, size)]
 
                 }
+
                 else {
-                    const closeError = await close()
-                    if (closeError) return closeError
+
+                    const [readError, dir] = await fh.readAsDir()
+                    const closeError = await fh.close()
+
+                    if (readError) return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, readError)
+                    if (closeError) return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, closeError)
+
+                    const dirObj = VFS.dir(address, size) as TDirectory
+
+                    for (const filename in dir.children) {
+                        if (Object.prototype.hasOwnProperty.call(dir.children, filename)) {
+
+                            const [scanError, child] = await scan(dir.children[filename]!)
+                            if (scanError) return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, scanError)
+
+                            dirObj.children[filename] = child
+                        }
+                    }
+                    
+                    return [null, dirObj]
+
                 }
 
             }
 
-            return await scan(this.volume.root.fsRoot, [])
+            return await scan(this.volume.root.fsRoot)
 
         } 
         catch (error) {
-            return new IBFSError('L1_FS_ADSPACE_SCAN', null, error as Error)
+            return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, error as Error)
         }
         finally {
             try { await handle!.close() } catch {}
@@ -341,7 +324,7 @@ export default class Filesystem {
 
             const dataBody = options.type === 'FILE'
                 ? Buffer.alloc(0)
-                : DirectoryTable.serialize({ children: {}, users: {}, meta: {} })
+                : DirectoryTables.serialize({ children: {}, users: {}, meta: {} })
 
             const dataError = await this.volume.writeDataBlock({
                 data: dataBody,
