@@ -1,3 +1,7 @@
+// TODO: Add node locking support to VFS in order to reflect file handle locking.
+// This also is required to properly perform recursive checks during deletion to
+// to avoid deleting a parent directory of a currently open file.
+
 // Imports =============================================================================================================
 
 import type * as T from '../../types.js'
@@ -106,6 +110,27 @@ export default class VFS {
     }
 
     // Methods ---------------------------------------------------------------------------------------------------------
+
+    /**
+     * Resolves the path to a virtual node.
+     * Use only for referencing VFS nodes for use in other private methods.
+     * This function does not not perform access control checks.
+     * @param path Path to the node to be resolved.
+     * @returns [error, node]
+     */
+    public resolve(path: string): T.XEav<TNode, 'L2_VFS_BAD_PATH'> {
+
+        let current: TNode = this.tree
+        const parts = VFS.normalizePath(path).split('/')
+
+        for (const part of parts) {
+            const newCurrent = (current as TDirectory).children[part] as TNode | undefined
+            if (!newCurrent) return IBFSError.eav('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`, null, { path })
+            current = newCurrent
+        }
+
+        return [null, current]
+    }
 
     /**
      * Checks if a new node can be created in the VFS.
