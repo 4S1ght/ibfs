@@ -1,5 +1,5 @@
 
-import { describe, test, expect, beforeAll } from "vitest"
+import { describe, test, expect } from "vitest"
 import DirectoryTable, { TDirectory } from "../../src/L1/directory/DirectoryTables.js"
 
 describe('Directory tables', () => {
