@@ -9,6 +9,7 @@ import type { TPermLevel  } from '../L1/directory/DirectoryTables.js'
 
 import np from 'node:path'
 import IBFSError from '../errors/IBFSError.js'
+import FileHandle from '../L1/file/FileHandle.js'
 
 // Types ===============================================================================================================
 
@@ -18,12 +19,14 @@ export interface TDirectory {
     /** Physical address of the directory head block. */ address:   number
     /** User permissions inside the directory         */ perms:     Record<string, TPermLevel>
     /** Children files and subdirectories.            */ children:  Record<string, TNode>
+    /** The handle that's currently holding the lock. */ lock:      WeakRef<FileHandle> | null
 }
 
 export interface TFile {
     /** Type of the file structure.                   */ type:      'FILE'
     /** Total size of the file's contents.            */ size:      number
     /** Physical address of the file head block.      */ address:   Number
+    /** The handle that's currently holding the lock. */ lock:      WeakRef<FileHandle> | null
 }
 
 export type TNode = TDirectory | TFile
@@ -49,7 +52,8 @@ export default class VFS {
         return {
             type: 'FILE',
             size,
-            address
+            address,
+            lock: null
         }
     }
 
@@ -59,7 +63,8 @@ export default class VFS {
             size,
             address,
             perms: {},
-            children: {}
+            children: {},
+            lock: null
         }
     }
 
@@ -106,15 +111,16 @@ export default class VFS {
         size: 0,
         address: 0,
         perms: {},
-        children: {}
+        children: {},
+        lock: null
     }
 
     // Methods ---------------------------------------------------------------------------------------------------------
 
     /**
-     * Resolves the path to a virtual node.
-     * Use only for referencing VFS nodes for use in other private methods.
-     * This function does not not perform access control checks.
+     * Resolves the path to a virtual node.  
+     * Use only for referencing VFS nodes for use in other private methods.  
+     * This function does not not perform access control checks.  
      * @param path Path to the node to be resolved.
      * @returns [error, node]
      */
@@ -130,6 +136,29 @@ export default class VFS {
         }
 
         return [null, current]
+    }
+
+    /**
+     * Resolves the path to a virtual node's parent directory.  
+     * Use only for referencing VFS nodes for use in other private methods.  
+     * This function does not not perform access control checks.  
+     * @param path Path to the node to be resolved.
+     * @returns [error, node]
+     */
+    public resolveParent(path: string): T.XEav<TDirectory, 'L2_VFS_BAD_PATH'> {
+        
+        let current: TNode = this.tree
+        const { parts, dest } = VFS.normalizeAndSplit(path)
+
+        if (!dest) return IBFSError.eav('L2_VFS_BAD_PATH', `Can not resolve the parent of a root directory.`, null, { path })
+
+        for (const part of parts) {
+            const newCurrent = (current as TDirectory).children[part] as TNode | undefined
+            if (!newCurrent) return IBFSError.eav('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`, null, { path })
+            current = newCurrent
+        }
+
+        return [null, current as TDirectory]
     }
 
     /**

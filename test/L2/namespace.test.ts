@@ -16,10 +16,9 @@ describe('Namespace', () => {
     })
 
     test('ns.createEmptyNamespace', async () => {
-        const name = 'test'
+        const name = 'l2_empty_namespace'
         const ns = await useEmptyNamespace(name)
         expect(ns).not.toBeNull()
-        console.log(ns)
     })
     
 })

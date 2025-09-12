@@ -15,35 +15,41 @@ describe('Virtual Filesystem', () => {
                 type: 'FILE',
                 size: 1400,
                 address: 10,
+                lock: null,
             },
             'folder1': {
                 type: 'DIR',
                 size: 0,
                 address: 20,
                 perms: {},
+                lock: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
                         size: 5000,
                         address: 30,
+                        lock: null,
                     },
                     'folder2': {
                         type: 'DIR',
                         size: 0,
                         address: 40,
                         perms: { group1: 0 },
+                        lock: null,
                         children: {
                             'file3.txt': {
                                 type: 'FILE',
                                 size: 300,
                                 address: 50,
+                                lock: null,
                             },
                             'folder3': {
                                 type: 'DIR',
                                 size: 0,
                                 address: 60,
                                 perms: { group1: 1 },
-                                children: {}
+                                children: {},
+                                lock: null,
                             }
                         },
                     },
@@ -56,9 +62,9 @@ describe('Virtual Filesystem', () => {
         expect(vfs.canReadNode('/', 'group2')!.has('L2_VFS_NO_PERM')).toBe(true)
 
         // File directly in root
-        expect(vfs.canReadNode('/file1.txt',    'group1')).toBe(undefined)
+        expect(vfs.canReadNode('/file1.txt', 'group1')).toBe(undefined)
         expect(vfs.canReadNode('/not-existent', 'group1')!.has('L2_VFS_BAD_PATH')).toBe(true)
-        expect(vfs.canReadNode('/file1.txt',    'group2')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canReadNode('/file1.txt', 'group2')!.has('L2_VFS_NO_PERM')).toBe(true)
 
         // Nested file
         expect(vfs.canReadNode('/folder1/file2.txt', 'group1')).toBe(undefined)
@@ -71,7 +77,7 @@ describe('Virtual Filesystem', () => {
         // Nested folder whose parent has denied permissions
         expect(vfs.canReadNode('/folder1/folder2/folder3/', 'group1')).toBeInstanceOf(IBFSError)
         expect(vfs.canReadNode('/folder1/folder2/folder3/', 'group2')!.has('L2_VFS_NO_PERM')).toBe(true)
-        
+
     })
 
     test('VFS.canWriteNode', () => {
@@ -82,17 +88,20 @@ describe('Virtual Filesystem', () => {
                 type: 'FILE',
                 size: 1400,
                 address: 10,
+                lock: null,
             },
             'folder1': {
                 type: 'DIR',
                 size: 0,
                 address: 20,
                 perms: { group1: 2, group2: 0 },
+                lock: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
                         size: 5000,
                         address: 30,
+                        lock: null,
                     }
                 }
             }
@@ -103,9 +112,9 @@ describe('Virtual Filesystem', () => {
         expect(vfs.canWriteNode('/', 'group2')).toBe(undefined)
 
         // File directly in root
-        expect(vfs.canWriteNode('/file1.txt',    'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canWriteNode('/file1.txt', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
         expect(vfs.canWriteNode('/not-existent', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
-        expect(vfs.canWriteNode('/file1.txt',    'group2')).toBe(undefined)
+        expect(vfs.canWriteNode('/file1.txt', 'group2')).toBe(undefined)
 
         // Nested file
         expect(vfs.canWriteNode('/folder1/file2.txt', 'group1')).toBe(undefined)
@@ -123,17 +132,20 @@ describe('Virtual Filesystem', () => {
                 type: 'FILE',
                 size: 1400,
                 address: 10,
+                lock: null,
             },
             'folder1': {
                 type: 'DIR',
                 size: 0,
                 address: 20,
                 perms: { group1: 3, group3: 3 },
+                lock: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
                         size: 5000,
                         address: 30,
+                        lock: null,
                     }
                 }
             },
@@ -171,17 +183,20 @@ describe('Virtual Filesystem', () => {
                 type: 'FILE',
                 size: 1400,
                 address: 10,
+                lock: null,
             },
             'folder1': {
                 type: 'DIR',
                 size: 0,
                 address: 20,
                 perms: { group1: 3, group3: 3 },
+                lock: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
                         size: 5000,
                         address: 30,
+                        lock: null,
                     }
                 }
             },
@@ -203,7 +218,7 @@ describe('Virtual Filesystem', () => {
 
 
     })
-    
+
     test('VFS.canRenameNode', () => {
 
         vfs.tree.perms = { group1: 1, group2: 4, group3: 0 }
@@ -212,17 +227,20 @@ describe('Virtual Filesystem', () => {
                 type: 'FILE',
                 size: 1400,
                 address: 10,
+                lock: null,
             },
             'folder1': {
                 type: 'DIR',
                 size: 0,
                 address: 20,
                 perms: { group1: 3, group3: 3 },
+                lock: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
                         size: 5000,
                         address: 30,
+                        lock: null,
                     }
                 }
             },
@@ -241,33 +259,37 @@ describe('Virtual Filesystem', () => {
 
         // Rename to an already taken name
         expect(vfs.canRenameNode('file1.txt', 'folder1', 'group2')!.has('L2_VFS_ALREADY_EXISTS')).toBe(true)
-        
+
     })
 
     test('VFS.canMoveNode', () => {
-        
+
         vfs.tree.perms = { group1: 1, group2: 4, group3: 0 }
         vfs.tree.children = {
             'file1.txt': {
                 type: 'FILE',
                 size: 1400,
                 address: 10,
+                lock: null,
             },
             'folder1': {
                 type: 'DIR',
                 size: 0,
                 address: 20,
                 perms: { group1: 3 },
+                lock: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
                         size: 5000,
                         address: 30,
+                        lock: null,
                     },
                     'file4.txt': {
                         type: 'FILE',
                         size: 400,
                         address: 60,
+                        lock: null,
                     }
                 }
             },
@@ -276,16 +298,19 @@ describe('Virtual Filesystem', () => {
                 size: 0,
                 address: 40,
                 perms: { group1: 1 },
+                lock: null,
                 children: {
                     'file3.txt': {
                         type: 'FILE',
                         size: 300,
                         address: 50,
+                        lock: null,
                     },
                     'file4.txt': {
                         type: 'FILE',
                         size: 400,
                         address: 60,
+                        lock: null,
                     }
                 }
             }
@@ -302,7 +327,7 @@ describe('Virtual Filesystem', () => {
         // Move item from read-only dir to a write-enabled dir
         expect(vfs.canMoveNode('/folder2/file3.txt', '/folder1', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
         expect(vfs.canMoveNode('/folder2/file3.txt', '/folder1', 'group2')).toBe(undefined)
-        
+
         // Move item to a directory with an item of the same name
         expect(vfs.canMoveNode('/folder1/file4.txt', '/folder2', 'group2')!.has('L2_VFS_ALREADY_EXISTS')).toBe(true)
 
@@ -316,24 +341,28 @@ describe('Virtual Filesystem', () => {
                 type: 'FILE',
                 size: 1400,
                 address: 10,
+                lock: null,
             },
             'folder1': {
                 type: 'DIR',
                 size: 0,
                 address: 20,
                 perms: { group2: 2 },
+                lock: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
                         size: 5000,
                         address: 30,
+                        lock: null,
                     },
                     'folder2': {
                         type: 'DIR',
                         size: 0,
                         address: 40,
                         perms: { group2: 1 },
-                        children: {}
+                        children: {},
+                        lock: null,
                     }
                 }
             }
@@ -360,7 +389,7 @@ describe('Virtual Filesystem', () => {
         // Delete folder with children the user doesn't have write access to
         expect(vfs.canDeleteNode('/folder1', 'group2')!.has('L2_VFS_NO_PERM_NESTED')).toBe(true)
 
-        
+
     })
-    
+
 })
