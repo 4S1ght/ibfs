@@ -45,6 +45,7 @@ export default class FileHandle extends EventEmitter {
     /** File's top-level block map.                        */ public declare readonly   fbm:                  FileBlockMap
     /** Original length of the file data.                  */ public declare readonly   originalLength:       number
 
+    /** The mode the handle was opened with.               */ public  declare readonly mode:                  'r' | 'w' | 'rw'
     /** Whether the file is currently open for reading.    */ private declare readonly _read:                 boolean
     /** Whether the file is currently open for writing.    */ private declare readonly _write:                boolean
     /** Whether writes be appended to the end of the file. */ private declare readonly _append:               boolean
@@ -76,6 +77,7 @@ export default class FileHandle extends EventEmitter {
             ;(self as any)._write          = ['rw', 'w'].includes(options.mode)
             ;(self as any)._append         = options.append   || false
             ;(self as any)._truncate       = options.truncate || false
+            ;(self as any).mode            = options.mode
 
             // Load FBM ---------------------------
             const [fbmError, fbm] = await FileBlockMap.open(options)

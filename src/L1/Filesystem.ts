@@ -189,6 +189,7 @@ export default class Filesystem {
                     if (closeError) return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, closeError)
 
                     const dirObj = VFS.dir(address, size) as TDirectory
+                    dirObj.perms = dir.users
 
                     for (const filename in dir.children) {
                         if (Object.prototype.hasOwnProperty.call(dir.children, filename)) {

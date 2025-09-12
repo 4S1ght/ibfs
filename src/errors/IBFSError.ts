@@ -243,10 +243,6 @@ const errorCodes = {
 
     // Level 2 =========================================================================================================
 
-    L2_NS_CREATE:                   'Failed to create the filesystem namespace.',
-    L2_NS_OPEN:                     'Failed to open the filesystem namespace.',
-    L2_NS_SCAN_TREE:                'Failed to scan the filesystem directory tree.',
-    
     L2_VFS_BAD_PATH:                'The resource with the requested path was not found or the path is malformed.',
     L2_VFS_NO_PERM:                 'The user does not have permission to access the requested resource.',
     L2_VFS_NO_PERM_NESTED:          `The user does not have permission to access/modify the requested resource because they don't have the permission to access one or more of its children`,
@@ -259,5 +255,13 @@ const errorCodes = {
     L2_VFS_CAN_MOVE_NODE:           'Can not move a node from the source directory to the target directory.',
     L2_VFS_CAN_DELETE_NODE:         'Can not delete a node.',
     L2_VFS_CAN_MANAGE_NODE:         'The group has no permission to manage this node.',
+
+    L2_NS_CREATE:                   'Failed to create the filesystem namespace.',
+    L2_NS_OPEN:                     'Failed to open the filesystem namespace.',
+    L2_NS_SCAN_TREE:                'Failed to scan the filesystem directory tree.',
+    
+    L2_NS_NO_PERM:                  'The user does not have permission to access the requested resource in the access mode they requested.',
+    L2_NS_OPEN_FILE:                'Failed to open a file.',
+    L2_NS_LOCKED:                   'The file/directory could not be opened because it is already in use by another consumer.',
 
 }

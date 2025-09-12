@@ -25,7 +25,7 @@ export interface TDirectory {
 export interface TFile {
     /** Type of the file structure.                   */ type:      'FILE'
     /** Total size of the file's contents.            */ size:      number
-    /** Physical address of the file head block.      */ address:   Number
+    /** Physical address of the file head block.      */ address:   number
     /** The handle that's currently holding the lock. */ lock:      WeakRef<FileHandle> | null
 }
 
@@ -127,7 +127,7 @@ export default class VFS {
     public resolve(path: string): T.XEav<TNode, 'L2_VFS_BAD_PATH'> {
 
         let current: TNode = this.tree
-        const parts = VFS.normalizePath(path).split('/')
+        const parts = VFS.normalizePath(path).split('/').filter(Boolean)
 
         for (const part of parts) {
             const newCurrent = (current as TDirectory).children[part] as TNode | undefined
