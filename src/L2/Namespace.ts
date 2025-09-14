@@ -2,7 +2,6 @@
 
 import type * as T from '../../types.js'
 import IBFSError from '../errors/IBFSError.js'
-import DirectoryTable from '../L1/directory/DirectoryTables.js'
 import FileHandle from '../L1/file/FileHandle.js'
 import Filesystem, { TFSInit, TFSOpenFile } from '../L1/Filesystem.js'
 import ssc from '../misc/safeShallowCopy.js'
@@ -12,6 +11,24 @@ import VFS, { TDirectory } from './VirtualFilesystem.js'
 
 export interface TNSInit extends TFSInit {
     /** The group of root users allowed to manage the filesystem. */ rootGroup: string
+}
+
+// Base options --------------------------------------------------------------------------------------------------------
+
+interface BaseReadOptions {
+    /** Whether to perform data integrity checks during reads. */ integrity?: boolean
+}
+
+export interface TNSReadOptions extends BaseReadOptions {
+    /** Offset from start of the file to begin reading from. */ offset: number
+    /** Number of bytes to read from the offset.             */ length: number
+}
+
+export interface TNSReadFileOptions extends BaseReadOptions {}
+
+export interface TNSOpenReadStreamOptions extends BaseReadOptions {
+    /** Offset from start of the file to begin reading from. */ offset: number
+    /** Number of bytes to read from the offset.             */ length: number
 }
 
 // Exports =============================================================================================================
@@ -108,7 +125,7 @@ export default class Namespace {
                 if (openError) return IBFSError.eav('L2_NS_OPEN_FILE', null, openError, { path, group, options })
 
                 vfsNode.lock = new WeakRef(handle)
-                handle.on('final-close', () => vfsNode.lock = null)
+                handle.on('close', () => vfsNode.lock = null)
 
                 return [null, handle]
 
@@ -124,5 +141,13 @@ export default class Namespace {
             return IBFSError.eav('L2_NS_OPEN_FILE', null, error as Error, { path, group, options })
         }
     }
+
+    public async read(path: string, group: string, options: TNSReadOptions) {}
+
+    public async readFile(path: string, group: string, options?: TNSReadFileOptions) {}
+
+    public async openReadStream(path: string, group: string, options?: TNSOpenReadStreamOptions) {}
+
+
 
 }

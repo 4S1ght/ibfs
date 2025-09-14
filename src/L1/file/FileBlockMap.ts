@@ -434,7 +434,7 @@ export default class FileBlockMap {
     // Setters ---------------------------------------------------------------------------------------------------------
 
     /**
-     * Updates the metadata in the file's root block.
+     * Updates the metadata in the file's head block.
      */
     public async setMetadata(metadata: TChangeMetadata): T.XEavSA<"L1_FBM_SETMETA"> {
 

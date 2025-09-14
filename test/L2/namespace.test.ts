@@ -29,6 +29,8 @@ describe('Namespace', () => {
         const handle    = await uniformAsync(ns.open('/', '000000', { mode: 'r' }))
         const rootDir   = await uniformAsync(handle.readAsDir())
 
+        console.log(handle)
+
         expect(rootDir).toStrictEqual({
             children: {},
             users: { '000000': 4 },
