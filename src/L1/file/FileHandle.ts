@@ -132,6 +132,13 @@ export default class FileHandle extends EventEmitter {
 
             // Fail silently if the file is already closed or is still busy.
             if (!this._isOpen) return new IBFSError('L1_FH_CLOSE', 'The handle is already closed')
+
+            // TODO: instead of failing to close when multiple streams are running (which might be the case when sharing a cached handle)
+            // proceed normally until final-close FINALIZE_HANDLE_CLOSE is called, at which point assume exclusive access and terminate
+            // underlying streams immediately.
+            
+            // Also introduce a mechanism for preventing a single user from closing a handle multiple 
+            // times causing possible race conditions and filesystem inconsistencies. 
             if (this.isBusy()) return new IBFSError('L1_FH_CLOSE', `Can't close the handle because it's busy. Wait for`
                 +` all read/write activity to finish or terminate all active streams before closing.`)
 
@@ -455,9 +462,9 @@ export default class FileHandle extends EventEmitter {
                 "Commit frequency": stream._fbmCommitFrequency 
             }
             this._ws.addRef('stream', stream, streamMeta)
-            stream.once('end',   () => this._ws.removeRef('stream'))
-            stream.once('close', () => this._ws.removeRef('stream'))
-            stream.once('error', () => this._ws.removeRef('stream'))
+            stream.once('finish', () => this._ws.removeRef('stream'))
+            stream.once('close',  () => this._ws.removeRef('stream'))
+            stream.once('error',  () => this._ws.removeRef('stream'))
         }
         else {
             const streamMeta = { 

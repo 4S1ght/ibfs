@@ -264,4 +264,8 @@ const errorCodes = {
     L2_NS_OPEN_FILE:                'Failed to open a file.',
     L2_NS_LOCKED:                   'The file/directory could not be opened because it is already in use by another consumer.',
 
+    L2_NS_READ:                     'Failed to open and read the file.',
+    L2_NS_READ_FILE:                'Failed to open and read the file.',
+    L2_NS_OPEN_READ_STREAM:         'Failed to open a file read stream.',
+
 }
