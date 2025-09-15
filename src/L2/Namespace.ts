@@ -2,12 +2,34 @@
 
 import type * as T from '../../types.js'
 import IBFSError from '../errors/IBFSError.js'
-import Filesystem, { TFSInit } from '../L1/Filesystem.js'
+import FileHandle from '../L1/file/FileHandle.js'
+import Filesystem, { TFSInit, TFSOpenFile } from '../L1/Filesystem.js'
+import ssc from '../misc/safeShallowCopy.js'
 import VFS, { TDirectory } from './VirtualFilesystem.js'
 
 // Types ===============================================================================================================
 
-export interface TNSInit extends TFSInit {}
+export interface TNSInit extends TFSInit {
+    /** The group of root users allowed to manage the filesystem. */ rootGroup: string
+}
+
+// Base options --------------------------------------------------------------------------------------------------------
+
+interface BaseReadOptions {
+    /** Whether to perform data integrity checks during reads. */ integrity?: boolean
+}
+
+export interface TNSReadOptions extends BaseReadOptions {
+    /** Offset from start of the file to begin reading from. */ offset: number
+    /** Number of bytes to read from the offset.             */ length: number
+}
+
+export interface TNSReadFileOptions extends BaseReadOptions {}
+
+export interface TNSOpenReadStreamOptions extends BaseReadOptions {
+    /** Offset from start of the file to begin reading from. */ offset: number
+    /** Number of bytes to read from the offset.             */ length: number
+}
 
 // Exports =============================================================================================================
 
@@ -29,9 +51,28 @@ export default class Namespace {
         try {
             
             // Create filesystem -----------------------------------------
-            const fsError = await Filesystem.createEmptyFilesystem(options)
-            if (fsError) return new IBFSError('L2_NS_CREATE', null, fsError)
-            
+            const createError = await Filesystem.createEmptyFilesystem(options)
+            if (createError) return new IBFSError('L2_NS_CREATE', null, createError, ssc(options, ['aesKey']))
+
+            // Create root group -----------------------------------------
+
+            let vfs: TDirectory
+            const [fsError, fs] = await Filesystem.open(options.fileLocation, options.aesKey, (dirTree) => vfs = dirTree as TDirectory)
+            if (fsError) return new IBFSError('L2_NS_CREATE', null, fsError, ssc(options, ['aesKey']))
+
+            const [openError, handle] = await fs.open({ fileAddress: vfs!.address, mode: 'rw' })
+            if (openError) return new IBFSError('L2_NS_CREATE', null, openError, ssc(options, ['aesKey']))
+
+            const writeError = await handle.writeAsDir({
+                children: {},
+                users: { [options.rootGroup]: 4 },
+                meta: {}
+            })
+            if (writeError) return new IBFSError('L2_NS_CREATE', null, writeError, ssc(options, ['aesKey']))
+
+            const hc = await handle.close()
+            if (hc) return new IBFSError('L2_NS_CREATE', null, hc, ssc(options, ['aesKey']))
+
         } 
         catch (error) {
             return new IBFSError('L2_NS_CREATE', null, error as Error)
@@ -61,5 +102,52 @@ export default class Namespace {
             return IBFSError.eav('L2_NS_OPEN', null, error as Error)
         }
     }
+
+    // IO methods ------------------------------------------------------------------------------------------------------
+
+    public async open(path: string, group: string, options: Omit<TFSOpenFile, 'fileAddress'>): T.XEavA<FileHandle, 'L2_NS_OPEN_FILE' | 'L2_NS_NO_PERM' | 'L2_NS_LOCKED'> {
+        try {
+
+            const isDisallowed = options.mode === 'r'
+                ? this.vfs.canReadNode(path, group)
+                : this.vfs.canWriteNode(path, group)
+
+            if (isDisallowed) return IBFSError.eav('L2_NS_OPEN_FILE', null, isDisallowed, { path, group, options })
+
+            const [resolveError, vfsNode] = this.vfs.resolve(path)
+            if (resolveError) return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError, { path, group, options })
+
+            const handle = vfsNode.lock && vfsNode.lock.deref()
+
+            if (!handle) {
+
+                const [openError, handle] = await this.fs.open({ fileAddress: vfsNode.address, ...options })
+                if (openError) return IBFSError.eav('L2_NS_OPEN_FILE', null, openError, { path, group, options })
+
+                vfsNode.lock = new WeakRef(handle)
+                handle.on('close', () => vfsNode.lock = null)
+
+                return [null, handle]
+
+            }
+
+            else {
+                if (options.mode === 'r' && handle.mode === 'r') return [null, handle]
+                else return IBFSError.eav('L2_NS_LOCKED', null, null, { path, group, options })
+            }
+            
+        } 
+        catch (error) {
+            return IBFSError.eav('L2_NS_OPEN_FILE', null, error as Error, { path, group, options })
+        }
+    }
+
+    public async read(path: string, group: string, options: TNSReadOptions) {}
+
+    public async readFile(path: string, group: string, options?: TNSReadFileOptions) {}
+
+    public async openReadStream(path: string, group: string, options?: TNSOpenReadStreamOptions) {}
+
+
 
 }

@@ -96,8 +96,8 @@ export default class InstanceRegistry<Key, Ref extends object> {
         const meta = this._meta.get(key)
 
         if (meta) {
-            meta!.refCount--
-            if (meta!.refCount <= 0) {
+            meta.refCount--
+            if (meta.refCount <= 0) {
                 this._refs.delete(key)
                 this._meta.delete(key)
                 this._fr.unregister(meta!.uToken)
@@ -108,7 +108,7 @@ export default class InstanceRegistry<Key, Ref extends object> {
         return false
 
     }
-
+    
     /**
      * Returns the stored instance reference.
      * @param key Key used to access the object.

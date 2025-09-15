@@ -1,8 +1,7 @@
 import { describe, test, expect } from "vitest"
-import IBFSError from "../../src/errors/IBFSError.js"
 import { uniform, uniformAsync, uniformSA } from "../libs/uniform.js"
-import BlockAESContext from "../../src/L0/BlockAES.js"
 import { emptyNamespace } from "../libs/empty-namespace.js"
+import BlockAESContext from "../../src/L0/BlockAES.js"
 
 describe('Namespace', () => {
 
@@ -12,14 +11,32 @@ describe('Namespace', () => {
         blockSize: 1,
         blockCount: 100,
         aesCipher: "aes-256-xts",
-        aesKey: key
+        aesKey: key,
+        rootGroup: '000000'
     })
 
-    test('ns.createEmptyNamespace', async () => {
-        const name = 'test'
-        const ns = await useEmptyNamespace(name)
-        expect(ns).not.toBeNull()
-        console.log(ns)
+    // test('ns.createEmptyNamespace', async () => {
+    //     const name = 'l2_empty_namespace'
+    //     const ns = await useEmptyNamespace(name)
+    //     expect(ns).not.toBeNull()
+    // })
+
+    test('ns.open', async () => {
+
+        const name = 'l2_open'
+
+        const ns        = await useEmptyNamespace(name)
+        const handle    = await uniformAsync(ns.open('/', '000000', { mode: 'r' }))
+        const rootDir   = await uniformAsync(handle.readAsDir())
+
+        console.log(handle)
+
+        expect(rootDir).toStrictEqual({
+            children: {},
+            users: { '000000': 4 },
+            meta: {}
+        })
+
     })
-    
+     
 })
