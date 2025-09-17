@@ -27,10 +27,8 @@ export interface TNSReadOptions extends BaseReadOptions {
     /** Number of bytes to read from the offset.             */ length: number
 }
 
-export interface TNSReadFileOptions extends BaseReadOptions {}
-
-export interface TNSOpenReadStreamOptions extends BaseReadOptions, TFRSOptions {
-}
+export interface TNSReadFileOptions       extends BaseReadOptions              {}
+export interface TNSOpenReadStreamOptions extends BaseReadOptions, TFRSOptions {}
 
 // Exports =============================================================================================================
 
@@ -106,6 +104,49 @@ export default class Namespace {
 
     // IO methods ------------------------------------------------------------------------------------------------------
 
+    /**
+     * Wraps a file handle inside a proxy to provide limiting mechanisms on how many times certain methods
+     * are allowed to be called by individual users. This is required because read-only handles are shared
+     * across multiple users and without limiting, a single user could close the handle multiple times
+     * causing it to close for other users that share it.
+     */
+    private createHandleProxy(handle: FileHandle): FileHandle {
+
+        let closed = false
+        let closing = false
+
+        return new Proxy(handle, {
+
+            get(target, prop, receiver) {
+
+                if (closed) return new IBFSError('L2_FH_CLOSED', "The proxy to this handle has already been closed and can not be used.")
+
+                if (prop === 'close') return async () => {
+
+                    if (closing) return new IBFSError('L2_FH_CLOSING', "The proxy to this handle has already been closed and can not be used.")
+                    if (closed) return new IBFSError('L2_FH_CLOSED', "The proxy to this handle has already been closed and can not be used.")
+                    
+                    closing = true
+
+                    const closeError = target.close()
+                    if (closeError) return closeError
+
+                    closed = true
+                    closing = false
+
+                }
+                
+                const value = Reflect.get(target, prop, receiver)
+
+                return typeof value === 'function'
+                    ? value.bind(target)
+                    : value
+                    
+            }
+
+        })
+    }
+
     public async open(path: string, group: string, options: TNSOpenOptions): T.XEavA<FileHandle, 'L2_NS_OPEN_FILE' | 'L2_NS_NO_PERM' | 'L2_NS_LOCKED'> {
         try {
 
@@ -124,6 +165,7 @@ export default class Namespace {
 
             const handle = vfsNode.lock && vfsNode.lock.deref()
 
+            // No existing handle, resource is free, open straight away and lock it.
             if (!handle) {
 
                 const [openError, handle] = await this.fs.open({ fileAddress: vfsNode.address, ...options })
@@ -132,13 +174,26 @@ export default class Namespace {
                 vfsNode.lock = new WeakRef(handle)
                 handle.on('close', () => vfsNode.lock = null)
 
-                return [null, handle]
+                const proxy = this.createHandleProxy(handle)
+                return [null, proxy]
 
             }
-
+            // The resource is locked by another user.
             else {
-                if (options.mode === 'r' && handle.mode === 'r') return [null, handle]
+
+                // Reuse/share a read-only handle (done internally)
+                if (options.mode === 'r' && handle.mode === 'r') {
+
+                    const [openError, handle] = await this.fs.open({ fileAddress: vfsNode.address, ...options })
+                    if (openError) return IBFSError.eav('L2_NS_OPEN_FILE', null, openError, { path, group, options })
+
+                    const proxy = this.createHandleProxy(handle)
+                    return [null, proxy]
+
+                }
+
                 else return IBFSError.eav('L2_NS_LOCKED', null, null, { path, group, options })
+
             }
             
         } 

@@ -12,6 +12,10 @@ export async function uniformAsync<V, E extends Error>(promise: T.EavA<V, E>): P
     return value!
 }
 
+export function uniformS<E extends Error>(error: T.EavS<E>): void {
+    if (error) throw error
+}
+
 export async function uniformSA<E extends Error>(promise: T.EavSA<E>): Promise<void> {
     const error = await promise
     if (error) throw error
