@@ -2,14 +2,14 @@ import type * as T from '../../types.js'
 
 // process.env.IBFS_ERR_TRACE_SIZE = '100'
 
-export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> extends Error {
+export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode, ErrorMeta extends Record<any, any> = Record<any, any>> extends Error {
 
     public readonly code: Code
     public readonly causes: Error[] = []
-    public readonly meta: IBFSErrorMetadata = {}
+    public readonly meta: ErrorMeta = {} as Record<any, any>
     public readonly rootCause?: IBFSError
 
-    constructor(code: Code, message?: string | null, cause?: Error | null, meta?: IBFSErrorMetadata) {
+    constructor(code: Code, message?: string | null, cause?: Error | null, meta?: ErrorMeta) {
         
         super(`[${code}] ${message || errorCodes[code]}`)
         this.name = this.constructor.name
@@ -65,8 +65,8 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
      * Constructs a new IBFSError instance in an Eav (error-as-value) format. 
      * @returns [IBFSError, null]
      */
-    public static eav<Code extends IBFSErrorCode>(code: Code, ...params: T.OmitFirst<ConstructorParameters<typeof IBFSError>>): [IBFSError<Code>, null] {
-        return [new this(code, ...params), null]
+    public static eav<Code extends IBFSErrorCode, ErrorMeta extends Record<any, any>>(code: Code, message?: string | null, cause?: Error | null, meta?: ErrorMeta): [IBFSError<Code, ErrorMeta>, null] {
+        return [new this(code, message, cause, meta), null]
     }
 
     private static trimErrorStack(error: Error, limit = 2) {
@@ -85,7 +85,6 @@ export default class IBFSError<Code extends IBFSErrorCode = IBFSErrorCode> exten
 }
 
 export type IBFSErrorCode = keyof typeof errorCodes
-export type IBFSErrorMetadata = { [key: string]: any }
 
 const errorCodes = {
 

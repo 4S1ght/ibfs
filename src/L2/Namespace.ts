@@ -20,7 +20,9 @@ interface BaseReadOptions {
     /** Whether to perform data integrity checks during reads. */ integrity?: boolean
 }
 
-export interface TNSOpenOptions extends Omit<TFSOpenFile, 'fileAddress'> {}
+export interface TNSOpenOptions extends Omit<TFSOpenFile, 'fileAddress'> {
+    /** Whether to create the file if it does not exist. */ create?: boolean
+}
 
 export interface TNSReadOptions extends BaseReadOptions {
     /** Offset from start of the file to begin reading from. */ offset?: number
@@ -147,12 +149,22 @@ export default class Namespace {
         })
     }
 
+    /**
+     * Opens the file on a specific `path` file and returns its handle. If the file is being used by another user that
+     * conflicts with the action of opening a new handle, the call will fail and return an error. The same file can be
+     * open multiple times by different users in read-only mode, but only by a single user in write mode which requires
+     * absolute exclusive access.
+     * @param path Path to the resource in the filesystem.
+     * @param group The group that is requesting access to the resource - used to check access permissions.
+     * @param options Open options - Append, truncate, etc.
+     * @param options.mode The mode in which the file is being opened.
+     * @param options.append Whether the file should be opened in append mode - Will force every write to the end of the file.
+     * @param options.truncate Whether the file should be truncated to 0 bytes before opening it.
+     * @param options.integrity Whether to perform data integrity checks.
+     * @returns `[error, null] | [null, handle]`
+     */
     public async open(path: string, group: string, options: TNSOpenOptions): T.XEavA<FileHandle, 'L2_NS_OPEN_FILE' | 'L2_NS_NO_PERM' | 'L2_NS_LOCKED'> {
         try {
-
-            // TODO: Instead of returning a direct file handle, return a proxy that limits the number of times 
-            // "close" can be called to a single successful call to prevent a single user from closing a 
-            // read-only handle for another.
 
             const permCheckError = options.mode === 'r'
                 ? this.vfs.canReadNode(path, group)
@@ -160,8 +172,30 @@ export default class Namespace {
 
             if (permCheckError) return IBFSError.eav('L2_NS_OPEN_FILE', null, permCheckError, { path, group, options })
 
+            // File creation --------------------------------------------------
+
             const [resolveError, vfsNode] = this.vfs.resolve(path)
+
+            if (resolveError) {
+                if (options.create && resolveError.meta.missingDirect) {
+                    
+                    // TODO:
+                    // 1. Namespace.open parent directory
+                    // 2. Create empty file structure
+                    // 3. Add it to the directory table and save the directory onto the disk.
+
+                    return IBFSError.eav('L2_NS_OPEN_FILE', 'options.create not yet implemented', resolveError, { path, group, options })
+
+                }
+                else {
+                    return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError, { path, group, options })
+                }
+            }
+
+
             if (resolveError) return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError, { path, group, options })
+
+            // ----------------------------------------------------------------
 
             const handle = vfsNode.lock && vfsNode.lock.deref()
 
@@ -202,6 +236,17 @@ export default class Namespace {
         }
     }
 
+    /**
+     * Reads data from a specific place inside a file based on the `offset` and `length` parameters.  
+     * **Access limitations & locking apply. See `Namespace.open()` method.**
+     * @param path Path to the resource in the filesystem.
+     * @param group The group that is requesting access to the resource - used to check access permissions.
+     * @param options Open options.
+     * @param options.offset The offset from the start of the file.
+     * @param options.length The number of bytes to read.
+     * @param options.integrity Whether to perform data integrity checks.
+     * @returns `[error, null] | [null, Buffer]`
+     */
     public async read(path: string, group: string, options: TNSReadOptions): T.XEavA<Buffer, 'L2_NS_READ'> {
 
         let fh: FileHandle | undefined = undefined
@@ -233,6 +278,15 @@ export default class Namespace {
         }
     }
 
+    /**
+     * Reads the entire contents of a file.  
+     * **Access limitations & locking apply. See `Namespace.open()` method.**
+     * @param path Path to the resource in the filesystem.
+     * @param group The group that is requesting access to the resource - used to check access permissions.
+     * @param options Open options.
+     * @param options.integrity Whether to perform data integrity checks.
+     * @returns `[error, null] | [null, Buffer]`
+     */
     public async readFile(path: string, group: string, options?: TNSReadFileOptions): T.XEavA<Buffer, 'L2_NS_READ_FILE'> {
 
         let fh: FileHandle | undefined = undefined
@@ -266,6 +320,19 @@ export default class Namespace {
         }
     }
 
+    /**
+     * Opens a file and returns a read stream.  
+     * **Access limitations & locking apply. See `Namespace.open()` method.**
+     * @param path Path to the resource in the filesystem.
+     * @param group The group that is requesting access to the resource - used to check access permissions.
+     * @param options Open options.
+     * @param options.offset The offset from the start of the file to start reading from.
+     * @param options.length The number of bytes to read.
+     * @param options.maxChunkSize The maximum size of individual data chunks pushed to the stream.
+     * @param options.highWaterMark The watermark below which the stream will read more data.
+     * @param options.integrity Whether to perform data integrity checks.
+     * @returns `[error, null] | [null, FileReadStream]`
+     */
     public async createReadStream(path: string, group: string, options?: TNSOpenReadStreamOptions): T.XEavA<FileReadStream, 'L2_NS_OPEN_READ_STREAM'> {
 
         let fh: FileHandle | undefined = undefined
@@ -292,7 +359,6 @@ export default class Namespace {
             return IBFSError.eav('L2_NS_OPEN_READ_STREAM', null, error as Error, { path, group, options })
         }
     }
-
 
 
 }

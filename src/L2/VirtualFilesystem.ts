@@ -124,14 +124,14 @@ export default class VFS {
      * @param path Path to the node to be resolved.
      * @returns [error, node]
      */
-    public resolve(path: string): T.XEav<TNode, 'L2_VFS_BAD_PATH'> {
+    public resolve(path: string): T.XEav<TNode, 'L2_VFS_BAD_PATH', { path: string, missing: string, missingDirect: boolean }> {
 
         let current: TNode = this.tree
         const parts = VFS.normalizePath(path).split('/').filter(Boolean)
 
         for (const part of parts) {
             const newCurrent = (current as TDirectory).children[part] as TNode | undefined
-            if (!newCurrent) return IBFSError.eav('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`, null, { path })
+            if (!newCurrent) return IBFSError.eav('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`, null, { path, missing: part, missingDirect: part === parts[parts.length - 1] })
             current = newCurrent
         }
 
