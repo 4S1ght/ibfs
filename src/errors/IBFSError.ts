@@ -270,4 +270,6 @@ const errorCodes = {
     L2_FH_CLOSED:                   'The proxy to this handle has already been closed and can not be used.',
     L2_FH_CLOSING:                  'The proxy to this handle is currently being closed and any further requests must wait until the close is complete.',
 
+    L2_NS_CREATE_NODE:              'Failed to create a node (file or directory)',
+
 }

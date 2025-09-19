@@ -6,7 +6,8 @@ import FileHandle from '../L1/file/FileHandle.js'
 import FileReadStream, { TFRSOptions } from '../L1/file/FileReadStream.js'
 import Filesystem, { TFSInit, TFSOpenFile } from '../L1/Filesystem.js'
 import ssc from '../misc/safeShallowCopy.js'
-import VFS, { TDirectory } from './VirtualFilesystem.js'
+import VFS, { TDirectory, TNode } from './VirtualFilesystem.js'
+import np from 'node:path'
 
 // Types ===============================================================================================================
 
@@ -107,49 +108,6 @@ export default class Namespace {
     // IO methods ------------------------------------------------------------------------------------------------------
 
     /**
-     * Wraps a file handle inside a proxy to provide limiting mechanisms on how many times certain methods
-     * are allowed to be called by individual users. This is required because read-only handles are shared
-     * across multiple users and without limiting, a single user could close the handle multiple times
-     * causing it to close for other users that share it.
-     */
-    private createHandleProxy(handle: FileHandle): FileHandle {
-
-        let closed = false
-        let closing = false
-
-        return new Proxy(handle, {
-
-            get(target, prop, receiver) {
-
-                if (closed) return new IBFSError('L2_FH_CLOSED', "The proxy to this handle has already been closed and can not be used.")
-
-                if (prop === 'close') return async () => {
-
-                    if (closing) return new IBFSError('L2_FH_CLOSING', "The proxy to this handle has already been closed and can not be used.")
-                    if (closed) return new IBFSError('L2_FH_CLOSED', "The proxy to this handle has already been closed and can not be used.")
-                    
-                    closing = true
-
-                    const closeError = target.close()
-                    if (closeError) return closeError
-
-                    closed = true
-                    closing = false
-
-                }
-                
-                const value = Reflect.get(target, prop, receiver)
-
-                return typeof value === 'function'
-                    ? value.bind(target)
-                    : value
-                    
-            }
-
-        })
-    }
-
-    /**
      * Opens the file on a specific `path` file and returns its handle. If the file is being used by another user that
      * conflicts with the action of opening a new handle, the call will fail and return an error. The same file can be
      * open multiple times by different users in read-only mode, but only by a single user in write mode which requires
@@ -159,6 +117,7 @@ export default class Namespace {
      * @param options Open options - Append, truncate, etc.
      * @param options.mode The mode in which the file is being opened.
      * @param options.append Whether the file should be opened in append mode - Will force every write to the end of the file.
+     * @param options.create Whether the file should be created if it does not exist.
      * @param options.truncate Whether the file should be truncated to 0 bytes before opening it.
      * @param options.integrity Whether to perform data integrity checks.
      * @returns `[error, null] | [null, handle]`
@@ -166,38 +125,40 @@ export default class Namespace {
     public async open(path: string, group: string, options: TNSOpenOptions): T.XEavA<FileHandle, 'L2_NS_OPEN_FILE' | 'L2_NS_NO_PERM' | 'L2_NS_LOCKED'> {
         try {
 
-            const permCheckError = options.mode === 'r'
+            const accessError = options.mode === 'r'
                 ? this.vfs.canReadNode(path, group)
                 : this.vfs.canWriteNode(path, group)
 
-            if (permCheckError) return IBFSError.eav('L2_NS_OPEN_FILE', null, permCheckError, { path, group, options })
+            // File creation ---------------------------------------------
 
-            // File creation --------------------------------------------------
-
-            const [resolveError, vfsNode] = this.vfs.resolve(path)
-
-            if (resolveError) {
-                if (options.create && resolveError.meta.missingDirect) {
+            if (accessError) {
+                if (accessError.code === 'L2_VFS_BAD_PATH' && accessError.meta.missingTarget && options.create && options.mode !== 'r') {
                     
-                    // TODO:
-                    // 1. Namespace.open parent directory
-                    // 2. Create empty file structure
-                    // 3. Add it to the directory table and save the directory onto the disk.
+                    const [createError, fileHandle] = await this.createEmptyNode(path, group, 'FILE')
+                    if (createError) return IBFSError.eav('L2_NS_OPEN_FILE', null, createError, { path, group, options })
+                    
+                    const [resolveError, fileNode] = this.vfs.resolve(path)
+                    if (resolveError) {
+                        await fileHandle.close()
+                        return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError, { path, group, options })
+                    }
 
-                    return IBFSError.eav('L2_NS_OPEN_FILE', 'options.create not yet implemented', resolveError, { path, group, options })
+                    fileNode.lock = new WeakRef(fileHandle)
+                    fileHandle.on('close', () => fileNode.lock = null)
+
+                    const proxy = this.createHandleProxy(fileHandle)
+                    return [null, proxy]
 
                 }
-                else {
-                    return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError, { path, group, options })
-                }
+                else return IBFSError.eav('L2_NS_OPEN_FILE', null, accessError, { path, group, options })
             }
 
+            // -----------------------------------------------------------
 
+            const [resolveError, vfsNode] = this.vfs.resolve(path)
             if (resolveError) return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError, { path, group, options })
 
-            // ----------------------------------------------------------------
-
-            const handle = vfsNode.lock && vfsNode.lock.deref()
+            const handle = vfsNode.lock && vfsNode.lock !== 'pending' && vfsNode.lock.deref()
 
             // No existing handle, resource is free, open straight away and lock it.
             if (!handle) {
@@ -215,7 +176,7 @@ export default class Namespace {
             // The resource is locked by another user.
             else {
 
-                // Reuse/share a read-only handle (done internally)
+                // Reuse/share a read-only handle if one exists (done internally)
                 if (options.mode === 'r' && handle.mode === 'r') {
 
                     const [openError, handle] = await this.fs.open({ fileAddress: vfsNode.address, ...options })
@@ -225,7 +186,7 @@ export default class Namespace {
                     return [null, proxy]
 
                 }
-
+                // Return an error if the file is locked by another user in write mode.
                 else return IBFSError.eav('L2_NS_LOCKED', null, null, { path, group, options })
 
             }
@@ -360,5 +321,116 @@ export default class Namespace {
         }
     }
 
+
+    // Private helpers -------------------------------------------------------------------------------------------------
+
+    /**
+     * Wraps a file handle inside a proxy to provide limiting mechanisms on how many times certain methods
+     * are allowed to be called by individual users. This is required because read-only handles are shared
+     * across multiple users and without limiting, a single user could close the handle multiple times
+     * causing it to close for other users that share it.
+     * 
+     * This function will likely evolve as new functionality is added to shared read-only handles.
+     */
+    private createHandleProxy(handle: FileHandle): FileHandle {
+
+        let closed = false
+        let closing = false
+
+        return new Proxy(handle, {
+
+            get(target, prop, receiver) {
+
+                if (closed) return new IBFSError('L2_FH_CLOSED', "The proxy to this handle has already been closed and can not be used.")
+
+                if (prop === 'close') return async () => {
+
+                    if (closing) return new IBFSError('L2_FH_CLOSING', "The proxy to this handle has already been closed and can not be used.")
+                    if (closed) return new IBFSError('L2_FH_CLOSED', "The proxy to this handle has already been closed and can not be used.")
+                    
+                    closing = true
+
+                    const closeError = target.close()
+                    if (closeError) return closeError
+
+                    closed = true
+                    closing = false
+
+                }
+                
+                const value = Reflect.get(target, prop, receiver)
+
+                return typeof value === 'function'
+                    ? value.bind(target)
+                    : value
+                    
+            }
+
+        })
+    }
+
+    /**
+     * Creates an empty node inside the physical filesystem and synchronizes the VFS to match the state.
+     * @param path Path to the node to create.
+     * @param group Group that is creating the node.
+     * @param type Type of node to create.
+     * @param keepPending Whether to keep the node's locked state as "pending"
+     * @returns `[error, null] | [null, FileHandle]`
+     */
+    private async createEmptyNode(path: string, group: string, type: TNode['type'], keepPending?: boolean): T.XEavA<FileHandle, 'L2_NS_CREATE_NODE'> {
+
+        let parentDir: FileHandle | undefined = undefined
+        let parentNode: TDirectory
+
+        const dirname = np.dirname(path)
+        const basename = np.basename(path)
+
+        const abort = async (cause: Error, meta: Record<any, any>) => {
+            await parentDir?.close()
+            if (parentNode.children[basename]) parentNode.children[basename]!.lock = null
+            return IBFSError.eav('L2_NS_CREATE_NODE', null, cause, meta)
+        }
+
+        try {
+
+            const cantCreate = this.vfs.canMakeNode(path, group)    
+            if (cantCreate) return IBFSError.eav('L2_NS_CREATE_NODE', null, cantCreate, { path, group })
+
+            const [resError, $parentNode] = this.vfs.resolveParent(path)
+            if (resError) return IBFSError.eav('L2_NS_CREATE_NODE', null, resError, { path, group })
+            parentNode = $parentNode
+            
+            const [parentError, $parentDir] = await this.open(dirname, group, { mode: 'rw' })
+            if (parentError) return IBFSError.eav('L2_NS_CREATE_NODE', null, parentError, { path, group })
+            parentDir = $parentDir
+
+            const [childError, childAddress] = await this.fs.createEmptyStructure({ type })
+            if (childError) return await abort(childError, { path, group })
+
+            const [dirReadError, dir] = await parentDir.readAsDir()
+            if (dirReadError) return await abort(dirReadError, { path, group })
+
+            dir.children[basename] = childAddress
+
+            const dirWriteError = await parentDir.writeAsDir(dir)
+            if (dirWriteError) return await abort(dirWriteError, { path, group })
+
+            const parentCloseError = await parentDir.close()
+            if (parentCloseError) return await abort(parentCloseError, { path, group })
+
+            parentNode.children[basename] = VFS[type](childAddress)
+            parentNode.children[basename].lock = keepPending ? 'pending' : null
+
+            const [childOpenError, child] = await this.fs.open({ fileAddress: childAddress, mode: 'rw' })
+
+            return childOpenError
+                ? await abort(childOpenError, { path, group })
+                : [null, child]
+
+        } 
+        catch (error) {
+            return IBFSError.eav('L2_NS_CREATE_NODE', null, error as Error, { path, group })    
+        }
+    }
 
 }

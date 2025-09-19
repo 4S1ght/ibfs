@@ -3,6 +3,7 @@ import { uniform, uniformAsync, uniformS, uniformSA } from "../libs/uniform.js"
 import { emptyNamespace } from "../libs/empty-namespace.js"
 import BlockAESContext from "../../src/L0/BlockAES.js"
 import IBFSError from "../../src/errors/IBFSError.js"
+import crypto from 'node:crypto'
 
 describe('Namespace', () => {
 
@@ -59,6 +60,26 @@ describe('Namespace', () => {
         expect(ns.fs._rh._meta.get(h1.fbm.startingAddress)?.refCount).toBe(1)
 
         await expect(h2.close()).resolves.toBeUndefined()
+
+    })
+
+    test('ns.open (create:true)', async () => {
+
+        const name = 'l2_close'
+        const ns = await useEmptyNamespace(name)
+
+        const h1 = await uniformAsync(ns.open('/file.txt', '000000', { mode: 'rw', create: true }))
+        const [err2, h2]      = await ns.open('/file.txt', '000000', { mode: 'rw', create: true })
+
+        // @ts-ignore
+        expect(ns.vfs.tree.children['file.txt']).not.toBeUndefined()
+        expect(err2!.has('L2_NS_LOCKED')).toBe(true)
+
+        const data = crypto.randomBytes(20_000)
+        await uniformSA(h1.writeFile(data))
+
+        expect(await uniformAsync(h1.readFile())).toStrictEqual(data)
+
 
     })
      

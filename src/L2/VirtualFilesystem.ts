@@ -19,14 +19,14 @@ export interface TDirectory {
     /** Physical address of the directory head block. */ address:   number
     /** User permissions inside the directory         */ perms:     Record<string, TPermLevel>
     /** Children files and subdirectories.            */ children:  Record<string, TNode>
-    /** The handle that's currently holding the lock. */ lock:      WeakRef<FileHandle> | null
+    /** The handle that's currently holding the lock. */ lock:      WeakRef<FileHandle> | 'pending' | null
 }
 
 export interface TFile {
     /** Type of the file structure.                   */ type:      'FILE'
     /** Total size of the file's contents.            */ size:      number
     /** Physical address of the file head block.      */ address:   number
-    /** The handle that's currently holding the lock. */ lock:      WeakRef<FileHandle> | null
+    /** The handle that's currently holding the lock. */ lock:      WeakRef<FileHandle> | 'pending' | null
 }
 
 export type TNode = TDirectory | TFile
@@ -48,7 +48,7 @@ export default class VFS {
 
     // Static ----------------------------------------------------------------------------------------------------------
 
-    public static file(address: number, size = 0): TNode {
+    public static FILE(address: number, size = 0): TNode {
         return {
             type: 'FILE',
             size,
@@ -57,7 +57,7 @@ export default class VFS {
         }
     }
 
-    public static dir(address: number, size = 0): TNode {
+    public static DIR(address: number, size = 0): TNode {
         return {
             type: 'DIR',
             size,
@@ -259,7 +259,7 @@ export default class VFS {
      * @param group Group that is writing the node.
      * @returns `undefined` if the node can be written, or an `IBFSError` if not.
      */
-    public canWriteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_WRITE_NODE'> {
+    public canWriteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_WRITE_NODE', { path: string, group: string, missingTarget?: boolean }> {
         try {
         
             let current             = this.tree
@@ -291,7 +291,7 @@ export default class VFS {
             if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
                 
             const newCurrent = current.children[dest]
-            if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" already exists.`, null, { path, group })
+            if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" already exists.`, null, { path, group, missingTarget: true })
 
             // If writing a directory, don't just check write perms on the leading path like 
             // with files, but check write perms inside the target directory as well.

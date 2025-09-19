@@ -176,7 +176,7 @@ export default class Filesystem {
                     const closeError = await fh.close()
                     if (closeError) return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, closeError)
 
-                    return [null, VFS.file(address, size)]
+                    return [null, VFS.FILE(address, size)]
 
                 }
 
@@ -188,7 +188,7 @@ export default class Filesystem {
                     if (readError) return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, readError)
                     if (closeError) return IBFSError.eav('L1_FS_ADSPACE_SCAN', null, closeError)
 
-                    const dirObj = VFS.dir(address, size) as TDirectory
+                    const dirObj = VFS.DIR(address, size) as TDirectory
                     dirObj.perms = dir.users
 
                     for (const filename in dir.children) {
@@ -303,10 +303,20 @@ export default class Filesystem {
      * Only `FILE` types are initialized empty.
      */
     public async createEmptyStructure(options: TCreateStructOptions): T.XEavA<number, 'L1_FS_CREATE_STRUCT'> {
+
+        let headAddress: number
+        let dataAddress: number
+
+        const abort = async (cause: Error, meta: Record<any, any>) => {
+            if (headAddress) this.adSpace.free(headAddress)
+            if (dataAddress) this.adSpace.free(dataAddress)
+            return IBFSError.eav('L1_FS_CREATE_STRUCT', null, cause, meta)
+        }
+
         try {
             
-            const headAddress = this.adSpace.alloc()
-            const dataAddress = this.adSpace.alloc()
+            headAddress = this.adSpace.alloc()
+            dataAddress = this.adSpace.alloc()
 
             const headBody = Buffer.allocUnsafe(8)
             headBody.writeBigInt64LE(BigInt(dataAddress), 0)
@@ -321,7 +331,7 @@ export default class Filesystem {
                 address: headAddress
             })
 
-            if (headError) return IBFSError.eav('L1_FS_CREATE_STRUCT', null, headError)
+            if (headError) return await abort(headError, options)
 
             const dataBody = options.type === 'FILE'
                 ? Buffer.alloc(0)
@@ -333,13 +343,13 @@ export default class Filesystem {
                 address: dataAddress
             })
 
-            if (dataError) return IBFSError.eav('L1_FS_CREATE_STRUCT', null, dataError)
+            if (dataError) return await abort(dataError, options)
 
             return [null, headAddress]
 
         } 
         catch (error) {
-            return IBFSError.eav('L1_FS_CREATE_STRUCT', null, error as Error)
+            return await abort(error as Error, options)
         }
     }
 
