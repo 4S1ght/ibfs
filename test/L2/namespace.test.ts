@@ -41,7 +41,7 @@ describe('Namespace', () => {
 
     test('ns.open/fh.close - Caching, locking & reference counting.', async () => {
 
-        const name = 'l2_close'
+        const name = 'l2_open_caching'
 
         const ns = await useEmptyNamespace(name)
         const h1 = await uniformAsync(ns.open('/', '000000', { mode: 'r' }))
@@ -65,7 +65,7 @@ describe('Namespace', () => {
 
     test('ns.open (create:true)', async () => {
 
-        const name = 'l2_close'
+        const name = 'l2_open_create'
         const ns = await useEmptyNamespace(name)
 
         const h1 = await uniformAsync(ns.open('/file.txt', '000000', { mode: 'rw', create: true }))
@@ -80,7 +80,50 @@ describe('Namespace', () => {
 
         expect(await uniformAsync(h1.readFile())).toStrictEqual(data)
 
+    })
+
+    test('ns.writeFile/readFile', async () => {
+
+        const name = 'l2_write_file'
+        const ns = await useEmptyNamespace(name)
+
+        const data = crypto.randomBytes(20_000)
+
+        const err1         = await ns.writeFile('/file.txt', '000000', data)
+        const [err2, read] = await ns.readFile('/file.txt',  '000000')
+
+        expect(err1).toBe(undefined)
+        expect(err2).toBe(null)
+        expect(read).toStrictEqual(data)
 
     })
+
+    test('ns.createReadStream', async () => {
+
+        const name = 'l2_read_stream'
+        const ns = await useEmptyNamespace(name)
+
+        const data = crypto.randomBytes(20_000)
+
+        const err1 = await ns.writeFile('/file.txt', '000000', data)
+        expect(err1).toBe(undefined)
+
+        const stream = await uniformAsync(ns.createReadStream('/file.txt', '000000'))
+
+        const read = Buffer.alloc(20_000)
+        let index = 0
+
+        for await (const chunk of stream) {
+            chunk.copy(read, index)
+            index += chunk.length
+        }
+
+        expect(read).toStrictEqual(data)
+
+    })
+
+
      
 })
+
+

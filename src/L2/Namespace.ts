@@ -25,13 +25,18 @@ export interface TNSOpenOptions extends Omit<TFSOpenFile, 'fileAddress'> {
     /** Whether to create the file if it does not exist. */ create?: boolean
 }
 
-export interface TNSReadOptions extends BaseReadOptions {
-    /** Offset from start of the file to begin reading from. */ offset?: number
-    /** Number of bytes to read from the offset.             */ length: number
-}
+// export interface TNSReadOptions extends BaseReadOptions {
+//     /** Offset from start of the file to begin reading from. */ offset?: number
+//     /** Number of bytes to read from the offset.             */ length: number
+// }
 
 export interface TNSReadFileOptions       extends BaseReadOptions              {}
 export interface TNSOpenReadStreamOptions extends BaseReadOptions, TFRSOptions {}
+
+export interface TNSWriteFileOptions {
+    /** Whether to create the file if it does not exist. */ create?: boolean
+
+}
 
 // Exports =============================================================================================================
 
@@ -208,36 +213,36 @@ export default class Namespace {
      * @param options.integrity Whether to perform data integrity checks.
      * @returns `[error, null] | [null, Buffer]`
      */
-    public async read(path: string, group: string, options: TNSReadOptions): T.XEavA<Buffer, 'L2_NS_READ'> {
+    // public async read(path: string, group: string, options: TNSReadOptions): T.XEavA<Buffer, 'L2_NS_READ'> {
 
-        let fh: FileHandle | undefined = undefined
+    //     let fh: FileHandle | undefined = undefined
 
-        try {
+    //     try {
 
-            const [openError, handle] = await this.open(path, group, { ...options, mode: 'r' })
-            if (openError) return IBFSError.eav('L2_NS_READ', null, openError, { path, group, options })
-            fh = handle
+    //         const [openError, handle] = await this.open(path, group, { ...options, mode: 'r' })
+    //         if (openError) return IBFSError.eav('L2_NS_READ', null, openError, { path, group, options })
+    //         fh = handle
 
-            const [readError, data] = await handle.read(options.offset || 0, options.length, options.integrity)
-            if (readError) {
-                await fh.close()
-                return IBFSError.eav('L2_NS_READ', null, readError, { path, group, options })
-            }
+    //         const [readError, data] = await handle.read(options.offset || 0, options.length, options.integrity)
+    //         if (readError) {
+    //             await fh.close()
+    //             return IBFSError.eav('L2_NS_READ', null, readError, { path, group, options })
+    //         }
 
-            const closeError = await handle.close()
-            if (closeError) {
-                await fh.close()
-                return IBFSError.eav('L2_NS_READ', null, closeError, { path, group, options })
-            }
+    //         const closeError = await handle.close()
+    //         if (closeError) {
+    //             await fh.close()
+    //             return IBFSError.eav('L2_NS_READ', null, closeError, { path, group, options })
+    //         }
 
-            return [null, data]
+    //         return [null, data]
 
-        } 
-        catch (error) {
-            if (fh) await fh.close()
-            return IBFSError.eav('L2_NS_READ', null, error as Error, { path, group, options })    
-        }
-    }
+    //     } 
+    //     catch (error) {
+    //         if (fh) await fh.close()
+    //         return IBFSError.eav('L2_NS_READ', null, error as Error, { path, group, options })    
+    //     }
+    // }
 
     /**
      * Reads the entire contents of a file.  
@@ -321,6 +326,47 @@ export default class Namespace {
         }
     }
 
+    /**
+     * Writes the entirety of the `data` buffer to the file on the specified `path`.  
+     * This overwrites the entire file. For partial writes, use the `FileHandle` interface.
+     * @param path Path to the resource in the filesystem.
+     * @param group Group that is requesting access to the resource - used to check access permissions.
+     * @param data Data to write.
+     * @param options Write options
+     * @param options.create Whether to create the file if it does not exist. `default: true`
+     * @returns `error | undefined`
+     */
+    public async writeFile(path: string, group: string, data: Buffer, options?: TNSWriteFileOptions): T.XEavSA<'L2_NS_WRITE'> {
+
+        let fh: FileHandle | undefined = undefined
+
+        const abort = async (cause: Error) => {
+            await fh?.close()
+            return new IBFSError('L2_NS_WRITE', null, cause, { path, group, options })
+        }
+
+        try {
+
+            const opt = {
+                create: true,
+                ...options
+            }
+
+            const [openError, handle] = await this.open(path, group, { ...opt, mode: 'w' })
+            if (openError) return await abort(openError)
+            fh = handle
+
+            const writeError = await handle.writeFile(data)
+            if (writeError) return await abort(writeError)
+
+            const closeError = await handle.close()
+            if (closeError) return await abort(closeError)
+            
+        } 
+        catch (error) {
+            return await abort(error as Error)
+        }
+    }
 
     // Private helpers -------------------------------------------------------------------------------------------------
 
