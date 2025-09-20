@@ -263,11 +263,11 @@ const errorCodes = {
     L2_NS_OPEN_FILE:                'Failed to open a file.',
     L2_NS_LOCKED:                   'The file/directory could not be opened because it is already in use by another consumer.',
 
-    L2_NS_READ:                     'Failed to open and read the file.',
     L2_NS_READ_FILE:                'Failed to open and read the file.',
     L2_NS_OPEN_READ_STREAM:         'Failed to open a file read stream.',
 
-    L2_NS_WRITE:                    'Failed to open and write the file.',
+    L2_NS_WRITE_FILE:               'Failed to open and write the file.',
+    L2_NS_OPEN_WRITE_STREAM:        'Failed to open a file write stream.',
 
     L2_FH_CLOSED:                   'The proxy to this handle has already been closed and can not be used.',
     L2_FH_CLOSING:                  'The proxy to this handle is currently being closed and any further requests must wait until the close is complete.',

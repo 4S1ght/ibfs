@@ -4,6 +4,7 @@ import type * as T from '../../types.js'
 import IBFSError from '../errors/IBFSError.js'
 import FileHandle from '../L1/file/FileHandle.js'
 import FileReadStream, { TFRSOptions } from '../L1/file/FileReadStream.js'
+import FileWriteStream, { TFWSOptions } from '../L1/file/FileWriteStream.js'
 import Filesystem, { TFSInit, TFSOpenFile } from '../L1/Filesystem.js'
 import ssc from '../misc/safeShallowCopy.js'
 import VFS, { TDirectory, TNode } from './VirtualFilesystem.js'
@@ -34,8 +35,19 @@ export interface TNSReadFileOptions       extends BaseReadOptions              {
 export interface TNSOpenReadStreamOptions extends BaseReadOptions, TFRSOptions {}
 
 export interface TNSWriteFileOptions {
-    /** Whether to create the file if it does not exist. */ create?: boolean
+    /** 
+     * Whether to create the file if it does not exist.
+     * @default true
+     */ 
+    create?: boolean
+}
 
+export interface TNSOpenWriteStreamOptions extends TFWSOptions, Pick<TFSOpenFile, 'append' | 'truncate'> {
+    /** 
+     * Whether to create the file if it does not exist.
+     * @default true
+     */ 
+    create?: boolean
 }
 
 // Exports =============================================================================================================
@@ -204,7 +216,7 @@ export default class Namespace {
 
     /**
      * Reads data from a specific place inside a file based on the `offset` and `length` parameters.  
-     * **Access limitations & locking apply. See `Namespace.open()` method.**
+     * **NOTE: Access limitations & locking apply. See `Namespace.open()` method.**
      * @param path Path to the resource in the filesystem.
      * @param group The group that is requesting access to the resource - used to check access permissions.
      * @param options Open options.
@@ -246,7 +258,7 @@ export default class Namespace {
 
     /**
      * Reads the entire contents of a file.  
-     * **Access limitations & locking apply. See `Namespace.open()` method.**
+     * **NOTE: Access limitations & locking apply. See `Namespace.open()` method.**
      * @param path Path to the resource in the filesystem.
      * @param group The group that is requesting access to the resource - used to check access permissions.
      * @param options Open options.
@@ -288,7 +300,7 @@ export default class Namespace {
 
     /**
      * Opens a file and returns a read stream.  
-     * **Access limitations & locking apply. See `Namespace.open()` method.**
+     * **NOTE: Access limitations & locking apply. See `Namespace.open()` method.**
      * @param path Path to the resource in the filesystem.
      * @param group The group that is requesting access to the resource - used to check access permissions.
      * @param options Open options.
@@ -316,6 +328,8 @@ export default class Namespace {
                 return IBFSError.eav('L2_NS_OPEN_READ_STREAM', null, streamError, { path, group, options })
             }
 
+            this.onStreamEnd(stream, () => fh?.close())
+
             return [null, stream]
 
             
@@ -328,7 +342,8 @@ export default class Namespace {
 
     /**
      * Writes the entirety of the `data` buffer to the file on the specified `path`.  
-     * This overwrites the entire file. For partial writes, use the `FileHandle` interface.
+     * This overwrites the entire file. For partial writes, use the `FileHandle` interface.  
+     * **NOTE: Access limitations & locking apply. See `Namespace.open()` method.**
      * @param path Path to the resource in the filesystem.
      * @param group Group that is requesting access to the resource - used to check access permissions.
      * @param data Data to write.
@@ -336,13 +351,13 @@ export default class Namespace {
      * @param options.create Whether to create the file if it does not exist. `default: true`
      * @returns `error | undefined`
      */
-    public async writeFile(path: string, group: string, data: Buffer, options?: TNSWriteFileOptions): T.XEavSA<'L2_NS_WRITE'> {
+    public async writeFile(path: string, group: string, data: Buffer, options?: TNSWriteFileOptions): T.XEavSA<'L2_NS_WRITE_FILE'> {
 
         let fh: FileHandle | undefined = undefined
 
         const abort = async (cause: Error) => {
             await fh?.close()
-            return new IBFSError('L2_NS_WRITE', null, cause, { path, group, options })
+            return new IBFSError('L2_NS_WRITE_FILE', null, cause, { path, group, options })
         }
 
         try {
@@ -365,6 +380,52 @@ export default class Namespace {
         } 
         catch (error) {
             return await abort(error as Error)
+        }
+    }
+
+    /**
+     * Opens a file and returns a write stream.  
+     * **NOTE: Access limitations & locking apply. See `Namespace.open()` method.**
+     * @param path Path to the resource in the filesystem.
+     * @param group The group that is requesting access to the resource - used to check access permissions.
+     * @param options Open options.
+     * @param options.offset The offset from the start of the file to start writing to. @default 0 // - "append" option takes precedence if set.
+     * @param options.highWaterMark The watermark below which the stream will write more data. @default 65536 // 64kB
+     * @param options.append Whether to append all writes to the end of the file. @default false
+     * @param options.create Whether to create the file if it does not exist. @default true
+     * @param options.truncate Whether to truncate the file if it already exists. @default false
+     * @returns `[error, null] | [null, FileWriteStream]`
+     */
+    public async createWriteStream(path: string, group: string, options?: TNSOpenWriteStreamOptions): T.XEavA<FileWriteStream, 'L2_NS_OPEN_WRITE_STREAM'> {
+        
+        let fh: FileHandle | undefined = undefined
+        
+        try {
+
+            const opt = {
+                create: true,
+                ...options
+            }
+
+            const [openError, handle] = await this.open(path, group, { ...opt, mode: 'w' })
+            if (openError) return IBFSError.eav('L2_NS_OPEN_WRITE_STREAM', null, openError, { path, group, options })
+            fh = handle
+
+            const [streamError, stream] = await handle.createWriteStream(opt)
+
+            if (streamError) {
+                await fh.close()
+                return IBFSError.eav('L2_NS_OPEN_WRITE_STREAM', null, streamError, { path, group, options })
+            }
+
+            this.onStreamEnd(stream, () => fh?.close())
+
+            return [null, stream]
+            
+        } 
+        catch (error) {
+            if (fh) await fh.close()
+            return IBFSError.eav('L2_NS_OPEN_WRITE_STREAM', null, error as Error, { path, group, options })
         }
     }
 
@@ -433,21 +494,21 @@ export default class Namespace {
 
         const abort = async (cause: Error, meta: Record<any, any>) => {
             await parentDir?.close()
-            if (parentNode.children[basename]) parentNode.children[basename]!.lock = null
+            if (parentNode && parentNode.children[basename]) parentNode.children[basename]!.lock = null
             return IBFSError.eav('L2_NS_CREATE_NODE', null, cause, meta)
         }
 
         try {
 
             const cantCreate = this.vfs.canMakeNode(path, group)    
-            if (cantCreate) return IBFSError.eav('L2_NS_CREATE_NODE', null, cantCreate, { path, group })
+            if (cantCreate) return abort(cantCreate, { path, group })
 
             const [resError, $parentNode] = this.vfs.resolveParent(path)
-            if (resError) return IBFSError.eav('L2_NS_CREATE_NODE', null, resError, { path, group })
+            if (resError) return await abort(resError, { path, group })
             parentNode = $parentNode
             
             const [parentError, $parentDir] = await this.open(dirname, group, { mode: 'rw' })
-            if (parentError) return IBFSError.eav('L2_NS_CREATE_NODE', null, parentError, { path, group })
+            if (parentError) return abort(parentError, { path, group })
             parentDir = $parentDir
 
             const [childError, childAddress] = await this.fs.createEmptyStructure({ type })
@@ -477,6 +538,12 @@ export default class Namespace {
         catch (error) {
             return IBFSError.eav('L2_NS_CREATE_NODE', null, error as Error, { path, group })    
         }
+    }
+
+    private onStreamEnd(stream: FileReadStream | FileWriteStream, callback: () => void) {
+        stream.on('end', callback)
+        stream.on('close', callback)
+        stream.on('finish', callback)
     }
 
 }

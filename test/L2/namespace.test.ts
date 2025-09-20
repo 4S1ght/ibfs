@@ -122,6 +122,27 @@ describe('Namespace', () => {
 
     })
 
+    test('ns.createWriteStream', async () => {
+
+        const name = 'l2_write_stream'
+        const ns = await useEmptyNamespace(name)
+        // console.log(ns.vfs)
+
+        const data = crypto.randomBytes(20_000)
+
+        const stream = await uniformAsync(ns.createWriteStream('/file.txt', '000000'))
+        
+        stream.write(data)
+        stream.end()
+
+        await new Promise<void>(resolve => stream.on('finish', resolve))
+
+
+        const read = await uniformAsync(ns.readFile('/file.txt', '000000'))
+        expect(read).toStrictEqual(data)
+
+    })
+
 
      
 })

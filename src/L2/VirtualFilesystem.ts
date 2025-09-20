@@ -291,7 +291,7 @@ export default class VFS {
             if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
                 
             const newCurrent = current.children[dest]
-            if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" already exists.`, null, { path, group, missingTarget: true })
+            if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" does not exist.`, null, { path, group, missingTarget: true })
 
             // If writing a directory, don't just check write perms on the leading path like 
             // with files, but check write perms inside the target directory as well.
