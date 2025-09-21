@@ -150,6 +150,9 @@ export default class Namespace {
 
             if (accessError) {
                 if (accessError.code === 'L2_VFS_BAD_PATH' && accessError.meta.missingTarget && options.create && options.mode !== 'r') {
+
+                    const cantMake = this.vfs.canMakeNode(path, group)
+                    if (cantMake) return IBFSError.eav('L2_NS_OPEN_FILE', null, cantMake, { path, group, options })
                     
                     const [createError, fileHandle] = await this.createEmptyNode(path, group, 'FILE')
                     if (createError) return IBFSError.eav('L2_NS_OPEN_FILE', null, createError, { path, group, options })
@@ -348,7 +351,7 @@ export default class Namespace {
      * @param group Group that is requesting access to the resource - used to check access permissions.
      * @param data Data to write.
      * @param options Write options
-     * @param options.create Whether to create the file if it does not exist. `default: true`
+     * @param options.create Whether to create the file if it does not exist. @default true
      * @returns `error | undefined`
      */
     public async writeFile(path: string, group: string, data: Buffer, options?: TNSWriteFileOptions): T.XEavSA<'L2_NS_WRITE_FILE'> {
@@ -426,6 +429,60 @@ export default class Namespace {
         catch (error) {
             if (fh) await fh.close()
             return IBFSError.eav('L2_NS_OPEN_WRITE_STREAM', null, error as Error, { path, group, options })
+        }
+    }
+
+
+    public async rename(path: string, newName: string, group: string): T.XEavSA<'L2_NS_RENAME'> {
+
+        const dirname = np.dirname(path)
+        const basename = np.basename(path)
+
+        let fh: FileHandle | undefined = undefined
+        let pd: TDirectory
+
+        const abort = async (cause: Error) => {
+            // close handle
+            if (fh) await fh.close()
+            // Revert VFS changes
+            if (pd && pd.children[newName]) {
+                pd.children[basename] = pd.children[newName]
+                delete pd.children[newName]
+            }
+            return new IBFSError('L2_NS_RENAME', null, cause, { path, newName, group })
+        }
+
+        try {
+
+            const cantRename = this.vfs.canRenameNode(path, newName, group)
+            if (cantRename) return await abort(cantRename);
+
+            const [resolveError, parentDir] = this.vfs.resolveParent(path)
+            if (resolveError) return await abort(resolveError)
+            pd = parentDir
+
+            const [openError, parentHandle] = await this.open(dirname, group, { mode: 'rw' })
+            if (openError) return await abort(openError)
+            fh = parentHandle
+
+            const [readError, dirData] = await parentHandle.readAsDir()
+            if (readError) return await abort(readError)
+
+            dirData.children[newName] = dirData.children[basename]!
+            delete dirData.children[basename]
+
+            const writeError = await parentHandle.writeAsDir(dirData)
+            if (writeError) return await abort(writeError)
+
+            parentDir.children[newName] = parentDir.children[basename]!
+            delete parentDir.children[basename]
+
+            const closeError = await parentHandle.close()
+            if (closeError) return await abort(closeError)
+            
+        } 
+        catch (error) {
+            return new IBFSError('L2_NS_RENAME', null, error as Error, { path, newName, group })
         }
     }
 
@@ -540,6 +597,7 @@ export default class Namespace {
         }
     }
 
+    // TODO: Add error event handling
     private onStreamEnd(stream: FileReadStream | FileWriteStream, callback: () => void) {
         stream.on('end', callback)
         stream.on('close', callback)

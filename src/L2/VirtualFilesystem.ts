@@ -1,7 +1,3 @@
-// TODO: Add node locking support to VFS in order to reflect file handle locking.
-// This also is required to properly perform recursive checks during deletion to
-// to avoid deleting a parent directory of a currently open file.
-
 // Imports =============================================================================================================
 
 import type * as T from '../../types.js'
