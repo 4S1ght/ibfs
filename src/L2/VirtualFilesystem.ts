@@ -163,7 +163,7 @@ export default class VFS {
      * @param group Group that is creating the node.
      * @returns `undefined` if the node can be created, or an `IBFSError` if not.
      */
-    public canMakeNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_CAN_MAKE_NODE'> {
+    public canMakeNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_CAN_MAKE_NODE' | 'L2_VFS_LOCKED'> {
         try {
         
             let current             = this.tree
@@ -173,8 +173,10 @@ export default class VFS {
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
             if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't create item on an empty path.`, null, { path, group })
 
-            for (const part of parts) {
+            for (let i = 0; i < parts.length; i++) {
                 
+                const part = parts[i]!
+                const last = i === parts.length - 1
                 const newCurrent = (current as TDirectory).children[part]
 
                 if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
@@ -182,6 +184,8 @@ export default class VFS {
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                
+                if (last && newCurrent.lock) return new IBFSError('L2_VFS_LOCKED', 'Can not create the item in the parent directory. The parent is locked.', null, { path, group })
                     
                 current = newCurrent
                 

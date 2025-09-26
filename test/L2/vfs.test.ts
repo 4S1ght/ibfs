@@ -149,6 +149,14 @@ describe('Virtual Filesystem', () => {
                     }
                 }
             },
+            'folder2': {
+                type: 'DIR',
+                size: 0,
+                address: 40,
+                perms: {},
+                lock: 'pending',
+                children: {}
+            }
         }
 
         // Root directory
@@ -171,6 +179,9 @@ describe('Virtual Filesystem', () => {
         // Nested file with denied parent
         expect(vfs.canMakeNode('/folder1/file3.txt', 'group2')).toBe(undefined)
         expect(vfs.canMakeNode('/folder1/file3.txt', 'group3')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+        // Respect the parent directory of the to-be-created node's parent directory.
+        expect(vfs.canMakeNode('/folder2/file.txt', 'group2')!.has('L2_VFS_LOCKED')).toBe(true)
 
 
     })
