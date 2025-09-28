@@ -254,7 +254,7 @@ const errorCodes = {
     L2_VFS_CAN_MOVE_NODE:           'Can not move a node from the source directory to the target directory.',
     L2_VFS_CAN_DELETE_NODE:         'Can not delete a node.',
     L2_VFS_CAN_MANAGE_NODE:         'The group has no permission to manage this node.',
-    L2_VFS_LOCKED:                  'The location is currently locked because it is open elsewhere.',
+    L2_VFS_LOCKED:                  'The location is currently locked because it is open elsewhere. Wait and try in a moment.',
 
     L2_NS_CREATE:                   'Failed to create the filesystem namespace.',
     L2_NS_OPEN:                     'Failed to open the filesystem namespace.',
