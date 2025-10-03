@@ -1,14 +1,17 @@
 // Imports =============================================================================================================
 
 import type * as T from '../../types.js'
-import IBFSError from '../errors/IBFSError.js'
-import FileHandle from '../L1/file/FileHandle.js'
-import FileReadStream, { TFRSOptions } from '../L1/file/FileReadStream.js'
-import FileWriteStream, { TFWSOptions } from '../L1/file/FileWriteStream.js'
-import Filesystem, { TFSInit, TFSOpenFile } from '../L1/Filesystem.js'
-import ssc from '../misc/safeShallowCopy.js'
-import VFS, { TDirectory, TNode } from './VirtualFilesystem.js'
-import np from 'node:path'
+
+import IBFSError                                from '../errors/IBFSError.js'
+import FileHandle                               from '../L1/file/FileHandle.js'
+import FileReadStream, { TFRSOptions }          from '../L1/file/FileReadStream.js'
+import FileWriteStream, { TFWSOptions }         from '../L1/file/FileWriteStream.js'
+import Filesystem, { TFSInit, TFSOpenFile }     from '../L1/Filesystem.js'
+
+import ssc                                      from '../misc/safeShallowCopy.js'
+import VFS, { TDirectory, TNode }               from './VirtualFilesystem.js'
+
+import np                                       from 'node:path'
 
 // Types ===============================================================================================================
 
