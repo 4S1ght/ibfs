@@ -152,7 +152,7 @@ export default class Namespace {
             // File creation ---------------------------------------------
 
             if (accessError) {
-                if (accessError.code === 'L2_VFS_BAD_PATH' && accessError.meta.missingTarget && options.create && options.mode !== 'r') {
+                if (accessError.code === 'L2_VFS_BAD_PATH' && Object.hasOwn(accessError.meta, 'missingTarget') && options.create && options.mode !== 'r') {
 
                     const cantMake = this.vfs.canMakeNode(path, group)
                     if (cantMake) return IBFSError.eav('L2_NS_OPEN_FILE', null, cantMake, { path, group, options })

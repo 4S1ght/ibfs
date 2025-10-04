@@ -63,7 +63,7 @@ describe('Namespace', () => {
 
     })
 
-    test('ns.open (create:true)', async () => {
+    test('ns.open (create:true) + write', async () => {
 
         const name = 'l2_open_create'
         const ns = await useEmptyNamespace(name)
@@ -77,8 +77,9 @@ describe('Namespace', () => {
 
         const data = crypto.randomBytes(20_000)
         await uniformSA(h1.writeFile(data))
+        const read = await uniformAsync(h1.readFile())
 
-        expect(await uniformAsync(h1.readFile())).toStrictEqual(data)
+        expect(read).toStrictEqual(data)
 
     })
 
