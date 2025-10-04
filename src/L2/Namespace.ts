@@ -152,6 +152,7 @@ export default class Namespace {
             // File creation ---------------------------------------------
 
             if (accessError) {
+                if (accessError.code === 'L2_VFS_LOCKED') return IBFSError.eav('L2_NS_LOCKED', null, accessError, { path, group, options })
                 if (accessError.code === 'L2_VFS_BAD_PATH' && Object.hasOwn(accessError.meta, 'missingTarget') && options.create && options.mode !== 'r') {
 
                     const cantMake = this.vfs.canMakeNode(path, group)

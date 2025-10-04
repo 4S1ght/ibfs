@@ -273,7 +273,7 @@ export default class VFS {
      * @param group Group that is writing the node.
      * @returns `undefined` if the node can be written, or an `IBFSError` if not.
      */
-    public canWriteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_WRITE_NODE', { path: string, group: string, missingTarget?: boolean }> {
+    public canWriteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_WRITE_NODE' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: boolean, missingTarget?: boolean }> {
         try {
         
             let current             = this.tree
@@ -314,6 +314,12 @@ export default class VFS {
                 if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
             }
 
+            const lock = newCurrent.lock
+            if (lock) {
+                if (lock === 'pending') return new IBFSError('L2_VFS_LOCKED', `Can not write the item because it's currently in use.`, null, { path, group, lockPending: true })
+                if (lock.deref())       return new IBFSError('L2_VFS_LOCKED', `Can not write the item because it's currently in use.`, null, { path, group })
+            }
+
             return undefined // Allow access
 
         } 
@@ -335,7 +341,7 @@ export default class VFS {
      * result  -> /path-to/my/newFile.txt
      * ```
      */
-    public canRenameNode(path: string, newName: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_RENAME_NODE' | 'L2_VFS_ALREADY_EXISTS'> {
+    public canRenameNode(path: string, newName: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_RENAME_NODE' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: boolean }> {
         try {
 
             let current             = this.tree
@@ -365,6 +371,9 @@ export default class VFS {
 
             // After loop is finished, check if direct parent has write perms:
             if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+
+            if (current.lock && (current.lock === 'pending' || current.lock.deref())) 
+                return new IBFSError('L2_VFS_LOCKED', `Can not rename this item because it's parent directory is currently in use.`, null, { path, group, lockPending: true })
 
             // Check if source item exists
             const srcNamedItem = current.children[dest]

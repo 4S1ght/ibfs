@@ -1,8 +1,10 @@
+// TODO: Refactor the entire registry to use a single map for both metadata and references
+// in order to simplify its logic.
+
 // Imports =============================================================================================================
 
 import { styleText } from "node:util"
 import { toGridString } from "../../misc/toGridString.js"
-
 
 // Types ===============================================================================================================
 

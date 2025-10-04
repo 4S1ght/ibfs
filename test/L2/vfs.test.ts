@@ -55,6 +55,12 @@ describe('Virtual Filesystem', () => {
                     },
                 },
             },
+            'locked-file': {
+                type: 'FILE',
+                size: 1400,
+                address: 10,
+                lock: 'pending',
+            }
         }
 
         // Root directory
@@ -77,6 +83,9 @@ describe('Virtual Filesystem', () => {
         // Nested folder whose parent has denied permissions
         expect(vfs.canReadNode('/folder1/folder2/folder3/', 'group1')).toBeInstanceOf(IBFSError)
         expect(vfs.canReadNode('/folder1/folder2/folder3/', 'group2')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+        // Respect file locks
+        expect(vfs.canReadNode('/locked-file', 'group1')!.has('L2_VFS_LOCKED')).toBe(true)
 
     })
 
@@ -104,6 +113,12 @@ describe('Virtual Filesystem', () => {
                         lock: null,
                     }
                 }
+            },
+            'locked-file': {
+                type: 'FILE',
+                size: 1400,
+                address: 10,
+                lock: 'pending',
             }
         }
 
@@ -121,6 +136,10 @@ describe('Virtual Filesystem', () => {
 
         // Nested file with denied parent
         expect(vfs.canWriteNode('/folder1/file2.txt', 'group2')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+        // Respect file locks
+        expect(vfs.canWriteNode('/locked-file', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canWriteNode('/locked-file', 'group2')!.has('L2_VFS_LOCKED')).toBe(true)
 
     })
 
@@ -255,6 +274,21 @@ describe('Virtual Filesystem', () => {
                     }
                 }
             },
+            'locked-dir': {
+                type: 'DIR',
+                size: 1400,
+                address: 10,
+                lock: 'pending',
+                perms: {},
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                        lock: null,
+                    }
+                }
+            }
         }
 
         // Rename root directory
@@ -270,6 +304,9 @@ describe('Virtual Filesystem', () => {
 
         // Rename to an already taken name
         expect(vfs.canRenameNode('file1.txt', 'folder1', 'group2')!.has('L2_VFS_ALREADY_EXISTS')).toBe(true)
+
+        // Respect file locks
+        expect(vfs.canRenameNode('/locked-dir/file2.txt', 'new-name', 'group2')!.has('L2_VFS_LOCKED')).toBe(true)
 
     })
 
