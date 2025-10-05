@@ -199,7 +199,7 @@ describe('Virtual Filesystem', () => {
         expect(vfs.canMakeNode('/folder1/file3.txt', 'group2')).toBe(undefined)
         expect(vfs.canMakeNode('/folder1/file3.txt', 'group3')!.has('L2_VFS_NO_PERM')).toBe(true)
 
-        // Respect the parent directory of the to-be-created node's parent directory.
+        // Respect file locks
         expect(vfs.canMakeNode('/folder2/file.txt', 'group2')!.has('L2_VFS_LOCKED')).toBe(true)
 
 
@@ -361,7 +361,22 @@ describe('Virtual Filesystem', () => {
                         lock: null,
                     }
                 }
-            }
+            },
+            'locked-dir': {
+                type: 'DIR',
+                size: 1400,
+                address: 10,
+                lock: 'pending',
+                perms: {},
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                        lock: null,
+                    }
+                }
+            },
         }
 
         // Move root directory
@@ -378,6 +393,17 @@ describe('Virtual Filesystem', () => {
 
         // Move item to a directory with an item of the same name
         expect(vfs.canMoveNode('/folder1/file4.txt', '/folder2', 'group2')!.has('L2_VFS_ALREADY_EXISTS')).toBe(true)
+
+        // Respect file locks
+        const op1 = vfs.canMoveNode('/file1.txt', '/locked-dir/', 'group2')!
+        expect(op1.has('L2_VFS_LOCKED')).toBe(true)
+        expect(op1.meta.lockPending).toBe(true)
+        expect(op1.meta.lockedDir).toBe('dest')
+
+        const op2 = vfs.canMoveNode('/locked-dir/file2.txt', '/folder2', 'group2')!
+        expect(op2.has('L2_VFS_LOCKED')).toBe(true)
+        expect(op2.meta.lockPending).toBe(true)
+        expect(op2.meta.lockedDir).toBe('source')
 
     })
 

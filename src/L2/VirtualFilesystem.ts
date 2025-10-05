@@ -193,15 +193,15 @@ export default class VFS {
 
             // After loop is finished, check if direct parent has write perms:
             if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                
+            const newCurrent = current.children[dest]
+            if (newCurrent) return new IBFSError('L2_VFS_ALREADY_EXISTS', `Entry "${dest}" in "${path}" already exists.`, null, { path, group })
 
             const lock = current.lock
             if (lock) {
                 if (lock === 'pending') return new IBFSError('L2_VFS_LOCKED', `Can not create the item because its parent directory is being read/written to.`, null, { path, group, lockPending: true })
                 if (lock.deref())       return new IBFSError('L2_VFS_LOCKED', `Can not create the item because its parent directory is being read/written to..`, null, { path, group })
             }
-                
-            const newCurrent = current.children[dest]
-            if (newCurrent) return new IBFSError('L2_VFS_ALREADY_EXISTS', `Entry "${dest}" in "${path}" already exists.`, null, { path, group })
 
             return undefined // Allow access
 
@@ -372,9 +372,6 @@ export default class VFS {
             // After loop is finished, check if direct parent has write perms:
             if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
 
-            if (current.lock && (current.lock === 'pending' || current.lock.deref())) 
-                return new IBFSError('L2_VFS_LOCKED', `Can not rename this item because it's parent directory is currently in use.`, null, { path, group, lockPending: true })
-
             // Check if source item exists
             const srcNamedItem = current.children[dest]
             if (!srcNamedItem) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" does not exist.`, null, { path, group })
@@ -382,6 +379,9 @@ export default class VFS {
             // Check if the target name isn't taken
             const destNamedItem = current.children[newName]
             if (destNamedItem) return new IBFSError('L2_VFS_ALREADY_EXISTS', `Entry "${newName}" in "${path}" already exists.`, null, { path, group })
+
+            if (current.lock && (current.lock === 'pending' || current.lock.deref())) 
+                return new IBFSError('L2_VFS_LOCKED', `Can not rename this item because it's parent directory is currently accessed elsewhere.`, null, { path, group, lockPending: true })
             
             return undefined // Allow access
             
@@ -404,7 +404,7 @@ export default class VFS {
      * result    -> /new/path/file.txt
      * ```
      */
-    public canMoveNode(path: string, newParent: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MOVE_NODE' | 'L2_VFS_ALREADY_EXISTS'> {
+    public canMoveNode(path: string, newParent: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MOVE_NODE' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: boolean, lockedDir?: 'source' | 'dest' }> {
         try {
 
             let current = this.tree
@@ -437,6 +437,9 @@ export default class VFS {
             const sourceItem = current.children[srcFinal]
             if (!sourceItem) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${srcFinal}" in "${path}" doesn't exists.`, null, { path, group })
 
+            if (current.lock && (current.lock === 'pending' || current.lock.deref())) 
+                return new IBFSError('L2_VFS_LOCKED', `Can not move this item because it's parent directory is currently accessed elsewhere.`, null, { path, group, lockPending: true, lockedDir: 'source' })
+
             // Destination path -----------------------------------------------
 
             current = this.tree
@@ -466,6 +469,9 @@ export default class VFS {
 
             const destItem = current.children[destFinal]
             if (destItem) return new IBFSError('L2_VFS_ALREADY_EXISTS', `Entry "${destFinal}" in "${newParent}" already exists.`, null, { path, group })
+
+            if (current.lock && (current.lock === 'pending' || current.lock.deref())) 
+                return new IBFSError('L2_VFS_LOCKED', `Can not move this item because the destination directory is currently accessed elsewhere.`, null, { path, group, lockPending: true, lockedDir: 'dest' })
 
             return undefined            
             
