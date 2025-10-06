@@ -1,7 +1,6 @@
 import { describe, test, expect } from "vitest"
 import IBFSError from "../../src/errors/IBFSError.js"
 import VFS from "../../src/L2/VirtualFilesystem.js"
-import { TPermLevel } from "../../src/L1/directory/DirectoryTables.js"
 
 describe('Virtual Filesystem', () => {
 
@@ -55,6 +54,12 @@ describe('Virtual Filesystem', () => {
                     },
                 },
             },
+            'locked-file': {
+                type: 'FILE',
+                size: 1400,
+                address: 10,
+                lock: 'pending',
+            }
         }
 
         // Root directory
@@ -77,6 +82,9 @@ describe('Virtual Filesystem', () => {
         // Nested folder whose parent has denied permissions
         expect(vfs.canReadNode('/folder1/folder2/folder3/', 'group1')).toBeInstanceOf(IBFSError)
         expect(vfs.canReadNode('/folder1/folder2/folder3/', 'group2')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+        // Respect file locks
+        expect(vfs.canReadNode('/locked-file', 'group1')!.has('L2_VFS_LOCKED')).toBe(true)
 
     })
 
@@ -104,6 +112,12 @@ describe('Virtual Filesystem', () => {
                         lock: null,
                     }
                 }
+            },
+            'locked-file': {
+                type: 'FILE',
+                size: 1400,
+                address: 10,
+                lock: 'pending',
             }
         }
 
@@ -121,6 +135,10 @@ describe('Virtual Filesystem', () => {
 
         // Nested file with denied parent
         expect(vfs.canWriteNode('/folder1/file2.txt', 'group2')!.has('L2_VFS_NO_PERM')).toBe(true)
+
+        // Respect file locks
+        expect(vfs.canWriteNode('/locked-file', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canWriteNode('/locked-file', 'group2')!.has('L2_VFS_LOCKED')).toBe(true)
 
     })
 
@@ -149,6 +167,14 @@ describe('Virtual Filesystem', () => {
                     }
                 }
             },
+            'folder2': {
+                type: 'DIR',
+                size: 0,
+                address: 40,
+                perms: {},
+                lock: 'pending',
+                children: {}
+            }
         }
 
         // Root directory
@@ -172,49 +198,8 @@ describe('Virtual Filesystem', () => {
         expect(vfs.canMakeNode('/folder1/file3.txt', 'group2')).toBe(undefined)
         expect(vfs.canMakeNode('/folder1/file3.txt', 'group3')!.has('L2_VFS_NO_PERM')).toBe(true)
 
-
-    })
-
-    test('VFS.canManageNode', () => {
-
-        vfs.tree.perms = { group1: 1, group2: 4, group3: 0 }
-        vfs.tree.children = {
-            'file1.txt': {
-                type: 'FILE',
-                size: 1400,
-                address: 10,
-                lock: null,
-            },
-            'folder1': {
-                type: 'DIR',
-                size: 0,
-                address: 20,
-                perms: { group1: 3, group3: 3 },
-                lock: null,
-                children: {
-                    'file2.txt': {
-                        type: 'FILE',
-                        size: 5000,
-                        address: 30,
-                        lock: null,
-                    }
-                }
-            },
-        }
-
-        // Manage root directory
-        expect(vfs.canManageNode('/', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
-        expect(vfs.canManageNode('/', 'group2')).toBe(undefined)
-
-        // Manage direct children of a level-3 directory
-        expect(vfs.canManageNode('/folder1', 'group1')).toBe(undefined)
-        expect(vfs.canManageNode('/folder1/file2.txt', 'group2')!.has('L2_VFS_BAD_PATH')).toBe(true) // Can't manage files, only directories
-
-        expect(vfs.canManageNode('/folder1', 'group2')).toBe(undefined)
-
-        // Manage directory while upper parent denies access
-        expect(vfs.canManageNode('/folder1', 'group3')!.has('L2_VFS_NO_PERM')).toBe(true)
-        expect(vfs.canManageNode('/folder1/file2.txt', 'group3')!.has('L2_VFS_NO_PERM')).toBe(true)
+        // Respect file locks
+        expect(vfs.canMakeNode('/folder2/file.txt', 'group2')!.has('L2_VFS_LOCKED')).toBe(true)
 
 
     })
@@ -244,6 +229,21 @@ describe('Virtual Filesystem', () => {
                     }
                 }
             },
+            'locked-dir': {
+                type: 'DIR',
+                size: 1400,
+                address: 10,
+                lock: 'pending',
+                perms: {},
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                        lock: null,
+                    }
+                }
+            }
         }
 
         // Rename root directory
@@ -259,6 +259,9 @@ describe('Virtual Filesystem', () => {
 
         // Rename to an already taken name
         expect(vfs.canRenameNode('file1.txt', 'folder1', 'group2')!.has('L2_VFS_ALREADY_EXISTS')).toBe(true)
+
+        // Respect file locks
+        expect(vfs.canRenameNode('/locked-dir/file2.txt', 'new-name', 'group2')!.has('L2_VFS_LOCKED')).toBe(true)
 
     })
 
@@ -313,7 +316,22 @@ describe('Virtual Filesystem', () => {
                         lock: null,
                     }
                 }
-            }
+            },
+            'locked-dir': {
+                type: 'DIR',
+                size: 1400,
+                address: 10,
+                lock: 'pending',
+                perms: {},
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                        lock: null,
+                    }
+                }
+            },
         }
 
         // Move root directory
@@ -330,6 +348,17 @@ describe('Virtual Filesystem', () => {
 
         // Move item to a directory with an item of the same name
         expect(vfs.canMoveNode('/folder1/file4.txt', '/folder2', 'group2')!.has('L2_VFS_ALREADY_EXISTS')).toBe(true)
+
+        // Respect file locks
+        const op1 = vfs.canMoveNode('/file1.txt', '/locked-dir/', 'group2')!
+        expect(op1.has('L2_VFS_LOCKED')).toBe(true)
+        expect(op1.meta.lockPending).toBe(true)
+        expect(op1.meta.lockedDir).toBe('dest')
+
+        const op2 = vfs.canMoveNode('/locked-dir/file2.txt', '/folder2', 'group2')!
+        expect(op2.has('L2_VFS_LOCKED')).toBe(true)
+        expect(op2.meta.lockPending).toBe(true)
+        expect(op2.meta.lockedDir).toBe('source')
 
     })
 
@@ -365,7 +394,22 @@ describe('Virtual Filesystem', () => {
                         lock: null,
                     }
                 }
-            }
+            },
+            'locked-dir': {
+                type: 'DIR',
+                size: 1400,
+                address: 10,
+                lock: null,
+                perms: {},
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                        lock: 'pending'
+                    }
+                }
+            },
         }
 
         // Delete root directory
@@ -388,6 +432,53 @@ describe('Virtual Filesystem', () => {
 
         // Delete folder with children the user doesn't have write access to
         expect(vfs.canDeleteNode('/folder1', 'group2')!.has('L2_VFS_NO_PERM_NESTED')).toBe(true)
+
+        // Respect file locks
+        expect(vfs.canDeleteNode('/locked-dir/file2.txt', 'group2')!.has('L2_VFS_LOCKED')).toBe(true)
+        expect(vfs.canDeleteNode('/locked-dir',           'group2')!.has('L2_VFS_LOCKED')).toBe(true)
+
+    })
+
+    test('VFS.canManageNode', () => {
+
+        vfs.tree.perms = { group1: 1, group2: 4, group3: 0 }
+        vfs.tree.children = {
+            'file1.txt': {
+                type: 'FILE',
+                size: 1400,
+                address: 10,
+                lock: null,
+            },
+            'folder1': {
+                type: 'DIR',
+                size: 0,
+                address: 20,
+                perms: { group1: 3, group3: 3 },
+                lock: null,
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                        lock: null,
+                    }
+                }
+            },
+        }
+
+        // Manage root directory
+        expect(vfs.canManageNode('/', 'group1')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canManageNode('/', 'group2')).toBe(undefined)
+
+        // Manage direct children of a level-3 directory
+        expect(vfs.canManageNode('/folder1', 'group1')).toBe(undefined)
+        expect(vfs.canManageNode('/folder1/file2.txt', 'group2')!.has('L2_VFS_BAD_PATH')).toBe(true) // Can't manage files, only directories
+
+        expect(vfs.canManageNode('/folder1', 'group2')).toBe(undefined)
+
+        // Manage directory while upper parent denies access
+        expect(vfs.canManageNode('/folder1', 'group3')!.has('L2_VFS_NO_PERM')).toBe(true)
+        expect(vfs.canManageNode('/folder1/file2.txt', 'group3')!.has('L2_VFS_NO_PERM')).toBe(true)
 
 
     })
