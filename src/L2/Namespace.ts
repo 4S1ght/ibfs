@@ -21,35 +21,32 @@ export interface TNSInit extends TFSInit {
 
 // Base options --------------------------------------------------------------------------------------------------------
 
-interface BaseReadOptions {
+interface TBaseOpenOptions {
+    /** How many times to retry opening the file if it fails due to a pending lock elsewhere. @default 3 */ 
+    retry?: number
+    /** How many milliseconds to wait between retries. @default 300 */
+    retryEvery?: number
+}
+
+interface TBaseReadOptions {
     /** Whether to perform data integrity checks during reads. */ integrity?: boolean
 }
 
-export interface TNSOpenOptions extends Omit<TFSOpenFile, 'fileAddress'> {
-    /** Whether to create the file if it does not exist. */ create?: boolean
-}
-
-// export interface TNSReadOptions extends BaseReadOptions {
-//     /** Offset from start of the file to begin reading from. */ offset?: number
-//     /** Number of bytes to read from the offset.             */ length: number
-// }
-
-export interface TNSReadFileOptions       extends BaseReadOptions              {}
-export interface TNSOpenReadStreamOptions extends BaseReadOptions, TFRSOptions {}
-
-export interface TNSWriteFileOptions {
-    /** 
-     * Whether to create the file if it does not exist.
-     * @default true
-     */ 
+export interface TNSOpenOptions extends TBaseOpenOptions, Omit<TFSOpenFile, 'fileAddress'> {
+    /** Whether to create the file if it does not exist. */ 
     create?: boolean
 }
 
-export interface TNSOpenWriteStreamOptions extends TFWSOptions, Pick<TFSOpenFile, 'append' | 'truncate'> {
-    /** 
-     * Whether to create the file if it does not exist.
-     * @default true
-     */ 
+export interface TNSReadFileOptions       extends TBaseOpenOptions, TBaseReadOptions              {}
+export interface TNSOpenReadStreamOptions extends TBaseOpenOptions, TBaseReadOptions, TFRSOptions {}
+
+export interface TNSWriteFileOptions extends TBaseOpenOptions {
+    /**  Whether to create the file if it does not exist. @default true */ 
+    create?: boolean
+}
+
+export interface TNSOpenWriteStreamOptions extends TBaseOpenOptions, TFWSOptions, Pick<TFSOpenFile, 'append' | 'truncate'> {
+    /**  Whether to create the file if it does not exist. @default true */ 
     create?: boolean
 }
 
@@ -128,7 +125,7 @@ export default class Namespace {
     // IO methods ------------------------------------------------------------------------------------------------------
 
     /**
-     * Opens the file on a specific `path` file and returns its handle. If the file is being used by another user that
+     * Opens the file on a specific `path` and returns its handle. If the file is being used by another user in a way that
      * conflicts with the action of opening a new handle, the call will fail and return an error. The same file can be
      * open multiple times by different users in read-only mode, but only by a single user in write mode which requires
      * absolute exclusive access.
@@ -142,82 +139,101 @@ export default class Namespace {
      * @param options.integrity Whether to perform data integrity checks.
      * @returns `[error, null] | [null, handle]`
      */
-    public async open(path: string, group: string, options: TNSOpenOptions): T.XEavA<FileHandle, 'L2_NS_OPEN_FILE' | 'L2_NS_NO_PERM' | 'L2_NS_LOCKED'> {
+    public async open(path: string, group: string, options: TNSOpenOptions): T.XEavA<FileHandle, 'L2_NS_OPEN_FILE' | 'L2_NS_NO_PERM' | 'L2_NS_LOCKED', { lockPending?: true }> {
         try {
 
-            const accessError = options.mode === 'r'
-                ? this.vfs.canReadNode(path, group)
-                : this.vfs.canWriteNode(path, group)
+            const maxRetries = options.retry || 3
+            const retryEvery = options.retryEvery || 300
 
-            // File creation ---------------------------------------------
+            const open = async (count: number = 0): Promise<ReturnType<typeof this.open>> => {
 
-            if (accessError) {
-                if (accessError.code === 'L2_VFS_LOCKED') return IBFSError.eav('L2_NS_LOCKED', null, accessError, { path, group, options })
-                if (accessError.code === 'L2_VFS_BAD_PATH' && Object.hasOwn(accessError.meta, 'missingTarget') && options.create && options.mode !== 'r') {
+                const accessError = options.mode === 'r'
+                    ? this.vfs.canReadNode(path, group)
+                    : this.vfs.canWriteNode(path, group)
 
-                    const cantMake = this.vfs.canMakeNode(path, group)
-                    if (cantMake) return IBFSError.eav('L2_NS_OPEN_FILE', null, cantMake, { path, group, options })
-                    
-                    const [createError, fileHandle] = await this.createEmptyNode(path, group, 'FILE')
-                    if (createError) return IBFSError.eav('L2_NS_OPEN_FILE', null, createError, { path, group, options })
-                    
-                    const [resolveError, fileNode] = this.vfs.resolve(path)
-                    if (resolveError) {
-                        await fileHandle.close()
-                        return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError, { path, group, options })
+                // File creation ---------------------------------------------
+
+                if (accessError) {
+
+                    if (accessError.code === 'L2_VFS_LOCKED') {
+                        // Retry X times if opening in read mode and file lock is pending.
+                        if (options.mode === 'r' && accessError.meta.lockPending && count < maxRetries) {
+                            await new Promise(resolve => setTimeout(resolve, retryEvery))
+                            return await open(count + 1)
+                        }
+                        return IBFSError.eav('L2_NS_LOCKED', null, accessError, { lockPending: true })
                     }
 
-                    fileNode.lock = new WeakRef(fileHandle)
-                    fileHandle.on('close', () => fileNode.lock = null)
+                    if (accessError.code === 'L2_VFS_BAD_PATH' && Object.hasOwn(accessError.meta, 'missingTarget') && options.create && options.mode !== 'r') {
 
-                    const proxy = this.createHandleProxy(fileHandle)
-                    return [null, proxy]
+                        const cantMake = this.vfs.canMakeNode(path, group)
+                        if (cantMake) return IBFSError.eav('L2_NS_OPEN_FILE', null, cantMake)
+                        
+                        const [createError, fileHandle] = await this.createEmptyNode(path, group, 'FILE')
+                        if (createError) return IBFSError.eav('L2_NS_OPEN_FILE', null, createError)
+                        
+                        const [resolveError, fileNode] = this.vfs.resolve(path)
+                        if (resolveError) {
+                            await fileHandle.close()
+                            return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError)
+                        }
+
+                        fileNode.lock = new WeakRef(fileHandle)
+                        fileHandle.on('close', () => fileNode.lock = null)
+
+                        const proxy = this.createHandleProxy(fileHandle)
+                        return [null, proxy]
+
+                    }
+                    else return IBFSError.eav('L2_NS_OPEN_FILE', null, accessError)
 
                 }
-                else return IBFSError.eav('L2_NS_OPEN_FILE', null, accessError, { path, group, options })
-            }
 
-            // -----------------------------------------------------------
+                // -----------------------------------------------------------
 
-            const [resolveError, vfsNode] = this.vfs.resolve(path)
-            if (resolveError) return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError, { path, group, options })
+                const [resolveError, vfsNode] = this.vfs.resolve(path)
+                if (resolveError) return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError)
 
-            const handle = vfsNode.lock && vfsNode.lock !== 'pending' && vfsNode.lock.deref()
+                const handle = vfsNode.lock && vfsNode.lock !== 'pending' && vfsNode.lock.deref()
 
-            // No existing handle, resource is free, open straight away and lock it.
-            if (!handle) {
-
-                const [openError, handle] = await this.fs.open({ fileAddress: vfsNode.address, ...options })
-                if (openError) return IBFSError.eav('L2_NS_OPEN_FILE', null, openError, { path, group, options })
-
-                vfsNode.lock = new WeakRef(handle)
-                handle.on('close', () => vfsNode.lock = null)
-
-                const proxy = this.createHandleProxy(handle)
-                return [null, proxy]
-
-            }
-            // The resource is locked by another user.
-            else {
-
-                // Reuse/share a read-only handle if one exists (done internally)
-                if (options.mode === 'r' && handle.mode === 'r') {
+                // No existing handle, resource is free, open straight away and lock it.
+                if (!handle) {
 
                     const [openError, handle] = await this.fs.open({ fileAddress: vfsNode.address, ...options })
-                    if (openError) return IBFSError.eav('L2_NS_OPEN_FILE', null, openError, { path, group, options })
+                    if (openError) return IBFSError.eav('L2_NS_OPEN_FILE', null, openError)
+
+                    vfsNode.lock = new WeakRef(handle)
+                    handle.on('close', () => vfsNode.lock = null)
 
                     const proxy = this.createHandleProxy(handle)
                     return [null, proxy]
 
                 }
-                // Return an error if the file is locked by another user in write mode.
-                else return IBFSError.eav('L2_NS_LOCKED', null, null, { path, group, options })
+                // The resource is locked by another user.
+                else {
+
+                    // Reuse/share a read-only handle if one exists (done internally)
+                    if (options.mode === 'r' && handle.mode === 'r') {
+
+                        const [openError, handle] = await this.fs.open({ fileAddress: vfsNode.address, ...options })
+                        if (openError) return IBFSError.eav('L2_NS_OPEN_FILE', null, openError)
+
+                        const proxy = this.createHandleProxy(handle)
+                        return [null, proxy]
+
+                    }
+                    // Return an error if the file is locked by another user in write mode.
+                    else return IBFSError.eav('L2_NS_LOCKED', null, null)
+
+                }
 
             }
+
+            return await open()
             
         } 
         catch (error) {
-            return IBFSError.eav('L2_NS_OPEN_FILE', null, error as Error, { path, group, options })
+            return IBFSError.eav('L2_NS_OPEN_FILE', null, error as Error)
         }
     }
 

@@ -163,7 +163,7 @@ export default class VFS {
      * @param group Group that is creating the node.
      * @returns `undefined` if the node can be created, or an `IBFSError` if not.
      */
-    public canMakeNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_CAN_MAKE_NODE' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: boolean }> {
+    public canMakeNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_CAN_MAKE_NODE' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: true }> {
         try {
         
             let current             = this.tree
@@ -217,7 +217,7 @@ export default class VFS {
      * @param group Group that is reading the node.
      * @returns `undefined` if the node can be read, or an `IBFSError` if not.
      */
-    public canReadNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_READ_NODE' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: boolean }> {
+    public canReadNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_READ_NODE' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: true }> {
         try {
             
             let current             = this.tree
@@ -273,7 +273,7 @@ export default class VFS {
      * @param group Group that is writing the node.
      * @returns `undefined` if the node can be written, or an `IBFSError` if not.
      */
-    public canWriteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_WRITE_NODE' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: boolean, missingTarget?: boolean }> {
+    public canWriteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_WRITE_NODE' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: true, missingTarget?: boolean }> {
         try {
         
             let current             = this.tree
@@ -341,7 +341,7 @@ export default class VFS {
      * result  -> /path-to/my/newFile.txt
      * ```
      */
-    public canRenameNode(path: string, newName: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_RENAME_NODE' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: boolean }> {
+    public canRenameNode(path: string, newName: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_RENAME_NODE' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: true }> {
         try {
 
             let current             = this.tree
@@ -404,7 +404,7 @@ export default class VFS {
      * result    -> /new/path/file.txt
      * ```
      */
-    public canMoveNode(path: string, newParent: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MOVE_NODE' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: boolean, lockedDir?: 'source' | 'dest' }> {
+    public canMoveNode(path: string, newParent: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MOVE_NODE' | 'L2_VFS_ALREADY_EXISTS' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: true, lockedDir?: 'source' | 'dest' }> {
         try {
 
             let current = this.tree
