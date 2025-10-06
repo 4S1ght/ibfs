@@ -487,7 +487,7 @@ export default class VFS {
      * @param group The group issuing the action.
      * @returns `undefined` if the node can be deleted, or an `IBFSError` if not.
      */
-    public canDeleteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE' | 'L2_VFS_NO_PERM_NESTED'> {
+    public canDeleteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE' | 'L2_VFS_NO_PERM_NESTED' | 'L2_VFS_LOCKED', { path: string, group: string, deniedChild?: string }> {
         try {
 
             let current             = this.tree
@@ -511,36 +511,65 @@ export default class VFS {
 
             }
 
+            // console.log(current)
+
             // After loop is finished, check if direct parent has write perms:
             if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
                 
             const newCurrent = current.children[dest]
             if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" doesn't exist.`, null, { path, group })
 
+            // console.log(newCurrent)
+
+            if (newCurrent.lock && (newCurrent.lock === 'pending' || newCurrent.lock.deref())) 
+                return new IBFSError('L2_VFS_LOCKED', `Can not delete this item because it is currently accessed elsewhere.`, null, { path, group })
+
             // Perform extra nested checks if the deleted item is a directory.
             // Deleting a directory requires write perms to every subdirectory
             // and file recursively to avoid any partial operations.
-            if (newCurrent.type === 'DIR') {
+            if (newCurrent.type === 'DIR') { 
+
+                // console.log('scanning...')
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
 
                 let deniedChild: string | null = null
+                let metPresentLock = false
 
                 const scanChildPerms = (dir: TDirectory, pathChunks: string[] = []) => {
                     for (const entry in dir.children) {
                         if (Object.prototype.hasOwnProperty.call(dir.children, entry)) {
+
+                            if (deniedChild) break
                             
                             const child = dir.children[entry]!
-                            if (child.type !== 'DIR') continue
 
-                            perm.progress(child.perms[group])
-                            if (!perm.canWrite) {
-                                if (!deniedChild) deniedChild = pathChunks.join('/') 
-                                break
+                            if (child.type === 'FILE') {
+                                if (child.lock && (child.lock === 'pending' || child.lock.deref())) {
+                                    if (!deniedChild) deniedChild = pathChunks.join('/')
+                                    metPresentLock = true
+                                    break
+                                }
                             }
 
-                            scanChildPerms(child, [...pathChunks, entry])
+                            if (child.type === 'DIR') {
+
+                                perm.progress(child.perms[group])
+                                if (!perm.canWrite) {
+                                    if (!deniedChild) deniedChild = pathChunks.join('/') 
+                                    break
+                                }
+
+                                if (child.lock && (child.lock === 'pending' || child.lock.deref())) {
+                                    if (!deniedChild) deniedChild = pathChunks.join('/')
+                                    metPresentLock = true
+                                    break
+                                }
+
+                                scanChildPerms(child, [...pathChunks, entry])
+
+                            }
 
                         }
                     }
@@ -548,8 +577,10 @@ export default class VFS {
 
                 scanChildPerms(newCurrent, [...parts, dest])
 
-                if (deniedChild) return new IBFSError('L2_VFS_NO_PERM_NESTED', null, null, { path: deniedChild, group })
-
+                if (deniedChild) {
+                    if (metPresentLock) return new IBFSError('L2_VFS_LOCKED', 'Can not delete the directory, at least one of its children is in use elsewhere.', null, { path, group, deniedChild })
+                    else                return new IBFSError('L2_VFS_NO_PERM_NESTED', null, null, { path: deniedChild, group })
+                }
             }
 
             return undefined // Allow access

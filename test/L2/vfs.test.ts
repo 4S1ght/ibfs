@@ -439,7 +439,22 @@ describe('Virtual Filesystem', () => {
                         lock: null,
                     }
                 }
-            }
+            },
+            'locked-dir': {
+                type: 'DIR',
+                size: 1400,
+                address: 10,
+                lock: null,
+                perms: {},
+                children: {
+                    'file2.txt': {
+                        type: 'FILE',
+                        size: 5000,
+                        address: 30,
+                        lock: 'pending'
+                    }
+                }
+            },
         }
 
         // Delete root directory
@@ -463,6 +478,9 @@ describe('Virtual Filesystem', () => {
         // Delete folder with children the user doesn't have write access to
         expect(vfs.canDeleteNode('/folder1', 'group2')!.has('L2_VFS_NO_PERM_NESTED')).toBe(true)
 
+        // Respect file locks
+        expect(vfs.canDeleteNode('/locked-dir/file2.txt', 'group2')!.has('L2_VFS_LOCKED')).toBe(true)
+        expect(vfs.canDeleteNode('/locked-dir',           'group2')!.has('L2_VFS_LOCKED')).toBe(true)
 
     })
 
