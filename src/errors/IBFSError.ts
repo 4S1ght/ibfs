@@ -271,6 +271,11 @@ const errorCodes = {
     L2_NS_OPEN_WRITE_STREAM:        'Failed to open a file write stream.',
 
     L2_NS_RENAME:                   'Could not rename the node',
+    L2_NS_BAD_NAME:                 'The target name is invalid or malformed. Make sure it does not contain path delimeters.',
+
+    L2_NS_MOVE:                     'Failed to move the node.',
+    
+    L2_NS_DELETE:                   'Failed to delete the node.',
 
     L2_FH_CLOSED:                   'The proxy to this handle has already been closed and can not be used.',
     L2_FH_CLOSING:                  'The proxy to this handle is currently being closed and any further requests must wait until the close is complete.',

@@ -28,7 +28,7 @@ describe('Namespace', () => {
         const name = 'l2_open'
 
         const ns        = await useEmptyNamespace(name)
-        const handle    = await uniformAsync(ns.open('/', '000000', { mode: 'r' }))
+        const handle    = await uniformAsync(ns.open('/', '000000'))
         const rootDir   = await uniformAsync(handle.readAsDir())
 
         expect(rootDir).toStrictEqual({
@@ -44,8 +44,8 @@ describe('Namespace', () => {
         const name = 'l2_open_caching'
 
         const ns = await useEmptyNamespace(name)
-        const h1 = await uniformAsync(ns.open('/', '000000', { mode: 'r' }))
-        const h2 = await uniformAsync(ns.open('/', '000000', { mode: 'r' }))
+        const h1 = await uniformAsync(ns.open('/', '000000'))
+        const h2 = await uniformAsync(ns.open('/', '000000'))
         
         const [h3e, h3] = await ns.open('/', '000000', { mode: 'w' })
         expect(h3e).toBeInstanceOf(IBFSError)

@@ -32,9 +32,11 @@ interface TBaseReadOptions {
     /** Whether to perform data integrity checks during reads. */ integrity?: boolean
 }
 
-export interface TNSOpenOptions extends TBaseOpenOptions, Omit<TFSOpenFile, 'fileAddress'> {
-    /** Whether to create the file if it does not exist. */ 
+export interface TNSOpenOptions extends TBaseOpenOptions, Omit<TFSOpenFile, 'fileAddress' | 'mode'> {
+    /** Whether to create the file if it does not exist. */
     create?: boolean
+    /** Mode in which to open the file. @default 'r' */ 
+    mode?: 'r' | 'rw' | 'w'
 }
 
 export interface TNSReadFileOptions       extends TBaseOpenOptions, TBaseReadOptions              {}
@@ -132,22 +134,25 @@ export default class Namespace {
      * @param path Path to the resource in the filesystem.
      * @param group The group that is requesting access to the resource - used to check access permissions.
      * @param options Open options - Append, truncate, etc.
-     * @param options.mode The mode in which the file is being opened.
-     * @param options.append Whether the file should be opened in append mode - Will force every write to the end of the file.
-     * @param options.create Whether the file should be created if it does not exist.
-     * @param options.truncate Whether the file should be truncated to 0 bytes before opening it.
-     * @param options.integrity Whether to perform data integrity checks.
+     * @param options.mode The mode in which the file is being opened. @default 'r'
+     * @param options.append Whether the file should be opened in append mode - Will force every write to the end of the file. @default false
+     * @param options.create Whether the file should be created if it does not exist. @default true // Only applies in write-enabled modes
+     * @param options.truncate Whether the file should be truncated to 0 bytes before opening it. @default false // Only applies in write-enabled modes
+     * @param options.integrity Whether to perform data integrity checks. @default true // Only applies in read-enabled modes
+     * @param options.retry How many times to retry opening the file if it fails due to a pending lock from another user. Very rare this will be needed. @default 3
+     * @param options.retryEvery How many milliseconds to wait between retries. @default 100
      * @returns `[error, null] | [null, handle]`
      */
-    public async open(path: string, group: string, options: TNSOpenOptions): T.XEavA<FileHandle, 'L2_NS_OPEN_FILE' | 'L2_NS_NO_PERM' | 'L2_NS_LOCKED', { lockPending?: true }> {
+    public async open(path: string, group: string, options: TNSOpenOptions = {}): T.XEavA<FileHandle, 'L2_NS_OPEN_FILE' | 'L2_NS_NO_PERM' | 'L2_NS_LOCKED', { lockPending?: true }> {
         try {
 
             const maxRetries = options.retry || 3
-            const retryEvery = options.retryEvery || 300
+            const retryEvery = options.retryEvery || 100
+            const mode = options.mode || 'r'
 
             const open = async (count: number = 0): Promise<ReturnType<typeof this.open>> => {
 
-                const accessError = options.mode === 'r'
+                const accessError = mode === 'r'
                     ? this.vfs.canReadNode(path, group)
                     : this.vfs.canWriteNode(path, group)
 
@@ -157,14 +162,14 @@ export default class Namespace {
 
                     if (accessError.code === 'L2_VFS_LOCKED') {
                         // Retry X times if opening in read mode and file lock is pending.
-                        if (options.mode === 'r' && accessError.meta.lockPending && count < maxRetries) {
+                        if (mode === 'r' && accessError.meta.lockPending && count < maxRetries) {
                             await new Promise(resolve => setTimeout(resolve, retryEvery))
                             return await open(count + 1)
                         }
                         return IBFSError.eav('L2_NS_LOCKED', null, accessError, { lockPending: true })
                     }
 
-                    if (accessError.code === 'L2_VFS_BAD_PATH' && Object.hasOwn(accessError.meta, 'missingTarget') && options.create && options.mode !== 'r') {
+                    if (accessError.code === 'L2_VFS_BAD_PATH' && Object.hasOwn(accessError.meta, 'missingTarget') && options.create && mode !== 'r') {
 
                         const cantMake = this.vfs.canMakeNode(path, group)
                         if (cantMake) return IBFSError.eav('L2_NS_OPEN_FILE', null, cantMake)
@@ -195,11 +200,12 @@ export default class Namespace {
                 if (resolveError) return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError)
 
                 const handle = vfsNode.lock && vfsNode.lock !== 'pending' && vfsNode.lock.deref()
+                const fileAddress = vfsNode.address
 
                 // No existing handle, resource is free, open straight away and lock it.
                 if (!handle) {
 
-                    const [openError, handle] = await this.fs.open({ fileAddress: vfsNode.address, ...options })
+                    const [openError, handle] = await this.fs.open({ fileAddress, mode, ...options })
                     if (openError) return IBFSError.eav('L2_NS_OPEN_FILE', null, openError)
 
                     vfsNode.lock = new WeakRef(handle)
@@ -213,9 +219,9 @@ export default class Namespace {
                 else {
 
                     // Reuse/share a read-only handle if one exists (done internally)
-                    if (options.mode === 'r' && handle.mode === 'r') {
+                    if (mode === 'r' && handle.mode === 'r') {
 
-                        const [openError, handle] = await this.fs.open({ fileAddress: vfsNode.address, ...options })
+                        const [openError, handle] = await this.fs.open({ fileAddress, mode, ...options })
                         if (openError) return IBFSError.eav('L2_NS_OPEN_FILE', null, openError)
 
                         const proxy = this.createHandleProxy(handle)
@@ -236,48 +242,6 @@ export default class Namespace {
             return IBFSError.eav('L2_NS_OPEN_FILE', null, error as Error)
         }
     }
-
-    /**
-     * Reads data from a specific place inside a file based on the `offset` and `length` parameters.  
-     * **NOTE: Access limitations & locking apply. See `Namespace.open()` method.**
-     * @param path Path to the resource in the filesystem.
-     * @param group The group that is requesting access to the resource - used to check access permissions.
-     * @param options Open options.
-     * @param options.offset The offset from the start of the file.
-     * @param options.length The number of bytes to read.
-     * @param options.integrity Whether to perform data integrity checks.
-     * @returns `[error, null] | [null, Buffer]`
-     */
-    // public async read(path: string, group: string, options: TNSReadOptions): T.XEavA<Buffer, 'L2_NS_READ'> {
-
-    //     let fh: FileHandle | undefined = undefined
-
-    //     try {
-
-    //         const [openError, handle] = await this.open(path, group, { ...options, mode: 'r' })
-    //         if (openError) return IBFSError.eav('L2_NS_READ', null, openError, { path, group, options })
-    //         fh = handle
-
-    //         const [readError, data] = await handle.read(options.offset || 0, options.length, options.integrity)
-    //         if (readError) {
-    //             await fh.close()
-    //             return IBFSError.eav('L2_NS_READ', null, readError, { path, group, options })
-    //         }
-
-    //         const closeError = await handle.close()
-    //         if (closeError) {
-    //             await fh.close()
-    //             return IBFSError.eav('L2_NS_READ', null, closeError, { path, group, options })
-    //         }
-
-    //         return [null, data]
-
-    //     } 
-    //     catch (error) {
-    //         if (fh) await fh.close()
-    //         return IBFSError.eav('L2_NS_READ', null, error as Error, { path, group, options })    
-    //     }
-    // }
 
     /**
      * Reads the entire contents of a file.  
@@ -452,14 +416,25 @@ export default class Namespace {
         }
     }
 
-
-    public async rename(path: string, newName: string, group: string): T.XEavSA<'L2_NS_RENAME'> {
+    /**
+     * Renames a file or directory. 
+     * Unlike native `fs.rename()`, this method only takes a single path to the resource and a singular
+     * new name. It can not be used to move resources around the filesystem.
+     * **NOTE: Access limitations & locking apply. See `Namespace.open()` method.**
+     * @param path Path to the resource in the filesystem.
+     * @param newName The new name of the file/directory.
+     * @param group The group that is requesting access to the resource - used to check access permissions.
+     * @returns `error | undefined`
+     */
+    public async rename(path: string, newName: string, group: string): T.XEavSA<'L2_NS_RENAME' | 'L2_NS_BAD_NAME'> {
 
         const dirname = np.dirname(path)
         const basename = np.basename(path)
 
         let fh: FileHandle | undefined = undefined
         let pd: TDirectory
+
+        if (newName.includes('/')) return new IBFSError('L2_NS_BAD_NAME', null, null, { path, newName, group })
 
         const abort = async (cause: Error) => {
             // close handle
@@ -503,6 +478,24 @@ export default class Namespace {
         } 
         catch (error) {
             return new IBFSError('L2_NS_RENAME', null, error as Error, { path, newName, group })
+        }
+    }
+
+    public async move(path: string, newParent: string, group: string): T.XEavSA<'L2_NS_MOVE'> {
+        try {
+            
+        } 
+        catch (error) {
+            return new IBFSError('L2_NS_MOVE', null, error as Error, { path, group })    
+        }
+    }
+
+    public async delete(path: string, group: string): T.XEavSA<'L2_NS_DELETE'> {
+        try {
+            
+        }
+        catch (error) {
+            return new IBFSError('L2_NS_DELETE', null, error as Error, { path, group })    
         }
     }
 
