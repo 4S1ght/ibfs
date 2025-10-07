@@ -1,3 +1,10 @@
+// TODO: Add an operation-level queue similar to the block I/O queue, where each operation must wait its turn to prevent
+// Subtle race conditions when an operation has to lock more than a single file at a time.
+//
+// Also - Make the queue skippable, so that the "open" method can use the queue by default, but other higher-level
+// operations can skip the queue when they need to open multiple files at once, effectively grouping multiple "opens"
+// as a single queue operation.
+
 // Imports =============================================================================================================
 
 import type * as T from '../../types.js'
@@ -161,7 +168,9 @@ export default class Namespace {
                 if (accessError) {
 
                     if (accessError.code === 'L2_VFS_LOCKED') {
-                        // Retry X times if opening in read mode and file lock is pending.
+                        // Retry X times if opening in read mode and file lock is pending,
+                        // as it may be being open elsewhere in read-only mode and it's worth
+                        // waiting for the lock to clear or become a handle reference to be reused.
                         if (mode === 'r' && accessError.meta.lockPending && count < maxRetries) {
                             await new Promise(resolve => setTimeout(resolve, retryEvery))
                             return await open(count + 1)
@@ -205,8 +214,13 @@ export default class Namespace {
                 // No existing handle, resource is free, open straight away and lock it.
                 if (!handle) {
 
+                    vfsNode.lock = 'pending'
+
                     const [openError, handle] = await this.fs.open({ fileAddress, mode, ...options })
-                    if (openError) return IBFSError.eav('L2_NS_OPEN_FILE', null, openError)
+                    if (openError) {
+                        vfsNode.lock = null
+                        return IBFSError.eav('L2_NS_OPEN_FILE', null, openError)
+                    }
 
                     vfsNode.lock = new WeakRef(handle)
                     handle.on('close', () => vfsNode.lock = null)
@@ -437,7 +451,7 @@ export default class Namespace {
         if (newName.includes('/')) return new IBFSError('L2_NS_BAD_NAME', null, null, { path, newName, group })
 
         const abort = async (cause: Error) => {
-            // close handle
+            // Close handle
             if (fh) await fh.close()
             // Revert VFS changes
             if (pd && pd.children[newName]) {
@@ -482,8 +496,77 @@ export default class Namespace {
     }
 
     public async move(path: string, newParent: string, group: string): T.XEavSA<'L2_NS_MOVE'> {
+
+
+        const dirname = np.dirname(path)
+        const basename = np.basename(path)
+
+        let sfh: FileHandle | undefined = undefined // Source directory
+        let dfh: FileHandle | undefined = undefined // Destination directory
+        let pd: TDirectory                          // Parent directory
+        let dd: TDirectory                          // Destination directory
+
+        const abort = async (cause: Error) => {
+            // Close handles
+            if (sfh) await sfh.close()
+            if (dfh) await dfh.close()
+            // Revert VFS changes
+            if (pd) {
+                pd.children[basename] = dd.children[basename]!
+                delete dd.children[basename]
+            }
+            // todo
+            return new IBFSError('L2_NS_MOVE', null, cause, { path, newParent, group })
+        }
+
         try {
-            
+
+            const cantMove = this.vfs.canMoveNode(path, newParent, group)
+            if (cantMove) return await abort(cantMove)
+
+            const [resolveError1, parentDir] = this.vfs.resolveParent(path)
+            const [resolveError2, destDir]   = this.vfs.resolve(newParent)
+            if (resolveError1 || resolveError2) return await abort(resolveError1! || resolveError2!)
+            pd = parentDir as TDirectory
+            dd = destDir as TDirectory
+
+            const [o1, o2] = await Promise.all([
+                this.open(dirname, group, { mode: 'rw' }),
+                this.open(newParent, group, { mode: 'rw' })
+            ])
+
+            const [openError1, parentHandle] = o1
+            if (openError1) return await abort(openError1)
+            sfh = parentHandle
+
+            const [openError2, destHandle] = o2
+            if (openError2) return await abort(openError2)
+            dfh = destHandle
+
+            const [readError1, sourceDirData]   = await parentHandle.readAsDir()
+            const [readError2, destDirData]     = await destHandle.readAsDir()
+            if (readError1 || readError2) return await abort(readError1! || readError2!)
+
+            destDirData.children[basename] = sourceDirData.children[basename]!
+            delete sourceDirData.children[basename]
+
+            const writeError1 = await parentHandle.writeAsDir(sourceDirData)
+            if (writeError1) return await abort(writeError1)
+
+            const writeError2 = await destHandle.writeAsDir(destDirData)
+            if (writeError2) {
+                // Attempt to revert on-disk changes from the parent.
+                sourceDirData.children[basename] = destDirData.children[basename]!
+                await parentHandle.writeAsDir(sourceDirData)
+                return await abort(writeError2)
+            }
+
+            dd.children[basename] = pd.children[basename]!
+            delete pd.children[basename]
+
+            const [closeError1, closeError2] = await Promise.all([ sfh.close(), dfh.close() ])
+            if (closeError1 || closeError2) return await abort(closeError1! || closeError2!)
+        
         } 
         catch (error) {
             return new IBFSError('L2_NS_MOVE', null, error as Error, { path, group })    

@@ -374,7 +374,7 @@ export default class FileHandle extends EventEmitter {
             const [wsError, ws] = await this.createWriteStream({ offset: 0 })
             if (wsError) return new IBFSError('L1_FH_DIR_WRITE', null, wsError)
 
-            ws.write(data)
+            ws.write(data, () => {}) // TODO: handle error callback
             ws.end()
             await streamFinish(ws)
             
