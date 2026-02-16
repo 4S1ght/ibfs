@@ -1,5 +1,5 @@
 // TODO: Add an operation-level queue similar to the block I/O queue, where each operation must wait its turn to prevent
-// Subtle race conditions when an operation has to lock more than a single file at a time.
+// subtle race conditions when an operation has to lock more than a single file at a time.
 //
 // Also - Make the queue skippable, so that the "open" method can use the queue by default, but other higher-level
 // operations can skip the queue when they need to open multiple files at once, effectively grouping multiple "opens"
@@ -32,7 +32,7 @@ interface TBaseOpenOptions {
     /** How many times to retry opening the file if it fails due to a pending lock elsewhere. @default 3 */ 
     retry?: number
     /** How many milliseconds to wait between retries. @default 300 */
-    retryEvery?: number
+    retryDelay?: number
 }
 
 interface TBaseReadOptions {
@@ -44,6 +44,11 @@ export interface TNSOpenOptions extends TBaseOpenOptions, Omit<TFSOpenFile, 'fil
     create?: boolean
     /** Mode in which to open the file. @default 'r' */ 
     mode?: 'r' | 'rw' | 'w'
+    /** 
+     * **Private API**  
+     * Used internally to track certain kinds of actions.
+     */ 
+    _actionID?: string
 }
 
 export interface TNSReadFileOptions       extends TBaseOpenOptions, TBaseReadOptions              {}
@@ -79,6 +84,7 @@ export default class Namespace {
         try {
             
             // Create filesystem -----------------------------------------
+
             const createError = await Filesystem.createEmptyFilesystem(options)
             if (createError) return new IBFSError('L2_NS_CREATE', null, createError, ssc(options, ['aesKey']))
 
@@ -147,14 +153,14 @@ export default class Namespace {
      * @param options.truncate Whether the file should be truncated to 0 bytes before opening it. @default false // Only applies in write-enabled modes
      * @param options.integrity Whether to perform data integrity checks. @default true // Only applies in read-enabled modes
      * @param options.retry How many times to retry opening the file if it fails due to a pending lock from another user. Very rare this will be needed. @default 3
-     * @param options.retryEvery How many milliseconds to wait between retries. @default 100
+     * @param options.retryDelay How many milliseconds to wait between retries. @default 100
      * @returns `[error, null] | [null, handle]`
      */
     public async open(path: string, group: string, options: TNSOpenOptions = {}): T.XEavA<FileHandle, 'L2_NS_OPEN_FILE' | 'L2_NS_NO_PERM' | 'L2_NS_LOCKED', { lockPending?: true }> {
         try {
 
             const maxRetries = options.retry || 3
-            const retryEvery = options.retryEvery || 100
+            const retryDelay = options.retryDelay || 100
             const mode = options.mode || 'r'
 
             const open = async (count: number = 0): Promise<ReturnType<typeof this.open>> => {
@@ -169,10 +175,10 @@ export default class Namespace {
 
                     if (accessError.code === 'L2_VFS_LOCKED') {
                         // Retry X times if opening in read mode and file lock is pending,
-                        // as it may be being open elsewhere in read-only mode and it's worth
-                        // waiting for the lock to clear or become a handle reference to be reused.
+                        // as it may be open elsewhere in read-only mode and it's worth waiting
+                        // for the lock to clear or become a handle reference to be reused.
                         if (mode === 'r' && accessError.meta.lockPending && count < maxRetries) {
-                            await new Promise(resolve => setTimeout(resolve, retryEvery))
+                            await new Promise(resolve => setTimeout(resolve, retryDelay))
                             return await open(count + 1)
                         }
                         return IBFSError.eav('L2_NS_LOCKED', null, accessError, { lockPending: true })
@@ -183,7 +189,7 @@ export default class Namespace {
                         const cantMake = this.vfs.canMakeNode(path, group)
                         if (cantMake) return IBFSError.eav('L2_NS_OPEN_FILE', null, cantMake)
                         
-                        const [createError, fileHandle] = await this.createEmptyNode(path, group, 'FILE')
+                        const [createError, fileHandle] = await this.createEmptyNode(path, group, 'FILE', true)
                         if (createError) return IBFSError.eav('L2_NS_OPEN_FILE', null, createError)
                         
                         const [resolveError, fileNode] = this.vfs.resolve(path)
@@ -208,7 +214,7 @@ export default class Namespace {
                 const [resolveError, vfsNode] = this.vfs.resolve(path)
                 if (resolveError) return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError)
 
-                const handle = vfsNode.lock && vfsNode.lock !== 'pending' && vfsNode.lock.deref()
+                const handle = vfsNode.lock && vfsNode.lock !== 'pending' && vfsNode.lock !== 'active' && vfsNode.lock.deref()
                 const fileAddress = vfsNode.address
 
                 // No existing handle, resource is free, open straight away and lock it.
@@ -497,7 +503,6 @@ export default class Namespace {
 
     public async move(path: string, newParent: string, group: string): T.XEavSA<'L2_NS_MOVE'> {
 
-
         const dirname = np.dirname(path)
         const basename = np.basename(path)
 
@@ -575,7 +580,14 @@ export default class Namespace {
 
     public async delete(path: string, group: string): T.XEavSA<'L2_NS_DELETE'> {
         try {
-            
+
+            const dirname = np.dirname(path)
+            const basename = np.basename(path)
+
+            let targetHandle: FileHandle | undefined = undefined // Target file/directory to delete
+            let parentHandle: FileHandle | undefined = undefined
+            let targetDir: TDirectory
+
         }
         catch (error) {
             return new IBFSError('L2_NS_DELETE', null, error as Error, { path, group })    

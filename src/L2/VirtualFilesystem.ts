@@ -9,20 +9,28 @@ import FileHandle from '../L1/file/FileHandle.js'
 
 // Types ===============================================================================================================
 
+// === LOCK TYPES ===
+
+// Handle     Active open file handle
+// "pending"  A temporary lock held by a user when they're opening a functioning handle.
+// "active"   A temporary lock placed on a directory during broader operations on it and its children,
+//            such as deleting the directory and all its contents.
+
 export interface TDirectory {
-    /** Type of the directory structure.              */ type:      'DIR'
-    /** Total size of the directory's contents.       */ size:      number
-    /** Physical address of the directory head block. */ address:   number
-    /** User permissions inside the directory         */ perms:     Record<string, TPermLevel>
-    /** Children files and subdirectories.            */ children:  Record<string, TNode>
-    /** The handle that's currently holding the lock. */ lock:      WeakRef<FileHandle> | 'pending' | null
+    /** Type of the directory structure.              */ type:     'DIR'
+    /** Total size of the directory's contents.       */ size:     number
+    /** Physical address of the directory head block. */ address:  number
+    /** User permissions inside the directory         */ perms:    Record<string, TPermLevel>
+    /** Children files and subdirectories.            */ children: Record<string, TNode>
+    /** The handle that's currently holding the lock. */ lock:     WeakRef<FileHandle> | 'pending' | 'active' | null
+    /** The ID of an action holding the lock.         */ actionID: number | null
 }
 
 export interface TFile {
-    /** Type of the file structure.                   */ type:      'FILE'
-    /** Total size of the file's contents.            */ size:      number
-    /** Physical address of the file head block.      */ address:   number
-    /** The handle that's currently holding the lock. */ lock:      WeakRef<FileHandle> | 'pending' | null
+    /** Type of the file structure.                   */ type:     'FILE'
+    /** Total size of the file's contents.            */ size:     number
+    /** Physical address of the file head block.      */ address:  number
+    /** The handle that's currently holding the lock. */ lock:     WeakRef<FileHandle> | 'pending' | null
 }
 
 export type TNode = TDirectory | TFile
@@ -60,7 +68,8 @@ export default class VFS {
             address,
             perms: {},
             children: {},
-            lock: null
+            lock: null,
+            actionID: null
         }
     }
 
@@ -108,7 +117,8 @@ export default class VFS {
         address: 0,
         perms: {},
         children: {},
-        lock: null
+        lock: null,
+        actionID: null
     }
 
     // Methods ---------------------------------------------------------------------------------------------------------
@@ -191,7 +201,8 @@ export default class VFS {
                 
             }
 
-            // After loop is finished, check if direct parent has write perms:
+            // After loop is finished, check if direct parent has write perms and is unlocked
+
             if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
                 
             const newCurrent = current.children[dest]
@@ -200,7 +211,7 @@ export default class VFS {
             const lock = current.lock
             if (lock) {
                 if (lock === 'pending') return new IBFSError('L2_VFS_LOCKED', `Can not create the item because its parent directory is being read/written to.`, null, { path, group, lockPending: true })
-                if (lock.deref())       return new IBFSError('L2_VFS_LOCKED', `Can not create the item because its parent directory is being read/written to..`, null, { path, group })
+                if (lock.deref())       return new IBFSError('L2_VFS_LOCKED', `Can not create the item because its parent directory is being read/written to.`, null, { path, group })
             }
 
             return undefined // Allow access
@@ -487,7 +498,7 @@ export default class VFS {
      * @param group The group issuing the action.
      * @returns `undefined` if the node can be deleted, or an `IBFSError` if not.
      */
-    public canDeleteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE' | 'L2_VFS_NO_PERM_NESTED' | 'L2_VFS_LOCKED', { path: string, group: string, deniedChild?: string }> {
+    public canDeleteNode(path: string, group: string, recursive?: boolean): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE' | 'L2_VFS_NO_PERM_NESTED' | 'L2_VFS_LOCKED', { path: string, group: string, deniedChild?: string }> {
         try {
 
             let current             = this.tree
@@ -511,25 +522,23 @@ export default class VFS {
 
             }
 
-            // console.log(current)
-
             // After loop is finished, check if direct parent has write perms:
             if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
                 
             const newCurrent = current.children[dest]
             if (!newCurrent) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" doesn't exist.`, null, { path, group })
 
-            // console.log(newCurrent)
 
             if (newCurrent.lock && (newCurrent.lock === 'pending' || newCurrent.lock.deref())) 
-                return new IBFSError('L2_VFS_LOCKED', `Can not delete this item because it is currently accessed elsewhere.`, null, { path, group })
+                return new IBFSError('L2_VFS_LOCKED', `Can not delete this item because it is currently being accessed elsewhere.`, null, { path, group })
 
             // Perform extra nested checks if the deleted item is a directory.
             // Deleting a directory requires write perms to every subdirectory
             // and file recursively to avoid any partial operations.
-            if (newCurrent.type === 'DIR') { 
-
-                // console.log('scanning...')
+            if (newCurrent.type === 'DIR') {
+                
+                if (Object.keys(newCurrent.children).length > 0 && recursive === false) 
+                    return new IBFSError('L2_VFS_NO_PERM_NESTED', `Can not non-recursively delete a non-empty directory.`, null, { path, group })
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
