@@ -14,6 +14,7 @@ import FileHandle                               from '../L1/file/FileHandle.js'
 import FileReadStream, { TFRSOptions }          from '../L1/file/FileReadStream.js'
 import FileWriteStream, { TFWSOptions }         from '../L1/file/FileWriteStream.js'
 import Filesystem, { TFSInit, TFSOpenFile }     from '../L1/Filesystem.js'
+import createRotaryID from '../misc/rotaryID.js'
 
 import ssc                                      from '../misc/safeShallowCopy.js'
 import VFS, { TDirectory, TNode }               from './VirtualFilesystem.js'
@@ -46,9 +47,9 @@ export interface TNSOpenOptions extends TBaseOpenOptions, Omit<TFSOpenFile, 'fil
     mode?: 'r' | 'rw' | 'w'
     /** 
      * **Private API**  
-     * Used internally to track certain kinds of actions.
+     * Used internally to track recursive actions.
      */ 
-    _actionID?: string
+    _rdID?: number
 }
 
 export interface TNSReadFileOptions       extends TBaseOpenOptions, TBaseReadOptions              {}
@@ -74,6 +75,8 @@ export default class Namespace {
 
     private declare fs: Filesystem
     private declare vfs: VFS
+
+    private rdg = createRotaryID(2**10)
 
     // Factory ---------------------------------------------------------------------------------------------------------
 
@@ -167,7 +170,7 @@ export default class Namespace {
 
                 const accessError = mode === 'r'
                     ? this.vfs.canReadNode(path, group)
-                    : this.vfs.canWriteNode(path, group)
+                    : this.vfs.canWriteNode(path, group, options._rdID)
 
                 // File creation ---------------------------------------------
 
@@ -214,7 +217,7 @@ export default class Namespace {
                 const [resolveError, vfsNode] = this.vfs.resolve(path)
                 if (resolveError) return IBFSError.eav('L2_NS_OPEN_FILE', null, resolveError)
 
-                const handle = vfsNode.lock && vfsNode.lock !== 'pending' && vfsNode.lock !== 'active' && vfsNode.lock.deref()
+                const handle = vfsNode.lock && vfsNode.lock !== 'pending' && vfsNode.lock.deref()
                 const fileAddress = vfsNode.address
 
                 // No existing handle, resource is free, open straight away and lock it.
@@ -578,15 +581,11 @@ export default class Namespace {
         }
     }
 
-    public async delete(path: string, group: string): T.XEavSA<'L2_NS_DELETE'> {
+    public async delete(path: string, group: string, recursive?: boolean): T.XEavSA<'L2_NS_DELETE'> {
         try {
 
-            const dirname = np.dirname(path)
-            const basename = np.basename(path)
-
-            let targetHandle: FileHandle | undefined = undefined // Target file/directory to delete
-            let parentHandle: FileHandle | undefined = undefined
-            let targetDir: TDirectory
+            // WIP
+            const cantDelete = this.vfs.canDeleteNode(path, group, recursive)
 
         }
         catch (error) {
@@ -601,8 +600,6 @@ export default class Namespace {
      * are allowed to be called by individual users. This is required because read-only handles are shared
      * across multiple users and without limiting, a single user could close the handle multiple times
      * causing it to close for other users that share it.
-     * 
-     * This function will likely evolve as new functionality is added to shared read-only handles.
      */
     private createHandleProxy(handle: FileHandle): FileHandle {
 
@@ -695,9 +692,12 @@ export default class Namespace {
 
             const [childOpenError, child] = await this.fs.open({ fileAddress: childAddress, mode: 'rw' })
 
-            return childOpenError
-                ? await abort(childOpenError, { path, group })
-                : [null, child]
+            if (childOpenError) {
+                parentNode.children[basename].lock = null
+                return await abort(childOpenError, { path, group })
+            }
+            
+            return [null, child]
 
         } 
         catch (error) {

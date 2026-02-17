@@ -22,8 +22,8 @@ export interface TDirectory {
     /** Physical address of the directory head block. */ address:  number
     /** User permissions inside the directory         */ perms:    Record<string, TPermLevel>
     /** Children files and subdirectories.            */ children: Record<string, TNode>
-    /** The handle that's currently holding the lock. */ lock:     WeakRef<FileHandle> | 'pending' | 'active' | null
-    /** The ID of an action holding the lock.         */ actionID: number | null
+    /** The handle that's currently holding the lock. */ lock:     WeakRef<FileHandle> | 'pending' | null
+    /** The ID of an action holding the lock.         */ rdID:     number | null
 }
 
 export interface TFile {
@@ -69,7 +69,7 @@ export default class VFS {
             perms: {},
             children: {},
             lock: null,
-            actionID: null
+            rdID: null
         }
     }
 
@@ -118,7 +118,7 @@ export default class VFS {
         perms: {},
         children: {},
         lock: null,
-        actionID: null
+        rdID: null
     }
 
     // Methods ---------------------------------------------------------------------------------------------------------
@@ -189,8 +189,9 @@ export default class VFS {
                 const last = i === parts.length - 1
                 const newCurrent = (current as TDirectory).children[part]
 
-                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
-                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,                                              null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`,                                          null, { path, group })
+                if (newCurrent.rdID)           return new IBFSError('L2_VFS_LOCKED',   `Entry "${part}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -210,8 +211,8 @@ export default class VFS {
 
             const lock = current.lock
             if (lock) {
-                if (lock === 'pending') return new IBFSError('L2_VFS_LOCKED', `Can not create the item because its parent directory is being read/written to.`, null, { path, group, lockPending: true })
-                if (lock.deref())       return new IBFSError('L2_VFS_LOCKED', `Can not create the item because its parent directory is being read/written to.`, null, { path, group })
+                if (lock === 'pending')    return new IBFSError('L2_VFS_LOCKED', `Can not create the item because its parent directory is being read/written to.`, null, { path, group, lockPending: true })
+                if (lock.deref())          return new IBFSError('L2_VFS_LOCKED', `Can not create the item because its parent directory is being read/written to.`, null, { path, group })
             }
 
             return undefined // Allow access
@@ -242,8 +243,9 @@ export default class VFS {
 
                 const newCurrent = (current as TDirectory).children[part]
 
-                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
-                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,                                              null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`,                                          null, { path, group })
+                if (newCurrent.rdID)           return new IBFSError('L2_VFS_LOCKED',   `Entry "${part}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -259,13 +261,14 @@ export default class VFS {
             // with files, but check read perms inside the target directory as well.
             if (newCurrent.type === 'DIR') {
                 perm.progress(newCurrent.perms[group])
-                if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                if (!perm.canRead)   return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                if (newCurrent.rdID) return new IBFSError('L2_VFS_LOCKED', `Entry "${dest}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
             }
 
             const lock = newCurrent.lock
+
             if (lock) {
-                // TODO: Read the "pending" lock state upstream and configure a retry within a second or two of the first read attempt
-                if (lock === 'pending') return new IBFSError('L2_VFS_LOCKED', `Can not read the item in the parent directory as it's currently in use.`, null, { path, group, lockPending: true })
+                if (lock === 'pending') return new IBFSError('L2_VFS_LOCKED', `Can not read the item as it's currently in use.`, null, { path, group, lockPending: true })
                 const ref = lock.deref()
                 if (ref && ref.mode !== 'r') return new IBFSError('L2_VFS_LOCKED', `Can not read the item in the parent directory as it's currently in use.`, null, { path, group })
             }
@@ -280,11 +283,18 @@ export default class VFS {
 
     /**
      * Checks if an existing node can be written to in the VFS.
-     * @param path Path to the node to be written to.
-     * @param group Group that is writing the node.
-     * @returns `undefined` if the node can be written, or an `IBFSError` if not.
+     * @param path 
+     * Path to the node to be written to.
+     * @param group 
+     * Group that is writing the node.
+     * @param rdID 
+     * A temporary ID given to a directory that's being recursively deleted.Used to bypass a lock that's applied earlier
+     * in the process of recursively deleting a directory and safeguarding the access to that directory to only the user
+     *  who issued the operation and knows the ID.
+     * @returns 
+     * `undefined` if the node can be written, or an `IBFSError` if not.
      */
-    public canWriteNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_WRITE_NODE' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: true, missingTarget?: boolean }> {
+    public canWriteNode(path: string, group: string, rdID?: number): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_WRITE_NODE' | 'L2_VFS_LOCKED', { path: string, group: string, lockPending?: true, missingTarget?: boolean }> {
         try {
         
             let current             = this.tree
@@ -302,8 +312,9 @@ export default class VFS {
                 
                 const newCurrent = (current as TDirectory).children[part]
 
-                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
-                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,                                              null, { path, group })
+                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`,                                          null, { path, group })
+                if (newCurrent.rdID !== rdID)  return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -322,10 +333,12 @@ export default class VFS {
             // with files, but check write perms inside the target directory as well.
             if (newCurrent.type === 'DIR') {
                 perm.progress(newCurrent.perms[group])
-                if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                if (!perm.canWrite)                              return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                if (newCurrent.rdID && newCurrent.rdID !== rdID) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${dest}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
             }
 
             const lock = newCurrent.lock
+
             if (lock) {
                 if (lock === 'pending') return new IBFSError('L2_VFS_LOCKED', `Can not write the item because it's currently in use.`, null, { path, group, lockPending: true })
                 if (lock.deref())       return new IBFSError('L2_VFS_LOCKED', `Can not write the item because it's currently in use.`, null, { path, group })
@@ -372,6 +385,7 @@ export default class VFS {
 
                 if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
                 if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+                if (newCurrent.rdID)           return new IBFSError('L2_VFS_LOCKED',   `Entry "${part}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -380,8 +394,9 @@ export default class VFS {
                 
             }
 
-            // After loop is finished, check if direct parent has write perms:
+            // After loop is finished, check if direct parent has write perms and is not being deleted.
             if (!perm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+            if (current.rdID)   return new IBFSError('L2_VFS_LOCKED', `Entry "${dest}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
             // Check if source item exists
             const srcNamedItem = current.children[dest]
@@ -434,6 +449,7 @@ export default class VFS {
 
                 if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
                 if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+                if (newCurrent.rdID)           return new IBFSError('L2_VFS_LOCKED',   `Entry "${part}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
                 srcPerm.progress(newCurrent.perms[group])
                 if (!srcPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -444,6 +460,7 @@ export default class VFS {
 
             // After loop is finished, check if direct source parent has write perms:
             if (!srcPerm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+            if (current.rdID)      return new IBFSError('L2_VFS_LOCKED', `Entry "${srcFinal}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
             const sourceItem = current.children[srcFinal]
             if (!sourceItem) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${srcFinal}" in "${path}" doesn't exists.`, null, { path, group })
@@ -458,7 +475,7 @@ export default class VFS {
             const { parts: destParts, dest: destFinal } = VFS.normalizeAndSplit(np.join(newParent, srcFinal))
             const destPerm                              = VFS.createPermCascade(this.tree.perms[group])
 
-            if (!destFinal) return new IBFSError('L2_VFS_BAD_PATH', `Can't move item on an empty path.`, null, { path, group })
+            if (!destFinal)        return new IBFSError('L2_VFS_BAD_PATH', `Can't move item on an empty path.`, null, { path, group })
             if (!destPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
 
             for (const part of destParts) {
@@ -467,6 +484,7 @@ export default class VFS {
 
                 if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${newParent}" does not exist.`,     null, { path, group })
                 if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${newParent}" is not a directory.`, null, { path, group })
+                if (newCurrent.rdID)           return new IBFSError('L2_VFS_LOCKED',   `Entry "${part}" in "${newParent}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
                 destPerm.progress(newCurrent.perms[group])
                 if (!destPerm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -477,6 +495,7 @@ export default class VFS {
 
             // After loop is finished, check if direct destination parent has write perms:
             if (!destPerm.canWrite) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+            if (current.rdID)       return new IBFSError('L2_VFS_LOCKED', `Entry "${destFinal}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
             const destItem = current.children[destFinal]
             if (destItem) return new IBFSError('L2_VFS_ALREADY_EXISTS', `Entry "${destFinal}" in "${newParent}" already exists.`, null, { path, group })
@@ -498,7 +517,7 @@ export default class VFS {
      * @param group The group issuing the action.
      * @returns `undefined` if the node can be deleted, or an `IBFSError` if not.
      */
-    public canDeleteNode(path: string, group: string, recursive?: boolean): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE' | 'L2_VFS_NO_PERM_NESTED' | 'L2_VFS_LOCKED', { path: string, group: string, deniedChild?: string }> {
+    public canDeleteNode(path: string, group: string, recursive?: boolean, rdID?: number): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_DELETE_NODE' | 'L2_VFS_NO_PERM_NESTED' | 'L2_VFS_LOCKED', { path: string, group: string, deniedChild?: string }> {
         try {
 
             let current             = this.tree
@@ -506,14 +525,15 @@ export default class VFS {
             const perm              = VFS.createPermCascade(this.tree.perms[group])
 
             if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM',  null, null, { path, group })
-            if (!dest) return new IBFSError('L2_VFS_BAD_PATH', `Can't delete an empty path.`, null, { path, group })
+            if (!dest)         return new IBFSError('L2_VFS_BAD_PATH', `Can't delete an empty path.`, null, { path, group })
 
             for (const part of parts) {
                 
                 const newCurrent = (current as TDirectory).children[part]
 
-                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
-                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+                if (!newCurrent)                                 return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,                                              null, { path, group })
+                if (newCurrent.type !== 'DIR')                   return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`,                                          null, { path, group })
+                if (newCurrent.rdID && newCurrent.rdID !== rdID) return new IBFSError('L2_VFS_LOCKED',   `Entry "${part}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -545,6 +565,7 @@ export default class VFS {
 
                 let deniedChild: string | null = null
                 let metPresentLock = false
+                let metRecursiveDelete = false
 
                 const scanChildPerms = (dir: TDirectory, pathChunks: string[] = []) => {
                     for (const entry in dir.children) {
@@ -576,6 +597,12 @@ export default class VFS {
                                     break
                                 }
 
+                                if (child.rdID && child.rdID !== rdID) {
+                                    if (!deniedChild) deniedChild = pathChunks.join('/')
+                                    metRecursiveDelete = true
+                                    break
+                                }
+
                                 scanChildPerms(child, [...pathChunks, entry])
 
                             }
@@ -587,8 +614,9 @@ export default class VFS {
                 scanChildPerms(newCurrent, [...parts, dest])
 
                 if (deniedChild) {
-                    if (metPresentLock) return new IBFSError('L2_VFS_LOCKED', 'Can not delete the directory, at least one of its children is in use elsewhere.', null, { path, group, deniedChild })
-                    else                return new IBFSError('L2_VFS_NO_PERM_NESTED', null, null, { path: deniedChild, group })
+                    if (metPresentLock)     return new IBFSError('L2_VFS_LOCKED',         'Can not delete the directory, at least one of its children is in use elsewhere.',         null, { path, group, deniedChild })
+                    if (metRecursiveDelete) return new IBFSError('L2_VFS_LOCKED',         'Can not delete the directory, as one of its children has pending downstream operations.', null, { path, group, deniedChild })
+                    else                    return new IBFSError('L2_VFS_NO_PERM_NESTED', null,                                                                                      null, { path, group, deniedChild })
                 }
             }
 
@@ -606,7 +634,7 @@ export default class VFS {
      * @param group Group that attempting to manage the node.
      * @returns `undefined` if the node can be managed, or an `IBFSError` if not.
      */
-    public canManageNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MANAGE_NODE'> {
+    public canManageNode(path: string, group: string): T.XEavS<'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM' | 'L2_VFS_CAN_MANAGE_NODE' | 'L2_VFS_LOCKED'> {
         try {
 
             let current             = this.tree
@@ -626,6 +654,7 @@ export default class VFS {
 
                 if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,     null, { path, group })
                 if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`, null, { path, group })
+                if (newCurrent.rdID)           return new IBFSError('L2_VFS_LOCKED',   `Entry "${part}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -644,6 +673,7 @@ export default class VFS {
             if (newCurrent.type === 'DIR') {
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canManage) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
+                if (newCurrent.rdID) return new IBFSError('L2_VFS_LOCKED', `Entry "${dest}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
             }
             else {
                 return new IBFSError('L2_VFS_BAD_PATH', `Can not manage non-directories. (entry /${parts.join('/')}/<${dest}>)`, null, { path, group })
