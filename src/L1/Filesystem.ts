@@ -251,7 +251,7 @@ export default class Filesystem {
 
                 this._rh.addRef(options.fileAddress, handle)
 
-                handle.once('requests-close', () => {
+                handle.on('requests-close', () => {
                     const hasNoRemainingRefs = this._rh.removeRef(options.fileAddress)
                     if (hasNoRemainingRefs) handle[FINALIZE_HANDLE_CLOSE]()
                 })
@@ -277,7 +277,7 @@ export default class Filesystem {
                 this._wh.addRef(options.fileAddress, handle)
 
                 // No need to check for remaining refs as the handle is guaranteed to be exclusive
-                handle.once('requests-close', () => {
+                handle.on('requests-close', () => {
                     this._wh.removeRef(options.fileAddress)
                     handle[FINALIZE_HANDLE_CLOSE]()
                 })

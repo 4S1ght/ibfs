@@ -22,6 +22,7 @@ describe('Virtual Filesystem', () => {
                 address: 20,
                 perms: {},
                 lock: null,
+                rdID: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
@@ -35,6 +36,7 @@ describe('Virtual Filesystem', () => {
                         address: 40,
                         perms: { group1: 0 },
                         lock: null,
+                        rdID: null,
                         children: {
                             'file3.txt': {
                                 type: 'FILE',
@@ -49,6 +51,7 @@ describe('Virtual Filesystem', () => {
                                 perms: { group1: 1 },
                                 children: {},
                                 lock: null,
+                                rdID: null
                             }
                         },
                     },
@@ -104,6 +107,7 @@ describe('Virtual Filesystem', () => {
                 address: 20,
                 perms: { group1: 2, group2: 0 },
                 lock: null,
+                rdID: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
@@ -158,6 +162,7 @@ describe('Virtual Filesystem', () => {
                 address: 20,
                 perms: { group1: 3, group3: 3 },
                 lock: null,
+                rdID: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
@@ -173,6 +178,7 @@ describe('Virtual Filesystem', () => {
                 address: 40,
                 perms: {},
                 lock: 'pending',
+                rdID: null,
                 children: {}
             }
         }
@@ -220,6 +226,7 @@ describe('Virtual Filesystem', () => {
                 address: 20,
                 perms: { group1: 3, group3: 3 },
                 lock: null,
+                rdID: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
@@ -235,6 +242,7 @@ describe('Virtual Filesystem', () => {
                 address: 10,
                 lock: 'pending',
                 perms: {},
+                rdID: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
@@ -281,6 +289,7 @@ describe('Virtual Filesystem', () => {
                 address: 20,
                 perms: { group1: 3 },
                 lock: null,
+                rdID: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
@@ -302,6 +311,7 @@ describe('Virtual Filesystem', () => {
                 address: 40,
                 perms: { group1: 1 },
                 lock: null,
+                rdID: null,
                 children: {
                     'file3.txt': {
                         type: 'FILE',
@@ -322,6 +332,7 @@ describe('Virtual Filesystem', () => {
                 size: 1400,
                 address: 10,
                 lock: 'pending',
+                rdID: null,
                 perms: {},
                 children: {
                     'file2.txt': {
@@ -378,6 +389,7 @@ describe('Virtual Filesystem', () => {
                 address: 20,
                 perms: { group2: 2 },
                 lock: null,
+                rdID: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',
@@ -392,6 +404,7 @@ describe('Virtual Filesystem', () => {
                         perms: { group2: 1 },
                         children: {},
                         lock: null,
+                        rdID: null,
                     }
                 }
             },
@@ -400,6 +413,7 @@ describe('Virtual Filesystem', () => {
                 size: 1400,
                 address: 10,
                 lock: null,
+                rdID: null,
                 perms: {},
                 children: {
                     'file2.txt': {
@@ -455,6 +469,7 @@ describe('Virtual Filesystem', () => {
                 address: 20,
                 perms: { group1: 3, group3: 3 },
                 lock: null,
+                rdID: null,
                 children: {
                     'file2.txt': {
                         type: 'FILE',

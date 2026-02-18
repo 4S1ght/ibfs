@@ -124,6 +124,12 @@ export default class FileBlockMap {
 
     // Allocation ------------------------------------------------------------------------------------------------------
 
+    /**
+     * Appends a set of addresses to the end of the file block map.
+     * @param addresses 
+     * @param iteration 
+     * @returns 
+     */
     public async append(addresses: number[], iteration = 0): T.XEavSA<"L1_FBM_APPEND"> {
         try {
 
@@ -137,7 +143,7 @@ export default class FileBlockMap {
                 // Append address if there's space for it
                 if (startingBlock.block.isFull === false) {
                     // This address will probably be allocated before use, but it's
-                    // worth making sure to prevent data from being overwritten later.
+                    // worth making sure it can't be overwritten later.
                     this.containingFilesystem.adSpace.markAllocated(address)
                     startingBlock.block.append(address)
                 }

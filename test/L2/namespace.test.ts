@@ -60,6 +60,9 @@ describe('Namespace', () => {
         expect(ns.fs._rh._meta.get(h1.fbm.startingAddress)?.refCount).toBe(1)
 
         await expect(h2.close()).resolves.toBeUndefined()
+        await expect(h2.close()).resolves.instanceOf(IBFSError)
+        // @ts-ignore
+        expect(ns.fs._rh._meta.get(h1.fbm.startingAddress)).toBe(undefined)
 
     })
 

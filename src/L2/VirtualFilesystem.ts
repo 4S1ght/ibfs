@@ -312,9 +312,9 @@ export default class VFS {
                 
                 const newCurrent = (current as TDirectory).children[part]
 
-                if (!newCurrent)               return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,                                              null, { path, group })
-                if (newCurrent.type !== 'DIR') return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`,                                          null, { path, group })
-                if (newCurrent.rdID !== rdID)  return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
+                if (!newCurrent)                                 return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" does not exist.`,                                              null, { path, group })
+                if (newCurrent.type !== 'DIR')                   return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is not a directory.`,                                          null, { path, group })
+                if (newCurrent.rdID && newCurrent.rdID !== rdID) return new IBFSError('L2_VFS_BAD_PATH', `Entry "${part}" in "${path}" is locked due to a pending operation downstream in the tree.`, null, { path, group })
 
                 perm.progress(newCurrent.perms[group])
                 if (!perm.canRead) return new IBFSError('L2_VFS_NO_PERM', null, null, { path, group })
@@ -685,6 +685,54 @@ export default class VFS {
         catch (error) {
             return new IBFSError('L2_VFS_CAN_MANAGE_NODE', null, error as Error, { path, group })
         }
+    }
+
+    // Helpers =========================================================================================================
+
+    /**
+     * Takes in a directory living inside the vfs, traverses its children and flattens the tree into a 2-level array.
+     * The child nodes are grouped into arrays corresponding to their depth in the subtree. Then each array is stored in
+     * a top-level array where the index corresponds to the path depth of all stored items.
+     * 
+     * eg.
+     * ```js
+     * [
+     *  ['/folder'],
+     *  ['/folder/file1', '/folder/file2', '/folder/dir1'],
+     *  ['/folder/dir1/file3'],
+     * ]
+     * ```
+     */
+    public flattenDirTree(path: string): T.XEav<string[][], 'L2_VFS_BAD_PATH'> {
+
+        const [resolveError, rootDir] = this.resolve(path)
+
+        if (resolveError)           return IBFSError.eav('L2_VFS_BAD_PATH', null, resolveError)
+        if (rootDir.type !== 'DIR') return IBFSError.eav('L2_VFS_BAD_PATH', `Entry "${path}" is not a directory.`, null, { path })
+
+        const tree: string[][] = []
+
+        const traverse = (dir: TDirectory, path: string, depth: number) => {
+
+            tree[depth] = tree[depth] || []
+            
+            for (const name of Object.keys(dir.children)) {
+
+                const item = dir.children[name]!
+                const itemPath = np.join(path, name)
+
+                tree[depth].push(itemPath)
+                if (item.type === 'DIR') traverse(item, itemPath, depth + 1)
+
+            }
+
+        }
+
+        traverse(rootDir, path, 0)
+        if (tree.at(-1)?.length === 0) tree.pop()
+            
+        return [null, tree]
+
     }
 
 }

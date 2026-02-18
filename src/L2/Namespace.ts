@@ -584,8 +584,58 @@ export default class Namespace {
     public async delete(path: string, group: string, recursive?: boolean): T.XEavSA<'L2_NS_DELETE'> {
         try {
 
-            // WIP
+            const dirname = np.dirname(path)
+            const basename = np.basename(path)
+
             const cantDelete = this.vfs.canDeleteNode(path, group, recursive)
+            if (cantDelete) return new IBFSError('L2_NS_DELETE', null, cantDelete, { path, group, recursive })
+
+            const [parentError, parent] = this.vfs.resolveParent(path)
+            const [childError, child]   = this.vfs.resolve(path)
+            if (parentError || childError) return new IBFSError('L2_NS_DELETE', null, parentError || childError, { path, group, recursive })
+
+            if (child.type === 'FILE') {
+
+                const abort = (reason: Error) => {
+                    if (cfh) cfh.close()
+                    if (pfh) pfh.close()
+                    return new IBFSError('L2_NS_DELETE', null, reason, { path, group, recursive })
+                }
+
+                // Open child to access its block map
+                const [cError, cfh] = await this.open(path, group, { mode: 'rw' })
+                if (cError) return abort(cError)
+
+                const [pError, pfh] = await this.open(dirname, group, { mode: 'rw' })
+                if (pError) return abort(pError)
+
+                const [dirReadError, parentDir] = await pfh.readAsDir()
+                if (dirReadError) return abort(dirReadError)
+                
+                if (!parentDir.children[basename]) return abort(new IBFSError('L2_NS_DELETE', 'File does not exist in the directory.', null, { path, group, recursive }))
+
+                // Delete the child inside the VFS
+                // It's deleted before physical changes, as any potential partial changes could render the file corrupt
+                // or intertwined with other file's blocks, so erasing it from the in-mem file tree is safer.
+                delete parent.children[basename]
+
+                // Delete child from its parent directory physically on the disk.
+                delete parentDir.children[basename]
+                const dirWriteError = await pfh.writeAsDir(parentDir)
+                if (dirWriteError) return abort(dirWriteError)
+
+                // Free child's blocks.
+                const addresses = cfh.fbm.allAddresses()
+                for (const address of addresses) this.fs.adSpace.free(address)
+
+                await cfh.close()
+                await pfh.close()
+
+            }
+
+            else {
+
+            }
 
         }
         catch (error) {
