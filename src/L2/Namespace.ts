@@ -614,9 +614,8 @@ export default class Namespace {
                 
                 if (!parentDir.children[basename]) return abort(new IBFSError('L2_NS_DELETE', 'File does not exist in the directory.', null, { path, group, recursive }))
 
-                // Delete the child inside the VFS
-                // It's deleted before physical changes, as any potential partial changes could render the file corrupt
-                // or intertwined with other file's blocks, so erasing it from the in-mem file tree is safer.
+                // the VFS child is deleted before physical changes, as any potential partial changes could render the 
+                // file corrupt or intertwined with other file's blocks, so erasing it from the in-mem file tree is safer.
                 delete parent.children[basename]
 
                 // Delete child from its parent directory physically on the disk.
@@ -635,11 +634,49 @@ export default class Namespace {
 
             else {
 
+                const abort = (reason: Error) => {
+                    if (cfh) cfh.close()
+                    if (pfh) pfh.close()
+                    return new IBFSError('L2_NS_DELETE', null, reason, { path, group, recursive })
+                }
+
+                const rdID = this.rdg.next().value
+                child.rdID = rdID
+
+                const [cError, cfh] = await this.open(path, group, { mode: 'rw', _rdID: rdID })
+                if (cError) return abort(cError)
+
+                const [pError, pfh] = await this.open(dirname, group, { mode: 'rw', _rdID: rdID })
+                if (pError) return abort(pError)
+
+                const [flatError, levels] = this.vfs.flattenDirTree(path)
+                if (flatError) return abort(flatError)
+
+                for (let i = levels.length - 1; i >= 0; i--) {
+
+                    const level = levels[i]
+
+                    for (const path in level) {
+
+                        const [openError, node] = await this.open(path, group, { mode: 'rw', _rdID: rdID })
+                        if (openError) return abort(openError)
+
+                        const addresses = node.fbm.allAddresses()
+                        for (const address of addresses) this.fs.adSpace.free(address)
+
+                    }
+
+                }
+
+                
+
+                
+
             }
 
         }
         catch (error) {
-            return new IBFSError('L2_NS_DELETE', null, error as Error, { path, group })    
+            return new IBFSError('L2_NS_DELETE', null, error as Error, { path, group })
         }
     }
 
