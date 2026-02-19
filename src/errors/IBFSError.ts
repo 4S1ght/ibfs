@@ -275,7 +275,8 @@ const errorCodes = {
 
     L2_NS_MOVE:                     'Failed to move the node.',
     
-    L2_NS_DELETE:                   'Failed to delete the node.',
+    L2_NS_DELETE:                   'Failed to perform the delete operation (possibly partially).',
+    L2_NS_DELETE_NODE:              'Failed to delete the node from the filesystem.',
 
     L2_FH_CLOSED:                   'The proxy to this handle has already been closed and can not be used.',
     L2_FH_CLOSING:                  'The proxy to this handle is currently being closed and any further requests must wait until the close is complete.',

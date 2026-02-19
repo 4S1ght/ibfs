@@ -14,10 +14,10 @@ import FileHandle                               from '../L1/file/FileHandle.js'
 import FileReadStream, { TFRSOptions }          from '../L1/file/FileReadStream.js'
 import FileWriteStream, { TFWSOptions }         from '../L1/file/FileWriteStream.js'
 import Filesystem, { TFSInit, TFSOpenFile }     from '../L1/Filesystem.js'
-import createRotaryID from '../misc/rotaryID.js'
+import VFS, { TDirectory, TNode }               from './VirtualFilesystem.js'
 
 import ssc                                      from '../misc/safeShallowCopy.js'
-import VFS, { TDirectory, TNode }               from './VirtualFilesystem.js'
+import createRotaryID                           from '../misc/rotaryID.js'
 
 import np                                       from 'node:path'
 
@@ -578,6 +578,60 @@ export default class Namespace {
         } 
         catch (error) {
             return new IBFSError('L2_NS_MOVE', null, error as Error, { path, group })    
+        }
+    }
+
+    private async _deleteNode(path: string, group: string): T.XEavSA<'L2_NS_DELETE_NODE'> {
+        try {
+
+            const abort = (reason: Error) => {
+                if (cfh) cfh.close()
+                if (pfh) pfh.close()
+                return new IBFSError('L2_NS_DELETE_NODE', null, reason, { path, group })
+            }
+
+            const dirname = np.dirname(path)
+            const basename = np.basename(path)
+
+            const cantDelete = this.vfs.canDeleteNode(path, group)
+            if (cantDelete) return abort(cantDelete)
+
+            const [parentError, parent] = this.vfs.resolveParent(path)
+            const [childError, child]   = this.vfs.resolve(path)
+            if (parentError || childError) return abort(parentError || childError!)
+
+            const [cError, cfh] = await this.open(dirname, group, { mode: 'rw' })
+            if (cError) return new IBFSError('L2_NS_DELETE_NODE', null, cError, { path, group })
+
+            const [pError, pfh] = await this.open(path, group, { mode: 'rw' })
+            if (pError) return new IBFSError('L2_NS_DELETE_NODE', null, pError, { path, group })
+
+            // Guard against deleting non-empty directories.
+            if (cfh.type === 'DIR') {
+
+                const [readError, dir] = await cfh.readAsDir()
+                if (readError) return new IBFSError('L2_NS_DELETE_NODE', null, readError, { path, group })
+
+                if (Object.keys(dir.children).length === 0)
+                    return abort(new Error('Directory is not empty'))
+
+            }
+
+            const [parentReadError, parentDirData] = await pfh.readAsDir()
+            if (parentReadError) return abort(parentReadError)
+
+            // The VFS child is deleted before physical changes, as any potential partial changes could render the 
+            // file corrupt or intertwined with other file's blocks, so erasing it from the cached file tree first is safer.
+            delete parent.children[basename]
+
+            // Delete child from its parent directory physically on the disk.
+            delete parentDirData.children[basename]
+            const dirWriteError = await pfh.writeAsDir(parentDirData)
+            if (dirWriteError) return abort(dirWriteError)
+            
+        } 
+        catch (error) {
+            return new IBFSError('L2_NS_DELETE_NODE', null, error as Error, { path, group })    
         }
     }
 
