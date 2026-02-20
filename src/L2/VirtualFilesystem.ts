@@ -3,9 +3,10 @@
 import type * as T from '../../types.js'
 import type { TPermLevel  } from '../L1/directory/DirectoryTables.js'
 
-import np from 'node:path'
-import IBFSError from '../errors/IBFSError.js'
-import FileHandle from '../L1/file/FileHandle.js'
+import np           from 'node:path'
+import IBFSError    from '../errors/IBFSError.js'
+import FileHandle   from '../L1/file/FileHandle.js'
+import Enum         from '../misc/enum.js'
 
 // Types ===============================================================================================================
 
@@ -108,6 +109,14 @@ export default class VFS {
             get permLevel()     { return permLevel }
         }
     }
+
+    private permLevels = Enum({
+        none: 0,
+        read: 1,
+        write: 2,
+        manage: 3,
+        root: 4
+    })
     
     // Initial state ---------------------------------------------------------------------------------------------------
 
@@ -703,7 +712,7 @@ export default class VFS {
      * ]
      * ```
      */
-    public flattenDirTree(path: string): T.XEav<string[][], 'L2_VFS_BAD_PATH'> {
+    public getFlattenedDirTreeList(path: string, group: string, minPermLevel?: typeof this.permLevels[number]): T.XEav<string[][], 'L2_VFS_BAD_PATH' | 'L2_VFS_NO_PERM'> {
 
         const [resolveError, rootDir] = this.resolve(path)
 
@@ -712,9 +721,16 @@ export default class VFS {
 
         const tree: string[][] = []
 
+        // This use case does not keep the top-down order of permissions
+        // but still provides info about whether some child inside the subtree lacks write permissions.
+        // If yes, then the operation can be stopped completely.
+        const perm = VFS.createPermCascade(rootDir.perms[group])
+
         const traverse = (dir: TDirectory, path: string, depth: number) => {
 
             tree[depth] = tree[depth] || []
+            perm.progress(dir.perms[group])
+            if (minPermLevel && perm.permLevel < this.permLevels[minPermLevel]) return 
             
             for (const name of Object.keys(dir.children)) {
 
@@ -730,7 +746,8 @@ export default class VFS {
 
         traverse(rootDir, path, 0)
         if (tree.at(-1)?.length === 0) tree.pop()
-            
+
+        if (minPermLevel && perm.permLevel < this.permLevels[minPermLevel]) IBFSError.eav('L2_VFS_NO_PERM', 'Can not', null, { path, group })
         return [null, tree]
 
     }

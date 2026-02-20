@@ -581,7 +581,7 @@ export default class Namespace {
         }
     }
 
-    private async _deleteNode(path: string, group: string): T.XEavSA<'L2_NS_DELETE_NODE'> {
+    private async _deleteNode(path: string, group: string, _rdID?: number): T.XEavSA<'L2_NS_DELETE_NODE'> {
         try {
 
             const abort = (reason: Error) => {
@@ -593,17 +593,14 @@ export default class Namespace {
             const dirname = np.dirname(path)
             const basename = np.basename(path)
 
-            const cantDelete = this.vfs.canDeleteNode(path, group)
-            if (cantDelete) return abort(cantDelete)
-
             const [parentError, parent] = this.vfs.resolveParent(path)
             const [childError, child]   = this.vfs.resolve(path)
             if (parentError || childError) return abort(parentError || childError!)
 
-            const [cError, cfh] = await this.open(dirname, group, { mode: 'rw' })
+            const [cError, cfh] = await this.open(dirname, group, { mode: 'rw', _rdID })
             if (cError) return new IBFSError('L2_NS_DELETE_NODE', null, cError, { path, group })
 
-            const [pError, pfh] = await this.open(path, group, { mode: 'rw' })
+            const [pError, pfh] = await this.open(path, group, { mode: 'rw', _rdID })
             if (pError) return new IBFSError('L2_NS_DELETE_NODE', null, pError, { path, group })
 
             // Guard against deleting non-empty directories.
@@ -650,83 +647,66 @@ export default class Namespace {
 
             if (child.type === 'FILE') {
 
-                const abort = (reason: Error) => {
-                    if (cfh) cfh.close()
-                    if (pfh) pfh.close()
-                    return new IBFSError('L2_NS_DELETE', null, reason, { path, group, recursive })
-                }
-
-                // Open child to access its block map
-                const [cError, cfh] = await this.open(path, group, { mode: 'rw' })
-                if (cError) return abort(cError)
-
-                const [pError, pfh] = await this.open(dirname, group, { mode: 'rw' })
-                if (pError) return abort(pError)
-
-                const [dirReadError, parentDir] = await pfh.readAsDir()
-                if (dirReadError) return abort(dirReadError)
-                
-                if (!parentDir.children[basename]) return abort(new IBFSError('L2_NS_DELETE', 'File does not exist in the directory.', null, { path, group, recursive }))
-
-                // the VFS child is deleted before physical changes, as any potential partial changes could render the 
-                // file corrupt or intertwined with other file's blocks, so erasing it from the in-mem file tree is safer.
-                delete parent.children[basename]
-
-                // Delete child from its parent directory physically on the disk.
-                delete parentDir.children[basename]
-                const dirWriteError = await pfh.writeAsDir(parentDir)
-                if (dirWriteError) return abort(dirWriteError)
-
-                // Free child's blocks.
-                const addresses = cfh.fbm.allAddresses()
-                for (const address of addresses) this.fs.adSpace.free(address)
-
-                await cfh.close()
-                await pfh.close()
+                const deleteError = await this._deleteNode(path, group)
+                if (deleteError) return new IBFSError('L2_NS_DELETE', null, deleteError, { path, group, recursive, type: child.type })
 
             }
 
-            else {
+            if (child.type === 'DIR') {
+                
+                const [traverseError, depthLevels] = this.vfs.getFlattenedDirTreeList(path, group, 'write')
+                if (traverseError) return new IBFSError('L2_NS_DELETE', null, traverseError, { path, group, recursive, type: child.type })
 
-                const abort = (reason: Error) => {
-                    if (cfh) cfh.close()
-                    if (pfh) pfh.close()
-                    return new IBFSError('L2_NS_DELETE', null, reason, { path, group, recursive })
-                }
+                for (let i = depthLevels.length - 1; i >= 0; i--) {
 
-                const rdID = this.rdg.next().value
-                child.rdID = rdID
+                    const children = depthLevels[i]!
 
-                const [cError, cfh] = await this.open(path, group, { mode: 'rw', _rdID: rdID })
-                if (cError) return abort(cError)
-
-                const [pError, pfh] = await this.open(dirname, group, { mode: 'rw', _rdID: rdID })
-                if (pError) return abort(pError)
-
-                const [flatError, levels] = this.vfs.flattenDirTree(path)
-                if (flatError) return abort(flatError)
-
-                for (let i = levels.length - 1; i >= 0; i--) {
-
-                    const level = levels[i]
-
-                    for (const path in level) {
-
-                        const [openError, node] = await this.open(path, group, { mode: 'rw', _rdID: rdID })
-                        if (openError) return abort(openError)
-
-                        const addresses = node.fbm.allAddresses()
-                        for (const address of addresses) this.fs.adSpace.free(address)
-
+                    for (const child of children) {
+                        const deleteError = await this._deleteNode(child, group)
+                        if (deleteError) return new IBFSError('L2_NS_DELETE', 'An error occurred when deleting a child node of a directory in recursive mode. The operation has been aborted and likely did not delete all items.', deleteError, { path, group, recursive })
                     }
 
                 }
 
-                
-
-                
-
             }
+
+            // if (child.type === 'FILE') {
+
+            //     const abort = (reason: Error) => {
+            //         if (cfh) cfh.close()
+            //         if (pfh) pfh.close()
+            //         return new IBFSError('L2_NS_DELETE', null, reason, { path, group, recursive })
+            //     }
+
+            //     // Open child to access its block map
+            //     const [cError, cfh] = await this.open(path, group, { mode: 'rw' })
+            //     if (cError) return abort(cError)
+
+            //     const [pError, pfh] = await this.open(dirname, group, { mode: 'rw' })
+            //     if (pError) return abort(pError)
+
+            //     const [dirReadError, parentDir] = await pfh.readAsDir()
+            //     if (dirReadError) return abort(dirReadError)
+                
+            //     if (!parentDir.children[basename]) return abort(new IBFSError('L2_NS_DELETE', 'File does not exist in the directory.', null, { path, group, recursive }))
+
+            //     // the VFS child is deleted before physical changes, as any potential partial changes could render the 
+            //     // file corrupt or intertwined with other file's blocks, so erasing it from the in-mem file tree is safer.
+            //     delete parent.children[basename]
+
+            //     // Delete child from its parent directory physically on the disk.
+            //     delete parentDir.children[basename]
+            //     const dirWriteError = await pfh.writeAsDir(parentDir)
+            //     if (dirWriteError) return abort(dirWriteError)
+
+            //     // Free child's blocks.
+            //     const addresses = cfh.fbm.allAddresses()
+            //     for (const address of addresses) this.fs.adSpace.free(address)
+
+            //     await cfh.close()
+            //     await pfh.close()
+
+            // }
 
         }
         catch (error) {
