@@ -561,15 +561,14 @@ export default class BlockSerializationContext {
 
 
     /**
-     * Serializes a link block and returns a buffer that can be written to the disk.
+     * Serializes a data block and returns a buffer that can be written to the disk.
      *
         Index | Size | Type   | Description
         ------|------|--------|------------------------------------------------
-        0     | 1B   | Int8   | Block type (LINK)
+        0     | 1B   | Int8   | Block type (data)
         1     | 4B   | Int32  | CRC checksum
-        5     | 8B   | Int64  | Next block address
-        13    | 4B   | Int32  | Size of usable block data
-        17-31 | ---- | ------ | ------------------ Reserved -------------------
+        5     | 4B   | Int32  | Size of usable block data
+        6-31  | ---- | ------ | ------------------ Reserved -------------------
         32    | N    | Body   | Block body
      */
     public serializeDataBlock(blockData: TDataBlock & TCommonWriteMeta): T.XEav<Buffer, 'L0_SR_DATA'|'L0_SR_LINK_SEGFAULT'> {
